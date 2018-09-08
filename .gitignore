@@ -1,0 +1,5 @@
+*.mod
+*.dat
+*output
+*.dSYM
+*.DS_Store

@@ -1,0 +1,12 @@
+1               / problem setup
+500             / mesh size (imax)
+0               / initialize from restart file './output/frozen_flow/frozenflow.dat'
+1               / Numerical Flux (1: Edwards' LDFSS)
+----------------------------------------------------------------------------------------------
+1               / Space discretization (0: P0; 1:MC-P0P1)
+5.0d-09         / Time-step size
+46000           / Maximum number of timesteps
+----------------------------------------------------------------------------------------------
+100000          / File-output dump
+1000            / On-screen output
+----------------------------------------------------------------------------------------------
