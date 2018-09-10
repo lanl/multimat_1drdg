@@ -1,3 +1,5 @@
+0               / pde system type
+----------------------------------------------------------------------------------------------
 1               / problem setup
 500             / mesh size (imax)
 0               / initialize from restart file './output/frozen_flow/frozenflow.dat'

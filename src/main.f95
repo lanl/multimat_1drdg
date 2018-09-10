@@ -1,10 +1,8 @@
 !!---------------------------------------------------------------------------------------
-!!----- Preliminary exam for Dr Edwards -----
-!!----- Non-equilibrium Isothermal Multiphase
+!!----- Non-equilibrium velocity Isothermal Multiphase and
+!!----- non-equilibrium pressure multi-material flow code
 !!----- by
 !!----- Aditya K Pandare
-!!----- Department of Mechanical and Aerospace Engineering,
-!!----- North Carolina State University.
 !!
 !!
 !!----- Start date : 27 Sept 2017
@@ -14,7 +12,6 @@ PROGRAM twofluid_main
 
 !----- Modules:
 
-USE glob_var
 USE preprocess
 USE time_integration
 
@@ -28,11 +25,26 @@ real*8, allocatable :: uprim(:,:,:), uprimn(:,:,:), &
 call read_cntl()
 
 !--- system dimensionality:
-neqns = 4
+
+write(*,*) " "
+if (i_system .eq. 0) then
+   ! isothermal single-pressure two-fluid system
+   write(*,*) " Isothermal single-pressure two-fluid system: "
+   write(*,*) " Pressure equilibrium " 
+   write(*,*) " Velocity non-equilibrium "
+   neqns = 4
+else if (i_system .eq. 1) then
+   ! pressure non-equilibrium velocity equilibrium two-fluid system
+   write(*,*) " Multi-material system: "
+   write(*,*) " Pressure non-equilibrium " 
+   write(*,*) " Velocity equilibrium "
+   neqns = 6
+end if
+
 if (nsdiscr .eq. 0) then
-        ndof = 1
+   ndof = 1
 else
-        ndof = 2
+   ndof = 2
 end if
 
 !----- Allocation:
@@ -51,13 +63,21 @@ write(*,*) " dt =    ", dt_u
 write(*,*) " "
 
 !----- Initialization:
-call init_soln(uprim, uprimn, ucons, uconsn)
+if (i_system .eq. 0) then
+   call init_soln_4eq(uprim, uprimn, ucons, uconsn)
+else if (i_system .eq. 1) then
+   call init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
+end if
 
 !----- Time-stepping:
 dt = dt_u
 
-!--- Backward Euler:
-call EulerExplicit(ucons, uconsn, uprim, uprimn)
+!--- Explicit TVD-RK3:
+if (i_system .eq. 0) then
+   call ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
+else if (i_system .eq. 1) then
+   call ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
+end if
 
 !----- Cleanup:
 deallocate(uprim, uprimn, &

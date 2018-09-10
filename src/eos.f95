@@ -1,9 +1,7 @@
 !!---------------------------------------------------------------------------------------
-!!----- Non-equilibrium Isothermal Multiphase (EOS Module)
+!!----- Multi-material and multi-phase (EOS module)
 !!----- by
 !!----- Aditya K Pandare
-!!----- Department of Mechanical and Aerospace Engineering,
-!!----- North Carolina State University.
 !!---------------------------------------------------------------------------------------
 
 MODULE eos
@@ -53,6 +51,76 @@ real*8, intent(in) :: rho
 real*8  :: eos2_ssound
 
     eos2_ssound = dsqrt(k0/(rho0**n0) * (rho**(n0-1.0)))
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- Density from pressure and temperature using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_density(gam, cp, p_c, pres, temp)
+
+real*8, intent(in) :: gam, cp, p_c, pres, temp
+
+real*8  :: eos3_density
+
+    eos3_density = gam * (pres + p_c) / ((gam - 1.0) * cp * temp)
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- Total energy from pressure and density using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_rhoe(gam, p_c, pres, rho, u)
+
+real*8, intent(in) :: gam, p_c, pres, rho, u
+
+real*8  :: eos3_rhoe
+
+    eos3_rhoe = (pres + p_c)/(gam - 1.0) + (0.5*rho*u*u) + p_c;
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- Pressure from total energy and density using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_pr(gam, p_c, rho, rhoe, u)
+
+real*8, intent(in) :: gam, p_c, rho, rhoe, u
+
+real*8  :: eos3_pr
+
+    eos3_pr = (gam - 1.0) * (rhoe - 0.5*rho*u*u - p_c) - p_c;
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- Temperature from total energy and density using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_t(gam, cp, p_c, rho, rhoe, u)
+
+real*8, intent(in) :: gam, cp, p_c, rho, rhoe, u
+
+real*8  :: eos3_t
+
+    eos3_t = (rhoe - (0.5*rho*u*u) - p_c) * (gam/(rho * cp));
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- speed of sound from density and pressure using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_ss(gam, p_c, rho, pr)
+
+real*8, intent(in) :: gam, p_c, rho, pr
+
+real*8  :: eos3_ss
+
+    eos3_ss = dsqrt(gam *(pr+p_c)/rho);
 
 end function
 

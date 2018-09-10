@@ -1,26 +1,22 @@
 !!---------------------------------------------------------------------------------------
-!!----- Non-equilibrium Isothermal Multiphase (Time-stepping Module)
+!!----- Multi-material and multi-phase (Time-stepping module)
 !!----- by
 !!----- Aditya K Pandare
-!!----- Department of Mechanical and Aerospace Engineering,
-!!----- North Carolina State University.
 !!---------------------------------------------------------------------------------------
 
 MODULE time_integration
 
-USE glob_var
 USE preprocess
-USE rhs_flux
 
 implicit none
 
 CONTAINS
 
 !----------------------------------------------------------------------------------------------
-!----- Forward Euler:
+!----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine EulerExplicit(ucons, uconsn, uprim, uprimn)
+subroutine ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
 
 integer :: itstep, ielem, ieqn, istage
 real*8  :: vol,time
@@ -76,7 +72,7 @@ real*8  :: rhsel(neqns,imax)
               end do !ieqn
               end do !ielem
 
-              call get_bc(ucons)
+              call get_bc_4eq(ucons)
               call decode_uprim(ucons,uprim)
               !call limit_disphase(ucons, uprim, uprimn)
               call blend_disphase(ucons, uprim)
@@ -103,14 +99,14 @@ real*8  :: rhsel(neqns,imax)
 
            !----- File-output:
            if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
-           call gnuplot_flow(uprim, ucons, itstep)
+           call gnuplot_flow_4eq(uprim, ucons, itstep)
            end if
 
         end do !itstep
 
         itstep = itstep - 1
 
-        call gnuplot_flow(uprim, ucons, itstep)
+        call gnuplot_flow_4eq(uprim, ucons, itstep)
 
         !----- Screen-output:
         write(*,*) "-----------------------------------------------"
@@ -121,7 +117,105 @@ real*8  :: rhsel(neqns,imax)
         write(*,*) "-----------------------------------------------"
         write(*,*) " "
 
-end subroutine EulerExplicit
+end subroutine ExplicitRK3_4eq
+
+!----------------------------------------------------------------------------------------------
+
+subroutine ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
+
+integer :: itstep, ielem, ieqn, istage
+real*8  :: vol,time
+real*8  :: uprim(ndof,neqns,0:imax+1),uprimn(ndof,neqns,0:imax+1), &
+           ucons(neqns,0:imax+1),uconsn(neqns,0:imax+1),uconsi(neqns,0:imax+1), &
+           k1(3),k2(3)
+real*8  :: rhsel(neqns,imax)
+
+  time = 0.d0
+
+  k1(1) = 0.0     !0.0
+  k1(2) = 3.0/4.0 !0.5
+  k1(3) = 1.0/3.0
+
+  k2(1) = 1.0     !1.0
+  k2(2) = 1.0/4.0 !0.5
+  k2(3) = 2.0/3.0
+
+  do itstep = 1,ntstep
+
+     uconsi = uconsn
+
+     !---------------------------------------------------------
+     !--- RK stages
+     do istage = 1,3 !2
+
+        rhsel(:,:) = 0.d0
+
+        if (nsdiscr .eq. 0) then
+           call flux_p0_mm6eq(uprim,uconsi,rhsel)
+           call get_pgradalpha(uprim,rhsel)
+        else if (nsdiscr .eq. 1) then
+           write(*,*) "p0p1 not set up for mm6eq!" 
+           exit
+        end if
+
+        do ielem = 1,imax
+
+        vol = coord(ielem+1)-coord(ielem)
+
+        do ieqn  = 1,neqns
+
+             ucons(ieqn,ielem) =   k1(istage) *   uconsn(ieqn,ielem) &
+                                 + k2(istage) * ( uconsi(ieqn,ielem) &
+                                                + dt * rhsel(ieqn,ielem)/ vol)
+
+        end do !ieqn
+        end do !ielem
+
+        call get_bc_mm6eq(ucons)
+        !call decode_uprim(ucons,uprim)
+        !call blend_disphase(ucons, uprim)
+
+        uconsi = ucons
+        uprimn = uprim
+
+     end do !istage
+     !---------------------------------------------------------
+
+     time = time + dt
+
+     !----- Screen-output:
+     if ((itstep.eq.1) .or. (mod(itstep,n_screen).eq.0)) then
+     write(*,*) "--------------------------------------------"
+     write(*,*) "  itstep: ", itstep, "   Time: ", time
+     write(*,*) "  Time step: ", dt
+     write(*,*) "--------------------------------------------"
+     write(*,*) " "
+     end if
+
+     !--- solution update
+     uconsn(:,:)   = ucons(:,:)
+
+     !----- File-output:
+     if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
+     call gnuplot_flow_mm6eq(ucons, itstep)
+     end if
+
+  end do !itstep
+
+  itstep = itstep - 1
+
+  call gnuplot_flow_mm6eq(ucons, itstep)
+
+  !----- Screen-output:
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-------- FINAL OUTPUT: ----- TVD-RK3: ---------"
+  write(*,*) "  itstep: ", itstep, "   Time: ", time
+  write(*,*) "  Time step: ", dt
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-----------------------------------------------"
+  write(*,*) " "
+
+end subroutine ExplicitRK3_mm6eq
 
 !----------------------------------------------------------------------------------------------
 !----- Disappearing phase treatment:

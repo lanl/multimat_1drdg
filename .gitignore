@@ -3,3 +3,4 @@
 *output
 *.dSYM
 *.DS_Store
+*.exe

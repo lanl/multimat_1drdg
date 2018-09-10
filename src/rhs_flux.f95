@@ -1,9 +1,7 @@
 !!---------------------------------------------------------------------------------------
-!!----- Non-equilibrium isothermal Multiphase (Flux computation Module)
+!!----- Velocity non-equilibrium isothermal Multiphase (Flux computation module)
 !!----- by
 !!----- Aditya K Pandare
-!!----- Department of Mechanical and Aerospace Engineering,
-!!----- North Carolina State University.
 !!---------------------------------------------------------------------------------------
 
 MODULE rhs_flux
@@ -619,7 +617,7 @@ end subroutine LDFSS_psreal
 !----- Boundary conditions:
 !----------------------------------------------------------------------------------------------
 
-subroutine get_bc(ucons)
+subroutine get_bc_4eq(ucons)
 
 real*8  :: rho_g, u_g, pr_g, ucons(neqns,0:imax+1)
 
@@ -637,7 +635,7 @@ real*8  :: rho_g, u_g, pr_g, ucons(neqns,0:imax+1)
            write(*,*) "BC's not set for iprob = ", iprob
         end if
 
-end subroutine get_bc
+end subroutine get_bc_4eq
 
 !----------------------------------------------------------------------------------------------
 !----- Primitive variable reconstruction (MC):
