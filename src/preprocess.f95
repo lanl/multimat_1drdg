@@ -27,6 +27,7 @@ integer :: i
         read(12,*) ! blank line
         read(12,*) iprob
         read(12,*) imax
+        read(12,*) g_lbflag, g_rbflag
         read(12,*) i_restart
         read(12,*) i_flux
         read(12,*) ! blank line
