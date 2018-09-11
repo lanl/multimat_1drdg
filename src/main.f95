@@ -61,6 +61,16 @@ write(*,*) "PREPROCESSING FINISHED."
 write(*,*) " nelem = ", imax
 write(*,*) " dt =    ", dt_u
 write(*,*) " "
+write(*,*) " Using appr. Riemann solver: "
+if (i_flux .eq. 1) then
+  write(*,*) " Lax-Friedrichs flux."
+else if (i_flux .eq. 2) then
+  write(*,*) " AUSM+ flux."
+else
+  write(*,*) "Invalid flux scheme."
+  stop
+end if
+write(*,*) " "
 
 !----- Initialization:
 if (i_system .eq. 0) then
