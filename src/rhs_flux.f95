@@ -19,12 +19,12 @@ CONTAINS
 
 subroutine get_pgradalpha(uprim, rhsel)
 
-real*8,  intent(in) :: uprim(ndof,neqns,0:imax+1)
+real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: dx, alpha1, alpha2, u1, u2, pr, rho1, rho2, &
            fwddiff,cntdiff,bwddiff, &
-           gradalpha1, urel, temp, temp1, pint, deltap, rhsel(neqns,imax)
+           gradalpha1, urel, temp, temp1, pint, deltap, rhsel(g_neqns,imax)
 
         do ielem = 1,imax
 
@@ -64,11 +64,11 @@ end subroutine get_pgradalpha
 
 subroutine get_pgradalpha_p0p1(uprim, rhsel)
 
-real*8,  intent(in) :: uprim(ndof,neqns,0:imax+1)
+real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: dx, alpha1, alpha2, u1, u2, pr, rho1, rho2, &
-           gradalpha1, urel, temp, temp1, pint, deltap, rhsel(neqns,imax)
+           gradalpha1, urel, temp, temp1, pint, deltap, rhsel(g_neqns,imax)
 
         do ielem = 1,imax
 
@@ -105,13 +105,13 @@ end subroutine get_pgradalpha_p0p1
 subroutine flux_p0(uprim, ucons, rhsel)
 
 integer :: ifc, iel, ier
-real*8  :: ul(neqns), ur(neqns), &
-           vl(neqns), vr(neqns), &
-           intflux(neqns), intpflux(2), rhsel(neqns,imax), &
+real*8  :: ul(g_neqns), ur(g_neqns), &
+           vl(g_neqns), vr(g_neqns), &
+           intflux(g_neqns), intpflux(2), rhsel(g_neqns,imax), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,neqns,0:imax+1), ucons(neqns,0:imax+1)
+real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
         do ifc = 1,imax+1
 
@@ -169,13 +169,13 @@ end subroutine flux_p0
 subroutine flux_p0p1(uprim, ucons, rhsel)
 
 integer :: ifc, iel, ier
-real*8  :: ul(neqns), ur(neqns), &
-           vl(neqns), vr(neqns), &
-           dxl, dxr, intflux(neqns), intpflux(2), rhsel(neqns,imax), &
+real*8  :: ul(g_neqns), ur(g_neqns), &
+           vl(g_neqns), vr(g_neqns), &
+           dxl, dxr, intflux(g_neqns), intpflux(2), rhsel(g_neqns,imax), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,neqns,0:imax+1), ucons(neqns,0:imax+1)
+real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
         call reconstruct_uprim(uprim)
 
@@ -263,9 +263,9 @@ real*8 :: arho1_l, arhou1_l, u1_l, alpha1_l, a1_l, rho1_l, m1_l, &
           mminu, pminu, mminu_12, mdotminu, &
           vrel, disp, mcorr_12, macht
 
-real*8 :: intflux(neqns), intpflux(2)
+real*8 :: intflux(g_neqns), intpflux(2)
 
-real*8, intent(in) :: ul(neqns), ur(neqns), vl(neqns), vr(neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), vl(g_neqns), vr(g_neqns)
 
         !----- Left state
         arho1_l  = ul(1)
@@ -442,9 +442,9 @@ real*8 :: arho1_l, arhou1_l, u1_l, alpha1_l, a1_l, rho1_l, m1_l, &
           vrel, disp, mcorr_12, macht, &
           vmix_l, vmix_r, mm_l, mm_r, rhoc_12
 
-real*8 :: intflux(neqns), intpflux(2)
+real*8 :: intflux(g_neqns), intpflux(2)
 
-real*8, intent(in) :: ul(neqns), ur(neqns), vl(neqns), vr(neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), vl(g_neqns), vr(g_neqns)
 
         !----- Left state
         arho1_l  = ul(1)
@@ -619,7 +619,7 @@ end subroutine LDFSS_psreal
 
 subroutine get_bc_4eq(ucons)
 
-real*8  :: rho_g, u_g, pr_g, ucons(neqns,0:imax+1)
+real*8  :: rho_g, u_g, pr_g, ucons(g_neqns,0:imax+1)
 
         !--- extrapolation
         if ((iprob .eq. 0) .or. (iprob .eq. 2)) then
@@ -645,7 +645,7 @@ subroutine reconstruct_uprim(uprim)
 
 integer :: ie, ieqn
 real*8  :: vol, fwddiff, bwddiff, cntdiff, &
-           uprim(ndof,neqns,0:imax+1)
+           uprim(ndof,g_neqns,0:imax+1)
 
 real*8  :: umin, umax, ui, ug, uplus, psil, psir, psi(imax)
 
@@ -653,7 +653,7 @@ real*8  :: umin, umax, ui, ug, uplus, psil, psir, psi(imax)
 
         vol = coord(ie+1)-coord(ie)
 
-        do ieqn = 1,neqns
+        do ieqn = 1,g_neqns
 
            fwddiff = ( uprim(1,ieqn,ie+1) - uprim(1,ieqn,ie) ) / vol
            bwddiff = ( uprim(1,ieqn,ie) - uprim(1,ieqn,ie-1) ) / vol
@@ -670,7 +670,7 @@ real*8  :: umin, umax, ui, ug, uplus, psil, psir, psi(imax)
 
         !--- barth limiter
 
-        do ieqn = 1,neqns
+        do ieqn = 1,g_neqns
 
         do ie = 1,imax
 

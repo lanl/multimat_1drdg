@@ -71,14 +71,48 @@ real*8  :: ldomn, dx
 end subroutine gen_mesh
 
 !----------------------------------------------------------------------------------------------
+!----- Reference quantities and nondimensionalization:
+!----------------------------------------------------------------------------------------------
+
+subroutine nondimen_mm6eq()
+
+  a_nd = dsqrt(pr1_fs/rho1_fs)
+  t_nd = t1_fs
+  p_nd = pr1_fs
+  rho_nd = rho1_fs
+
+  write(*,*)" Reference quantities used in non-dimensionalization:"
+  write(*,*)"  Speed of sound: ", a_nd
+  write(*,*)"  Temperature:    ", t_nd
+  write(*,*)"  Pressure:       ", p_nd
+  write(*,*)"  Density:        ", rho_nd
+
+  !--- nondimensionalization
+  rho1_fs = rho1_fs/rho_nd
+  rho2_fs = rho2_fs/rho_nd
+  pr1_fs = pr1_fs/p_nd
+  pr2_fs = pr2_fs/p_nd
+  t1_fs = t1_fs/t_nd
+  t2_fs = t2_fs/t_nd
+  u_fs = u_fs/a_nd
+  dt_u = dt_u*a_nd
+
+  g_pc1 = g_pc1/p_nd
+  g_pc2 = g_pc2/p_nd
+  g_cp1 = g_cp1/ (a_nd*a_nd/t_nd)
+  g_cp2 = g_cp2/ (a_nd*a_nd/t_nd)
+
+end subroutine nondimen_mm6eq
+
+!----------------------------------------------------------------------------------------------
 !----- Solution initialization for 4-eq isothermal 2fluid model:
 !----------------------------------------------------------------------------------------------
 
 subroutine init_soln_4eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
-real*8  :: uprim(ndof,neqns,0:imax+1), uprimn(ndof,neqns,0:imax+1), &
-           ucons(neqns,0:imax+1), uconsn(neqns,0:imax+1)
+real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
+           ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1)
 real*8  :: xf, pl, pr
 
         !--- SCD
@@ -192,8 +226,8 @@ end subroutine init_soln_4eq
 subroutine init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
-real*8  :: uprim(ndof,neqns,0:imax+1), uprimn(ndof,neqns,0:imax+1), &
-           ucons(neqns,0:imax+1), uconsn(neqns,0:imax+1)
+real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
+           ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1)
 real*8  :: xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -211,17 +245,19 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
      rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
 
+     call nondimen_mm6eq()
+
      ! left state
-     p1l = 1.1d5
-     p2l = 1.1d5
-     t1l = 300.0
-     t2l = 300.0
+     p1l = pr1_fs
+     p2l = pr2_fs
+     t1l = t1_fs
+     t2l = t2_fs
      ul  = u_fs
      ! right state
-     p1r = 1.1d5
-     p2r = 1.1d5
-     t1r = 300.0
-     t2r = 300.0
+     p1r = pr1_fs
+     p2r = pr2_fs
+     t1r = t1_fs
+     t2r = t2_fs
      ur  = u_fs
 
      do ielem = 0,imax+1
@@ -273,7 +309,7 @@ end subroutine init_soln_mm6eq
 subroutine gnuplot_flow_4eq(uprim, ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: uprim(ndof,neqns,0:imax+1), ucons(neqns,0:imax+1)
+real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, pres, rhomix, umix, &
@@ -314,7 +350,7 @@ end subroutine gnuplot_flow_4eq
 subroutine gnuplot_flow_mm6eq(ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: ucons(neqns,0:imax+1)
+real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, &
@@ -322,32 +358,42 @@ real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, &
 
 character(len=100) :: filename2,filename3
 
-        write(filename2,'(1I50)')itstep
-        filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
-        open(23,file=trim(adjustl(filename3)),status='unknown')
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
+  open(23,file=trim(adjustl(filename3)),status='unknown')
 
-        do ielem = 1,imax
+  do ielem = 1,imax
 
-           xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
-           alp1 = ucons(1,ielem)
-           alp2 = 1.0 - alp1
-           rho1 = ucons(2,ielem)/alp1
-           rho2 = ucons(3,ielem)/alp2
-           rhomix = ucons(2,ielem) + ucons(3,ielem) !alp1*rho1 + alp2*rho2
-           umix = ucons(4,ielem)/rhomix
-           rhoe1 = ucons(5,ielem)/alp1
-           rhoe2 = ucons(6,ielem)/alp2
-           p1   = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, umix)
-           p2   = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, umix)
-           t1   = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, umix)
-           t2   = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, umix)
-           pmix = alp1*p1 + alp2*p2
+     xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
+     alp1 = ucons(1,ielem)
+     alp2 = 1.0 - alp1
+     rho1 = ucons(2,ielem)/alp1
+     rho2 = ucons(3,ielem)/alp2
+     rhomix = ucons(2,ielem) + ucons(3,ielem) !alp1*rho1 + alp2*rho2
+     umix = ucons(4,ielem)/rhomix
+     rhoe1 = ucons(5,ielem)/alp1
+     rhoe2 = ucons(6,ielem)/alp2
+     p1   = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, umix)
+     p2   = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, umix)
+     t1   = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, umix)
+     t2   = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, umix)
+     pmix = alp1*p1 + alp2*p2
+     tmix = alp1*t1 + alp2*t2
 
-           write(23,'(9E16.6)') xcc, alp1, rhomix, umix, pmix, tmix, p1, p2, t1, t2
+     write(23,'(10E16.6)') xcc, &            !1
+                           alp1, &           !2
+                           rhomix*rho_nd, &  !3
+                           umix*a_nd , &     !4
+                           pmix*p_nd, &      !5
+                           tmix*t_nd, &      !6
+                           p1*p_nd, &        !7
+                           p2*p_nd, &        !8
+                           t1*t_nd, &        !9
+                           t2*t_nd           !10
 
-        end do !ielem
+  end do !ielem
 
-        close(23)
+  close(23)
 
 end subroutine gnuplot_flow_mm6eq
 

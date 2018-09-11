@@ -19,13 +19,13 @@ CONTAINS
 
 subroutine flux_p0_mm6eq(uprim, ucons, rhsel)
 
-integer :: ifc, iel, ier
-real*8  :: ul(neqns), ur(neqns), &
-           intflux(neqns), intpflux(2), rhsel(neqns,imax), &
+integer :: ifc, iel, ier, ieqn
+real*8  :: ul(g_neqns), ur(g_neqns), &
+           intflux(g_neqns), intpflux(2), rhsel(g_neqns,imax), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,neqns,0:imax+1), ucons(neqns,0:imax+1)
+real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
   do ifc = 1,imax+1
 
@@ -40,21 +40,15 @@ real*8, intent(in) :: uprim(ndof,neqns,0:imax+1), ucons(neqns,0:imax+1)
   call ausmplus_mm6eq(ul, ur, intflux)
 
   if (iel .gt. 0) then
-          rhsel(1,iel) = rhsel(1,iel) - intflux(1)
-          rhsel(2,iel) = rhsel(2,iel) - intflux(2)
-          rhsel(3,iel) = rhsel(3,iel) - intflux(3)
-          rhsel(4,iel) = rhsel(4,iel) - intflux(4)
-          rhsel(5,iel) = rhsel(5,iel) - intflux(5)
-          rhsel(6,iel) = rhsel(6,iel) - intflux(6)
+    do ieqn = 1,g_neqns
+          rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
+    end do !ieqn
   end if
 
   if (ier .lt. (imax+1)) then
-          rhsel(1,ier) = rhsel(1,ier) + intflux(1)
-          rhsel(2,ier) = rhsel(2,ier) + intflux(2)
-          rhsel(3,ier) = rhsel(3,ier) + intflux(3)
-          rhsel(4,ier) = rhsel(4,ier) + intflux(4)
-          rhsel(5,ier) = rhsel(5,ier) + intflux(5)
-          rhsel(6,ier) = rhsel(6,ier) + intflux(6)
+    do ieqn = 1,g_neqns
+          rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
+    end do !ieqn
   end if
 
   !--- Non-conservative fluxes
@@ -70,9 +64,9 @@ end subroutine flux_p0_mm6eq
 
 subroutine ausmplus_mm6eq(ul, ur, flux)
 
-real*8, intent(in) :: ul(neqns), ur(neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(neqns)
+real*8 :: flux(g_neqns)
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
           arho2_l,rho2_l,e2_l,a2_l,h2_l,p2_l, &
@@ -90,6 +84,8 @@ real*8 :: psplus_l,psplus_r,psminu_l,psminu_r
 real*8 :: lambda,lambda_plus, lambda_minu
   
 !real*8 :: k_p, k_u
+
+  flux(:) = 0.0
   
   ! ul
   al1_l   = ul(1)
@@ -167,8 +163,6 @@ real*8 :: lambda,lambda_plus, lambda_minu
   !p_u   = -k_u* (c10-psplus_l* psminu_r)* f_a* rho_12* vnrel* (vn_r-vn_l)
   p_12 = psplus_l*p_l + psminu_r*p_r! + p_u
   
-  !p_12 = max(p_12, 1.0e-6*min(p_l,p_r))
-  
   lambda = ac_12 * m_12
   
   lambda_plus = 0.5 * (lambda + dabs(lambda))
@@ -224,7 +218,7 @@ end subroutine splitmach_as
 
 subroutine get_bc_mm6eq(ucons)
 
-real*8  :: ucons(neqns,0:imax+1)
+real*8  :: ucons(g_neqns,0:imax+1)
 
   !----- left boundary
 

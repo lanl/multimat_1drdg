@@ -32,13 +32,13 @@ if (i_system .eq. 0) then
    write(*,*) " Isothermal single-pressure two-fluid system: "
    write(*,*) " Pressure equilibrium " 
    write(*,*) " Velocity non-equilibrium "
-   neqns = 4
+   g_neqns = 4
 else if (i_system .eq. 1) then
    ! pressure non-equilibrium velocity equilibrium two-fluid system
    write(*,*) " Multi-material system: "
    write(*,*) " Pressure non-equilibrium " 
    write(*,*) " Velocity equilibrium "
-   neqns = 6
+   g_neqns = 6
 end if
 
 if (nsdiscr .eq. 0) then
@@ -48,8 +48,8 @@ else
 end if
 
 !----- Allocation:
-allocate(uprim(ndof,neqns,0:imax+1), uprimn(ndof,neqns,0:imax+1), &
-         ucons(neqns,0:imax+1), uconsn(neqns,0:imax+1))
+allocate(uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
+         ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1))
 
 allocate(coord(0:imax+2))
 

@@ -3,7 +3,7 @@ MODULE glob_var
 implicit none
 
 integer :: i_system, &
-           imax, neqns, ntstep, &
+           imax, g_neqns, ntstep, &
            nsdiscr, ndof, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen
@@ -13,6 +13,9 @@ real*8  :: dt_u, dt, dt_s
 real*8  :: u1_fs, rho1_fs, pr1_fs, t1_fs, alpha1_fs, alphamin
 real*8  :: u2_fs, rho2_fs, pr2_fs, t2_fs
 real*8  :: u_fs, pr_fs
+
+!--- reference quantities for nondimensionalization
+real*8  :: a_nd, t_nd, p_nd, rho_nd
 
 !--- isothermal gas
 real*8, parameter :: rgas = 287.15

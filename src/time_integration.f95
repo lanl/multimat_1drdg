@@ -20,10 +20,10 @@ subroutine ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
 
 integer :: itstep, ielem, ieqn, istage
 real*8  :: vol,time
-real*8  :: uprim(ndof,neqns,0:imax+1),uprimn(ndof,neqns,0:imax+1), &
-           ucons(neqns,0:imax+1),uconsn(neqns,0:imax+1),uconsi(neqns,0:imax+1), &
+real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
+           ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
            k1(3),k2(3)
-real*8  :: rhsel(neqns,imax)
+real*8  :: rhsel(g_neqns,imax)
 
         time = 0.d0
 
@@ -63,7 +63,7 @@ real*8  :: rhsel(neqns,imax)
                  rhsel(4,ielem) = rhsel(4,ielem) + uconsn(3,ielem)*9.81*vol
               end if
 
-              do ieqn  = 1,neqns
+              do ieqn  = 1,g_neqns
 
                    ucons(ieqn,ielem) =   k1(istage) *   uconsn(ieqn,ielem) &
                                        + k2(istage) * ( uconsi(ieqn,ielem) &
@@ -125,10 +125,10 @@ subroutine ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
 
 integer :: itstep, ielem, ieqn, istage
 real*8  :: vol,time
-real*8  :: uprim(ndof,neqns,0:imax+1),uprimn(ndof,neqns,0:imax+1), &
-           ucons(neqns,0:imax+1),uconsn(neqns,0:imax+1),uconsi(neqns,0:imax+1), &
+real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
+           ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
            k1(3),k2(3)
-real*8  :: rhsel(neqns,imax)
+real*8  :: rhsel(g_neqns,imax)
 
   time = 0.d0
 
@@ -162,7 +162,7 @@ real*8  :: rhsel(neqns,imax)
 
         vol = coord(ielem+1)-coord(ielem)
 
-        do ieqn  = 1,neqns
+        do ieqn  = 1,g_neqns
 
              ucons(ieqn,ielem) =   k1(istage) *   uconsn(ieqn,ielem) &
                                  + k2(istage) * ( uconsi(ieqn,ielem) &
@@ -181,13 +181,13 @@ real*8  :: rhsel(neqns,imax)
      end do !istage
      !---------------------------------------------------------
 
-     time = time + dt
+     time = time + (dt/a_nd)
 
      !----- Screen-output:
      if ((itstep.eq.1) .or. (mod(itstep,n_screen).eq.0)) then
      write(*,*) "--------------------------------------------"
      write(*,*) "  itstep: ", itstep, "   Time: ", time
-     write(*,*) "  Time step: ", dt
+     write(*,*) "  Time step: ", dt/a_nd
      write(*,*) "--------------------------------------------"
      write(*,*) " "
      end if
@@ -210,7 +210,7 @@ real*8  :: rhsel(neqns,imax)
   write(*,*) "-----------------------------------------------"
   write(*,*) "-------- FINAL OUTPUT: ----- TVD-RK3: ---------"
   write(*,*) "  itstep: ", itstep, "   Time: ", time
-  write(*,*) "  Time step: ", dt
+  write(*,*) "  Time step: ", dt/a_nd
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
@@ -224,11 +224,11 @@ end subroutine ExplicitRK3_mm6eq
 
 subroutine limit_disphase(ucons, uprim, uprimn)
 
-real*8, intent(in) :: uprimn(ndof,neqns,0:imax+1)
+real*8, intent(in) :: uprimn(ndof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: alpha1, u1, u2, &
-           ucons(neqns,0:imax+1), uprim(ndof,neqns,0:imax+1)
+           ucons(g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
 
         do ie = 1,imax
            alpha1 = uprim(1,1,ie)
@@ -260,7 +260,7 @@ subroutine blend_disphase(ucons, uprim)
 
 integer :: ie
 real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
-           ucons(neqns,0:imax+1), uprim(ndof,neqns,0:imax+1)
+           ucons(g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
 
         epsmin = 1.0  * alphamin
         epsmax = 10.0 * alphamin
