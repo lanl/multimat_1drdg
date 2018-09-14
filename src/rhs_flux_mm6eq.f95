@@ -60,26 +60,63 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
   end do !ifc
 
-  !--- Non-conservative terms
+  !!--- Non-conservative terms
 
-  do ie = 1,imax
-    u_conv = ucons(4,ie)/(ucons(2,ie)+ucons(3,ie))
-    p1  = eos3_pr(g_gam1, g_pc1, ucons(2,ie)/ucons(1,ie), ucons(5,ie)/ucons(1,ie), u_conv)
-    p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ie)/ucons(1,ie), ucons(6,ie)/ucons(1,ie), u_conv)
-    par = ucons(1,ie)*p1 + (1.0-ucons(1,ie))*p2
+  !do ie = 1,imax
+  !  u_conv = ucons(4,ie)/(ucons(2,ie)+ucons(3,ie))
+  !  p1  = eos3_pr(g_gam1, g_pc1, ucons(2,ie)/ucons(1,ie), ucons(5,ie)/ucons(1,ie), u_conv)
+  !  p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ie)/ucons(1,ie), ucons(6,ie)/ucons(1,ie), u_conv)
+  !  par = ucons(1,ie)*p1 + (1.0-ucons(1,ie))*p2
 
-    dx = 2.0*(coord(ie+1)-coord(ie))
-    daldx = (ucons(1,ie+1)-ucons(1,ie-1))/dx
-    dudx = ((ucons(4,ie+1)/(ucons(2,ie+1)+ucons(3,ie+1))) &
-          - (ucons(4,ie-1)/(ucons(2,ie-1)+ucons(3,ie-1))))/dx
-    intper = par*u_conv*daldx
+  !  dx = 2.0*(coord(ie+1)-coord(ie))
+  !  daldx = (ucons(1,ie+1)-ucons(1,ie-1))/dx
+  !  dudx = ((ucons(4,ie+1)/(ucons(2,ie+1)+ucons(3,ie+1))) &
+  !        - (ucons(4,ie-1)/(ucons(2,ie-1)+ucons(3,ie-1))))/dx
+  !  intper = par*u_conv*daldx
 
-    rhsel(1,ie) = rhsel(1,ie) + ucons(1,ie)*dudx
-    rhsel(5,ie) = rhsel(5,ie) + intper
-    rhsel(6,ie) = rhsel(6,ie) - intper
-  end do !ie
+  !  rhsel(1,ie) = rhsel(1,ie) + 0.5*dx*ucons(1,ie)*dudx
+  !  rhsel(5,ie) = rhsel(5,ie) + 0.5*dx*intper
+  !  rhsel(6,ie) = rhsel(6,ie) - 0.5*dx*intper
+  !end do !ie
 
 end subroutine flux_p0_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Interface pressure correction (hyperbolization)
+!----------------------------------------------------------------------------------------------
+
+subroutine get_pugradalpha(ucons, rhsel)
+
+real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
+
+integer :: ie
+real*8  :: dx, al1, al2, p1, p2, u_conv, pr, &
+           fwddiff,cntdiff,bwddiff, &
+           gradal1, rhsel(g_neqns,imax)
+
+  do ie = 1,imax
+
+    dx = 2.0 * (coord(ie+1)-coord(ie))
+
+    u_conv = ucons(4,ie)/(ucons(2,ie)+ucons(3,ie))
+    al1 = ucons(1,ie)
+    al2 = 1.0 - al1
+    p1  = eos3_pr(g_gam1, g_pc1, ucons(2,ie)/al1, ucons(5,ie)/al1, u_conv)
+    p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ie)/al2, ucons(6,ie)/al2, u_conv)
+    pr  = al1*p1+al2*p2
+
+    fwddiff = ( ucons(1,ie+1) - ucons(1,ie) ) / (0.5*dx)
+    bwddiff = ( ucons(1,ie) - ucons(1,ie-1) ) / (0.5*dx)
+    cntdiff = (ucons(1,ie+1) - ucons(1,ie-1)) / dx
+
+    gradal1 = mclim(fwddiff,cntdiff,bwddiff)
+
+    rhsel(5,ie) = rhsel(5,ie) + pr*u_conv*gradal1*dx*0.5
+    rhsel(6,ie) = rhsel(6,ie) - pr*u_conv*gradal1*dx*0.5
+
+  end do !ie
+
+end subroutine get_pugradalpha
 
 !-------------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:

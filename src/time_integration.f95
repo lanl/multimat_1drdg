@@ -152,7 +152,7 @@ real*8  :: rhsel(g_neqns,imax)
 
         if (nsdiscr .eq. 0) then
            call flux_p0_mm6eq(uprim,uconsi,rhsel)
-           !call get_pgradalpha(uprim,rhsel)
+           call get_pugradalpha(uconsi,rhsel)
         else if (nsdiscr .eq. 1) then
            write(*,*) "p0p1 not set up for mm6eq!" 
            exit
