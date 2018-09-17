@@ -9,7 +9,9 @@ all:
 		time_integration.f95\
 		main.f95\
 		-o multimat1d.exe\
-		-ffpe-trap=zero,invalid,overflow -fdefault-real-8 -fdefault-double-8 -fcheck=all -g
+		-ffpe-trap=zero,invalid,overflow\
+		-freal-4-real-10 -freal-8-real-10\
+		-fcheck=all -g
 
 # Remove .mod's and .exe's from the parent directory:
 clean:

@@ -234,7 +234,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
   !--- SCD
   if (iprob .eq. 0) then
 
-     alphamin = 1.d-6
+     alphamin = 1.d-10
 
      alpha1_fs = alphamin
      u_fs = 10.0
