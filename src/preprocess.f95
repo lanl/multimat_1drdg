@@ -31,6 +31,9 @@ integer :: i
         read(12,*) i_restart
         read(12,*) i_flux
         read(12,*) ! blank line
+        read(12,*) g_gam1, g_pc1, g_cp1
+        read(12,*) g_gam2, g_pc2, g_cp2
+        read(12,*) ! blank line
         read(12,*) nsdiscr
         read(12,*) dt_u
         read(12,*) ntstep
@@ -361,6 +364,17 @@ character(len=100) :: filename2,filename3
   write(filename2,'(1I50)')itstep
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
   open(23,file=trim(adjustl(filename3)),status='unknown')
+
+  write(23,'(10A8)') "# xcc,", &   !1
+                     "alp1,", &    !2
+                     "rhomix,", &  !3
+                     "umix," , &   !4
+                     "pmix,", &    !5
+                     "tmix,", &    !6
+                     "p1,", &      !7
+                     "p2,", &      !8
+                     "t1,", &      !9
+                     "t2"         !10
 
   do ielem = 1,imax
 

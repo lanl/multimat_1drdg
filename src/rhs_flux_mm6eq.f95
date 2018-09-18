@@ -23,7 +23,7 @@ integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            intflux(g_neqns), rhsel(g_neqns,imax), &
            dx, u_conv, daldx, dudx, intpel, intper, par, &
-           p1, p2, uf, alpf(2), ncnfl, ncnfr
+           p1, p2, uf, alpf, ncnfl, ncnfr
 
 real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
@@ -47,7 +47,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   endif
 
   !--- Non-conservative terms
-  !alpf = 0.5 * (ucons(1,iel) + ucons(1,ier))
+  alpf = 0.5 * (ucons(1,iel) + ucons(1,ier))
 
   ! left element
   u_conv = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
@@ -56,7 +56,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   p2  = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
                 ucons(6,iel)/(1.0-ucons(1,iel)), u_conv)
   par = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
-  ncnfl = par
+  ncnfl = par * u_conv
   uf = 0.5 * u_conv
 
   ! right element
@@ -66,7 +66,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
                 ucons(6,ier)/(1.0-ucons(1,ier)), u_conv)
   par = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
-  ncnfr = par
+  ncnfr = par * u_conv
   uf = uf + 0.5 * u_conv
 
   !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
@@ -76,8 +76,8 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
     rhsel(1,iel) = rhsel(1,iel) + uf * ucons(1,iel)
-    rhsel(5,iel) = rhsel(5,iel) + alpf(1) * ncnfl
-    rhsel(6,iel) = rhsel(6,iel) + alpf(2) * ncnfl
+    rhsel(5,iel) = rhsel(5,iel) + alpf * ncnfl
+    rhsel(6,iel) = rhsel(6,iel) + (1.0-alpf) * ncnfl
   end if
 
   if (ier .lt. (imax+1)) then
@@ -85,8 +85,8 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
     rhsel(1,ier) = rhsel(1,ier) - uf * ucons(1,ier)
-    rhsel(5,ier) = rhsel(5,ier) - alpf(1) * ncnfr
-    rhsel(6,ier) = rhsel(6,ier) - alpf(2) * ncnfr
+    rhsel(5,ier) = rhsel(5,ier) - alpf * ncnfr
+    rhsel(6,ier) = rhsel(6,ier) - (1.0-alpf) * ncnfr
   end if
 
   end do !ifc
@@ -143,7 +143,7 @@ subroutine llf_mm6eq(ul, ur, flux, alpf)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(g_neqns), alpf(2)
+real*8 :: flux(g_neqns), alpf
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
           arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
@@ -238,7 +238,6 @@ real*8 :: lambda
   flux(6) = 0.5 * ( ffunc_l(6)+ffunc_r(6) - lambda*(ur(6)-ul(6)) )
   
   alpf = flux(1)
-  alpf = flux(1)
 
 end subroutine llf_mm6eq
 
@@ -250,7 +249,7 @@ subroutine ausmplus_mm6eq(ul, ur, flux, alpf)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(g_neqns), alpf(2)
+real*8 :: flux(g_neqns), alpf
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
           arho2_l,rho2_l,e2_l,a2_l,h2_l,p2_l, &

@@ -29,12 +29,8 @@ real*8  :: k0   = 2.15d9
 real*8  :: n0   = 7.15
 
 !--- stiffened gas constants
-real*8  :: g_gam1 = 1.4
-real*8  :: g_gam2 = 2.8
-real*8  :: g_cp1 = 1004.5
-real*8  :: g_cp2 = 4186.0
-real*8  :: g_pc1 = 0.0
-real*8  :: g_pc2 = 8.5d8
+real*8  :: g_gam1, g_cp1, g_pc1
+real*8  :: g_gam2, g_cp2, g_pc2
 
 !--- interface pressure correction coeff
 real*8  :: ipsig = 2.0

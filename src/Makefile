@@ -10,7 +10,7 @@ all:
 		main.f95\
 		-o multimat1d.exe\
 		-ffpe-trap=zero,invalid,overflow\
-		-freal-4-real-10 -freal-8-real-10\
+		-freal-4-real-8\
 		-fcheck=all -g
 
 # Remove .mod's and .exe's from the parent directory:
