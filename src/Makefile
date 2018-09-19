@@ -17,7 +17,3 @@ all:
 clean:
 	rm *.mod *.exe
 	rm -r *.dSYM
-
-# Remove data from the output directory:
-rmout:
-	rm -f ./output/*

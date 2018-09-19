@@ -9,6 +9,9 @@
 1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
 2.8     0.0     4186.0     / material-2 properties: gamma, P_c, C_p
 ----------------------------------------------------------------------------------------------
+0.0             / Freestream velocity
+0.0      0.0    / Freestream pressures for 2 phases
+----------------------------------------------------------------------------------------------
 1               / Space discretization (0: P0; 1:MC-P0P1)
 5.0d-09         / Time-step size
 46000           / Maximum number of timesteps

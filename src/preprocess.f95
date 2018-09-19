@@ -34,6 +34,9 @@ integer :: i
         read(12,*) g_gam1, g_pc1, g_cp1
         read(12,*) g_gam2, g_pc2, g_cp2
         read(12,*) ! blank line
+        read(12,*) u_fs
+        read(12,*) pr1_fs, pr2_fs
+        read(12,*) ! blank line
         read(12,*) nsdiscr
         read(12,*) dt_u
         read(12,*) ntstep
@@ -240,9 +243,6 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
      alphamin = 1.d-10
 
      alpha1_fs = alphamin
-     u_fs = 10.0
-     pr1_fs = 1.1d5
-     pr2_fs = 1.1d5
      t1_fs = 300.0
      t2_fs = 300.0
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)

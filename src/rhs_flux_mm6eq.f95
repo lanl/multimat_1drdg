@@ -22,8 +22,8 @@ subroutine flux_p0_mm6eq(uprim, ucons, rhsel)
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            intflux(g_neqns), rhsel(g_neqns,imax), &
-           dx, u_conv, daldx, dudx, intpel, intper, par, &
-           p1, p2, uf, alpf, ncnfl, ncnfr
+           u_conv, pr, p1, p2, &
+           uf, alp1f, alp2f, ncnfl, ncnfr, lplus, lminu
 
 real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
@@ -38,46 +38,48 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   !--- Conservative fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, alpf)
+     call llf_mm6eq(ul, ur, intflux, lplus, lminu)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, alpf)
+     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu)
   else
      print*, "Invalid flux scheme."
      stop
   endif
 
   !--- Non-conservative terms
-  alpf = 0.5 * (ucons(1,iel) + ucons(1,ier))
+  alp1f = lplus*ucons(1,iel) + lminu*ucons(1,ier)
+  alp2f = lplus*(1.0-ucons(1,iel)) + lminu*(1.0-ucons(1,ier))
 
   ! left element
   u_conv = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
-  p1  = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
-                ucons(5,iel)/ucons(1,iel), u_conv)
-  p2  = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
-                ucons(6,iel)/(1.0-ucons(1,iel)), u_conv)
-  par = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
-  ncnfl = par * u_conv
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
+               ucons(5,iel)/ucons(1,iel), u_conv)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
+               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv)
+  pr = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
+  ncnfl = pr * u_conv
   uf = 0.5 * u_conv
 
   ! right element
   u_conv = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
-  p1  = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
-                ucons(5,ier)/ucons(1,ier), u_conv)
-  p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
-                ucons(6,ier)/(1.0-ucons(1,ier)), u_conv)
-  par = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
-  ncnfr = par * u_conv
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
+               ucons(5,ier)/ucons(1,ier), u_conv)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
+               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv)
+  pr = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
+  ncnfr = pr * u_conv
   uf = uf + 0.5 * u_conv
 
   !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
+  !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
     rhsel(1,iel) = rhsel(1,iel) + uf * ucons(1,iel)
-    rhsel(5,iel) = rhsel(5,iel) + alpf * ncnfl
-    rhsel(6,iel) = rhsel(6,iel) + (1.0-alpf) * ncnfl
+    rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
+    rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
 
   if (ier .lt. (imax+1)) then
@@ -85,8 +87,8 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
     rhsel(1,ier) = rhsel(1,ier) - uf * ucons(1,ier)
-    rhsel(5,ier) = rhsel(5,ier) - alpf * ncnfr
-    rhsel(6,ier) = rhsel(6,ier) - (1.0-alpf) * ncnfr
+    rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
+    rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
 
   end do !ifc
@@ -139,11 +141,11 @@ end subroutine get_pugradalpha
 !----- 2fluid Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------------
 
-subroutine llf_mm6eq(ul, ur, flux, alpf)
+subroutine llf_mm6eq(ul, ur, flux, lplus, lminu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(g_neqns), alpf
+real*8 :: flux(g_neqns), lplus, lminu
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
           arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
@@ -236,8 +238,9 @@ real*8 :: lambda
   flux(4) = 0.5 * ( ffunc_l(4)+ffunc_r(4) - lambda*(ur(4)-ul(4)) )
   flux(5) = 0.5 * ( ffunc_l(5)+ffunc_r(5) - lambda*(ur(5)-ul(5)) )
   flux(6) = 0.5 * ( ffunc_l(6)+ffunc_r(6) - lambda*(ur(6)-ul(6)) )
-  
-  alpf = flux(1)
+
+  lplus = 0.5
+  lminu = 0.5
 
 end subroutine llf_mm6eq
 
@@ -245,11 +248,11 @@ end subroutine llf_mm6eq
 !----- 2fluid AUSM+UP:
 !-------------------------------------------------------------------------------------
 
-subroutine ausmplus_mm6eq(ul, ur, flux, alpf)
+subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(g_neqns), alpf
+real*8 :: flux(g_neqns)
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
           arho2_l,rho2_l,e2_l,a2_l,h2_l,p2_l, &
@@ -358,7 +361,8 @@ real*8 :: lambda,lambda_plus, lambda_minu
   flux(5) = lambda_plus*(h1_l)  + lambda_minu*(h1_r)
   flux(6) = lambda_plus*(h2_l)  + lambda_minu*(h2_r)
 
-  alpf = flux(1)
+  lambda_plus = lambda_plus/(dabs(lambda)+1.d-14) 
+  lambda_minu = lambda_minu/(dabs(lambda)+1.d-14)
 
 end subroutine ausmplus_mm6eq
 
