@@ -238,6 +238,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
   !--- SCD
+  !----------
   if (iprob .eq. 0) then
 
      alphamin = 1.d-10
@@ -253,6 +254,62 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
      ! left state
      p1l = pr1_fs
      p2l = pr2_fs
+     t1l = t1_fs
+     t2l = t2_fs
+     ul  = u_fs
+     ! right state
+     p1r = pr1_fs
+     p2r = pr2_fs
+     t1r = t1_fs
+     t2r = t2_fs
+     ur  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.5) then
+           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
+           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
+           ucons(1,ielem) = alphamin
+           ucons(2,ielem) = alphamin * rho1
+           ucons(3,ielem) = (1.0-alphamin) * rho2
+           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
+           ucons(5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+        else
+           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
+           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
+           ucons(1,ielem) = 1.0-alphamin
+           ucons(2,ielem) = (1.0-alphamin) * rho1
+           ucons(3,ielem) = alphamin * rho2
+           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
+           ucons(5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+        end if
+
+     end do !ielem
+
+  !--- Shocktube
+  !----------
+  else if (iprob .eq. 1) then
+
+     alphamin = 1.d-10
+
+     alpha1_fs = alphamin
+     u_fs = 0.0
+     pr1_fs = 1.d5
+     pr2_fs = 1.d5
+     t1_fs = 300.0
+     t2_fs = 300.0
+     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
+     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = 10.0 * pr1_fs
+     p2l = 10.0 * pr2_fs
      t1l = t1_fs
      t2l = t2_fs
      ul  = u_fs
