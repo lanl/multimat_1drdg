@@ -22,8 +22,8 @@ subroutine flux_p0_mm6eq(uprim, ucons, rhsel)
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            intflux(g_neqns), rhsel(g_neqns,imax), &
-           u_conv, pr, p1, p2, &
-           uf, alp1f, alp2f, ncnfl, ncnfr, lplus, lminu
+           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu
 
 real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
@@ -51,24 +51,24 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   alp2f = lplus*(1.0-ucons(1,iel)) + lminu*(1.0-ucons(1,ier))
 
   ! left element
-  u_conv = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
+  u_conv_l = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
   p1 = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
-               ucons(5,iel)/ucons(1,iel), u_conv)
+               ucons(5,iel)/ucons(1,iel), u_conv_l)
   p2 = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
-               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv)
+               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv_l)
   pr = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
-  ncnfl = pr * u_conv
-  uf = 0.5 * u_conv
+  ncnfl = pr * u_conv_l
 
   ! right element
-  u_conv = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
+  u_conv_r = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
   p1 = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
-               ucons(5,ier)/ucons(1,ier), u_conv)
+               ucons(5,ier)/ucons(1,ier), u_conv_r)
   p2 = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
-               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv)
+               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv_r)
   pr = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
-  ncnfr = pr * u_conv
-  uf = uf + 0.5 * u_conv
+  ncnfr = pr * u_conv_r
+
+  uf = 0.5 * (u_conv_l+u_conv_r) !lplus*u_conv_l + lminu*u_conv_r
 
   !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
   !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
@@ -77,7 +77,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + uf * ucons(1,iel)
+    rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
     rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
     rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
@@ -86,7 +86,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - uf * ucons(1,ier)
+    rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
     rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
     rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if

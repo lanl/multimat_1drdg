@@ -308,16 +308,16 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
      call nondimen_mm6eq()
 
      ! left state
-     p1l = 10.0 * pr1_fs
-     p2l = 10.0 * pr2_fs
+     p1l = pr1_fs
+     p2l = pr2_fs
      t1l = t1_fs
      t2l = t2_fs
      ul  = u_fs
      ! right state
-     p1r = pr1_fs
-     p2r = pr2_fs
-     t1r = t1_fs
-     t2r = t2_fs
+     p1r = 0.1*pr1_fs
+     p2r = 0.1*pr2_fs
+     t1r = 0.8*t1_fs
+     t2r = 0.8*t2_fs
      ur  = u_fs
 
      do ielem = 0,imax+1

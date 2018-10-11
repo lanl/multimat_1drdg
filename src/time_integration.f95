@@ -173,7 +173,7 @@ real*8  :: rhsel(g_neqns,imax)
 
         call get_bc_mm6eq(ucons)
         !call decode_uprim(ucons,uprim)
-        !call blend_disphase(ucons, uprim)
+        !call blend_disphase_mm6eq(ucons)
 
         uconsi = ucons
         uprimn = uprim
@@ -315,6 +315,89 @@ real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
         end do !ie
 
 end subroutine blend_disphase
+
+!----------------------------------------------------------------------------------------------
+!----- Disappearing phase treatment for mm6eq:
+!----- using blending
+!----------------------------------------------------------------------------------------------
+
+subroutine blend_disphase_mm6eq(ucons)
+
+integer :: ie
+real*8  :: al1, p1, t1, rho1, rhoe1, u, &
+           al2, p2, t2, rho2, rhoe2, xi, gxi, rho, epsmin, epsmax, &
+           ucons(g_neqns,0:imax+1)
+
+  epsmin = 1.0  * alphamin
+  epsmax = 10.0 * alphamin
+
+  do ie = 1,imax
+
+    ! conserved variables
+    al1 = ucons(1,ie)
+    al2 = 1.0 -al1
+    rho1 = ucons(2,ie) / al1
+    rho2 = ucons(3,ie) / al2
+    rhoe1 = ucons(5,ie) / al1
+    rhoe2 = ucons(6,ie) / al2
+
+    ! primitive variables
+    u = ucons(4,ie) / (ucons(2,ie)+ucons(3,ie))
+    p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
+    p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
+    t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
+    t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+  
+    !--- phase-1 disappearing
+    if (al1 .lt. epsmax) then
+
+      if ((al1 .ge. epsmin)) then
+            xi = (al1 - epsmin)/(epsmax - epsmin)
+      elseif (al1 .lt. epsmin) then
+            al1 = epsmin
+            xi = 0.0
+      end if
+
+      ! blend pressure and temperature
+      Gxi = - xi*xi * ((2.0 * xi) - 3.0)
+      p1 = (Gxi*p1) + ((1.0 - Gxi)*p2)
+      t1 = (Gxi*t1) + ((1.0 - Gxi)*t2)
+
+      ! consistently update derived quantities
+      rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
+      rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
+
+      ! update conserved variables
+      ucons(2,ie) = al1*rho1
+      ucons(5,ie) = al1*rhoe1
+
+    !--- phase-2 disappearing
+    elseif (al2 .lt. epsmax) then
+
+      if ((al2 .ge. epsmin)) then
+            xi = (al2 - epsmin)/(epsmax - epsmin)
+      elseif (al2 .lt. epsmin) then
+            al2 = epsmin
+            xi = 0.0
+      end if
+
+      ! blend pressure and temperature
+      Gxi = - xi*xi * ((2.0 * xi) - 3.0)
+      p2 = (Gxi*p2) + ((1.0 - Gxi)*p1)
+      t2 = (Gxi*t2) + ((1.0 - Gxi)*t1)
+
+      ! consistently update derived quantities
+      rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
+      rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
+
+      ucons(3,ie) = al2*rho2
+      ucons(6,ie) = al2*rhoe2
+
+    end if
+
+  end do !ie
+
+end subroutine blend_disphase_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
