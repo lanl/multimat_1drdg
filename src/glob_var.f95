@@ -35,6 +35,11 @@ real*8  :: g_gam2, g_cp2, g_pc2
 !--- interface pressure correction coeff
 real*8  :: ipsig = 2.0
 
+!--- conservation
+real*8  :: g_mass0_1, g_tenergy0_1
+real*8  :: g_mass0_2, g_tenergy0_2
+real*8  :: g_mass0_m, g_tenergy0_m
+
 !--- geometry
 real*8,  allocatable :: coord(:)
 

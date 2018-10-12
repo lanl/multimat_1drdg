@@ -82,12 +82,24 @@ end if
 !----- Time-stepping:
 dt = dt_u
 
+open(33,file='diag.dat',status='unknown')
+
+write(33,'(7A12)') "# tstep,", &   !1
+                   "mass1,", &     !2
+                   "mass2,", &     !3
+                   "massmix," , &  !4
+                   "tenergy1,", &  !5
+                   "tenergy2,", &  !6
+                   "tenergymix"    !7
+
 !--- Explicit TVD-RK3:
 if (i_system .eq. 0) then
    call ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
 else if (i_system .eq. 1) then
    call ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
 end if
+
+close(33)
 
 !----- Cleanup:
 deallocate(uprim, uprimn, &

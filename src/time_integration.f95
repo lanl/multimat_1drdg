@@ -128,7 +128,7 @@ real*8  :: vol,time
 real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
            ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
            k1(3),k2(3)
-real*8  :: rhsel(g_neqns,imax)
+real*8  :: rhsel(g_neqns,imax), cons_err(6)
 
   time = 0.d0
 
@@ -139,6 +139,8 @@ real*8  :: rhsel(g_neqns,imax)
   k2(1) = 1.0     !1.0
   k2(2) = 1.0/4.0 !0.5
   k2(3) = 2.0/3.0
+
+  call meconservation_mm6eq(0,ucons,cons_err)
 
   do itstep = 1,ntstep
 
@@ -183,11 +185,17 @@ real*8  :: rhsel(g_neqns,imax)
 
      time = time + (dt/a_nd)
 
+     !----- Diagnostics:
+     call meconservation_mm6eq(itstep,ucons,cons_err)
+
      !----- Screen-output:
      if ((itstep.eq.1) .or. (mod(itstep,n_screen).eq.0)) then
      write(*,*) "--------------------------------------------"
      write(*,*) "  itstep: ", itstep, "   Time: ", time
      write(*,*) "  Time step: ", dt/a_nd
+     write(*,*) "  Conservation: "
+     write(*,*) "  Mass:         ", cons_err(3)
+     write(*,*) "  Total-energy: ", cons_err(6)
      write(*,*) "--------------------------------------------"
      write(*,*) " "
      end if
@@ -200,17 +208,25 @@ real*8  :: rhsel(g_neqns,imax)
      call gnuplot_flow_mm6eq(ucons, itstep)
      end if
 
+     if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
+     call gnuplot_diagnostics_mm6eq(cons_err, itstep)
+     end if
+
   end do !itstep
 
   itstep = itstep - 1
 
   call gnuplot_flow_mm6eq(ucons, itstep)
+  call gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"
   write(*,*) "-------- FINAL OUTPUT: ----- TVD-RK3: ---------"
   write(*,*) "  itstep: ", itstep, "   Time: ", time
   write(*,*) "  Time step: ", dt/a_nd
+  write(*,*) "  Conservation: "
+  write(*,*) "  Mass:         ", cons_err(3)
+  write(*,*) "  Total-energy: ", cons_err(6)
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
@@ -398,6 +414,85 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
   end do !ie
 
 end subroutine blend_disphase_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Compute mass and energy conservation for the mm6eq system:
+!----------------------------------------------------------------------------------------------
+
+subroutine meconservation_mm6eq(its, ucons, err)
+
+integer, intent(in) :: its
+real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
+
+integer :: ie
+real*8  :: mass_1, tenergy_1, massi_1, tenergyi_1, &
+           mass_2, tenergy_2, massi_2, tenergyi_2, &
+           mass_m, tenergy_m, massi_m, tenergyi_m
+real*8  :: err(6)
+
+  !--- initialize
+  if (its .eq. 0) then
+    g_mass0_1 = 0.0
+    g_mass0_2 = 0.0
+    g_mass0_m = 0.0
+    g_tenergy0_1 = 0.0
+    g_tenergy0_2 = 0.0
+    g_tenergy0_m = 0.0
+
+  else
+    massi_1 = 0.0
+    massi_2 = 0.0
+    massi_m = 0.0
+    tenergyi_1 = 0.0
+    tenergyi_2 = 0.0
+    tenergyi_m = 0.0
+
+  end if
+
+  do ie = 1,imax
+
+    !--- mass
+    mass_1 = ucons(2,ie)
+    mass_2 = ucons(3,ie)
+    mass_m = mass_1 + mass_2
+
+    !--- total energy
+    tenergy_1 = ucons(5,ie)
+    tenergy_2 = ucons(6,ie)
+    tenergy_m = tenergy_1 + tenergy_2
+
+    if (its .eq. 0) then
+      g_mass0_1 = g_mass0_1 + mass_1
+      g_mass0_2 = g_mass0_2 + mass_2
+      g_mass0_m = g_mass0_m + mass_m
+      g_tenergy0_1 = g_tenergy0_1 + tenergy_1
+      g_tenergy0_2 = g_tenergy0_2 + tenergy_2
+      g_tenergy0_m = g_tenergy0_m + tenergy_m
+
+    else
+      massi_1 = massi_1 + mass_1
+      massi_2 = massi_2 + mass_2
+      massi_m = massi_m + mass_m
+      tenergyi_1 = tenergyi_1 + tenergy_1
+      tenergyi_2 = tenergyi_2 + tenergy_2
+      tenergyi_m = tenergyi_m + tenergy_m
+
+    end if
+
+  end do !ie
+
+  if (its .ne. 0) then
+    err(1) = (massi_1 - g_mass0_1) / g_mass0_1
+    err(2) = (massi_2 - g_mass0_2) / g_mass0_2
+    err(3) = (massi_m - g_mass0_m) / g_mass0_m
+    err(4) = (tenergyi_1 - g_tenergy0_1) / g_tenergy0_1
+    err(5) = (tenergyi_2 - g_tenergy0_2) / g_tenergy0_2
+    err(6) = (tenergyi_m - g_tenergy0_m) / g_tenergy0_m
+  else
+    err(:) = 0.0;
+  end if
+
+end subroutine meconservation_mm6eq
 
 !----------------------------------------------------------------------------------------------
 

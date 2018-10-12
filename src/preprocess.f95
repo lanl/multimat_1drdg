@@ -413,7 +413,7 @@ integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
 
 integer :: ielem
-real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, &
+real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, rhoe_mix, &
            rho1, rho2, rhoe1, rhoe2, alp1, alp2
 
 character(len=100) :: filename2,filename3
@@ -422,7 +422,7 @@ character(len=100) :: filename2,filename3
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
   open(23,file=trim(adjustl(filename3)),status='unknown')
 
-  write(23,'(10A8)') "# xcc,", &   !1
+  write(23,'(11A8)') "# xcc,", &   !1
                      "alp1,", &    !2
                      "rhomix,", &  !3
                      "umix," , &   !4
@@ -431,7 +431,8 @@ character(len=100) :: filename2,filename3
                      "p1,", &      !7
                      "p2,", &      !8
                      "t1,", &      !9
-                     "t2"         !10
+                     "t2,", &      !10
+                     "rhoe_m"      !11
 
   do ielem = 1,imax
 
@@ -450,8 +451,10 @@ character(len=100) :: filename2,filename3
      t2   = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, umix)
      pmix = alp1*p1 + alp2*p2
      tmix = alp1*t1 + alp2*t2
+     rhoe_mix = (alp1 * (rhoe1 - 0.5*rho1*umix*umix) + &
+                 alp2 * (rhoe2 - 0.5*rho2*umix*umix)) / rhomix
 
-     write(23,'(10E16.6)') xcc, &            !1
+     write(23,'(11E16.6)') xcc, &            !1
                            alp1, &           !2
                            rhomix*rho_nd, &  !3
                            umix*a_nd , &     !4
@@ -460,13 +463,37 @@ character(len=100) :: filename2,filename3
                            p1*p_nd, &        !7
                            p2*p_nd, &        !8
                            t1*t_nd, &        !9
-                           t2*t_nd           !10
+                           t2*t_nd, &        !10
+                           rhoe_mix          !11
 
   end do !ielem
 
   close(23)
 
 end subroutine gnuplot_flow_mm6eq
+
+!----------------------------------------------------------------------------------------------
+
+subroutine gnuplot_diagnostics_mm6eq(cons_err, itstep)
+
+integer, intent(in) :: itstep
+real*8,  intent(in) :: cons_err(6)
+
+integer :: ielem
+
+  do ielem = 1,imax
+
+    write(33,*) itstep, &       !1
+                cons_err(1), &  !2
+                cons_err(2), &  !3
+                cons_err(3), &  !4
+                cons_err(4), &  !5
+                cons_err(5), &  !6
+                cons_err(6)     !7
+
+  end do !ielem
+
+end subroutine gnuplot_diagnostics_mm6eq
 
 !----------------------------------------------------------------------------------------------
 

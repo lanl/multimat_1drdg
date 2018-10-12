@@ -13,8 +13,8 @@
 1.0d5    1.0d5  / Freestream pressures for 2 phases
 ----------------------------------------------------------------------------------------------
 0               / Space discretization (0: P0; 1:MC-P0P1)
-1.0d-08         / Time-step size
-20000           / Maximum number of timesteps
+1.0d-06         / Time-step size
+700             / Maximum number of timesteps
 ----------------------------------------------------------------------------------------------
 1000            / File-output dump
 500             / On-screen output

@@ -23,7 +23,7 @@ integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            intflux(g_neqns), rhsel(g_neqns,imax), &
            u_conv_l, u_conv_r, uf, pr, p1, p2, &
-           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu
+           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
 
 real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
@@ -40,7 +40,7 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   if (i_flux .eq. 1) then
      call llf_mm6eq(ul, ur, intflux, lplus, lminu)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu)
+     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
   else
      print*, "Invalid flux scheme."
      stop
@@ -74,19 +74,21 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
   !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
 
   if (iel .gt. 0) then
-    do ieqn = 1,g_neqns
+    rhsel(1,iel) = rhsel(1,iel) - intflux(1) * u_conv_l/lmag
+    do ieqn = 2,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
+    !rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
     rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
     rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
 
   if (ier .lt. (imax+1)) then
-    do ieqn = 1,g_neqns
+    rhsel(1,ier) = rhsel(1,ier) + intflux(1) * u_conv_r/lmag
+    do ieqn = 2,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
+    !rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
     rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
     rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
@@ -248,7 +250,7 @@ end subroutine llf_mm6eq
 !----- 2fluid AUSM+UP:
 !-------------------------------------------------------------------------------------
 
-subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu)
+subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
@@ -267,7 +269,7 @@ real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
 real*8 :: psplus_l,psplus_r,psminu_l,psminu_r
 !real*8 :: temp,temp1,temp2,num,den
   
-real*8 :: lambda,lambda_plus, lambda_minu
+real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
   
 !real*8 :: k_p, k_u
 
@@ -361,8 +363,10 @@ real*8 :: lambda,lambda_plus, lambda_minu
   flux(5) = lambda_plus*(h1_l)  + lambda_minu*(h1_r)
   flux(6) = lambda_plus*(h2_l)  + lambda_minu*(h2_r)
 
-  lambda_plus = lambda_plus/(dabs(lambda)+1.d-14) 
-  lambda_minu = lambda_minu/(dabs(lambda)+1.d-14)
+  lambda_mag = dabs(lambda) + 1.d-16
+
+  lambda_plus = lambda_plus/(lambda_mag) 
+  lambda_minu = lambda_minu/(lambda_mag)
 
 end subroutine ausmplus_mm6eq
 
