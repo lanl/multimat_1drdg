@@ -121,14 +121,15 @@ end subroutine ExplicitRK3_4eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn, uprim, uprimn)
 
-integer :: itstep, ielem, ieqn, istage
-real*8  :: vol,time
-real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
-           k1(3),k2(3)
-real*8  :: rhsel(g_neqns,imax), cons_err(6)
+external :: rhs_mm6eq
+integer  :: itstep, ielem, ieqn, istage
+real*8   :: vol,time
+real*8   :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
+            ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
+            k1(3),k2(3)
+real*8   :: rhsel(g_neqns,imax), cons_err(6)
 
   time = 0.d0
 
@@ -152,13 +153,8 @@ real*8  :: rhsel(g_neqns,imax), cons_err(6)
 
         rhsel(:,:) = 0.d0
 
-        if (nsdiscr .eq. 0) then
-           call flux_p0_mm6eq(uprim,uconsi,rhsel)
-           !call get_pugradalpha(uconsi,rhsel)
-        else if (nsdiscr .eq. 1) then
-           write(*,*) "p0p1 not set up for mm6eq!" 
-           exit
-        end if
+        call reconstruction(uconsi)
+        call rhs_mm6eq(uconsi, rhsel)
 
         do ielem = 1,imax
 
@@ -174,7 +170,6 @@ real*8  :: rhsel(g_neqns,imax), cons_err(6)
         end do !ielem
 
         call get_bc_mm6eq(ucons)
-        !call decode_uprim(ucons,uprim)
         !call blend_disphase_mm6eq(ucons)
 
         uconsi = ucons

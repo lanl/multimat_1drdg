@@ -1,8 +1,8 @@
-!!---------------------------------------------------------------------------------------
+!!------------------------------------------------------------------------------
 !!----- Pressure non-equilibrium multi-material (Flux computation module)
 !!----- by
 !!----- Aditya K Pandare
-!!---------------------------------------------------------------------------------------
+!!------------------------------------------------------------------------------
 
 MODULE rhs_flux_mm6eq
 
@@ -13,11 +13,11 @@ implicit none
 
 CONTAINS
 
-!----------------------------------------------------------------------------------------------
-!----- Advective-flux contribution to RHS:
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
+!----- P0 Advective-flux contribution to RHS:
+!-------------------------------------------------------------------------------
 
-subroutine flux_p0_mm6eq(uprim, ucons, rhsel)
+subroutine flux_p0_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
@@ -25,7 +25,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            u_conv_l, u_conv_r, uf, pr, p1, p2, &
            alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
 
-real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_neqns,0:imax+1)
 
   do ifc = 1,imax+1
 
@@ -100,9 +100,96 @@ real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
 
 end subroutine flux_p0_mm6eq
 
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
+!----- P0P1 Advective-flux contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine flux_p0p1_mm6eq(ucons, rhsel)
+
+integer :: ifc, iel, ier, ieqn
+real*8  :: ul(g_neqns), ur(g_neqns), &
+           intflux(g_neqns), rhsel(g_neqns,imax), &
+           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
+
+real*8, intent(in) :: ucons(g_neqns,0:imax+1)
+
+  do ifc = 1,imax+1
+
+  iel = ifc - 1
+  ier = ifc
+
+  ul(:) = ucons(:,iel)
+  ur(:) = ucons(:,ier)
+
+  !--- Conservative fluxes
+
+  if (i_flux .eq. 1) then
+     call llf_mm6eq(ul, ur, intflux, lplus, lminu)
+  else if (i_flux .eq. 2) then
+     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+  else
+     print*, "Invalid flux scheme."
+     stop
+  endif
+
+  !--- Non-conservative terms
+  alp1f = lplus*ucons(1,iel) + lminu*ucons(1,ier)
+  alp2f = lplus*(1.0-ucons(1,iel)) + lminu*(1.0-ucons(1,ier))
+
+  ! left element
+  u_conv_l = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
+               ucons(5,iel)/ucons(1,iel), u_conv_l)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
+               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv_l)
+  pr = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
+  ncnfl = pr * u_conv_l
+
+  ! right element
+  u_conv_r = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
+               ucons(5,ier)/ucons(1,ier), u_conv_r)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
+               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv_r)
+  pr = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
+  ncnfr = pr * u_conv_r
+
+  uf = lmag*(lplus+lminu)
+
+  !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
+  !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
+
+  if (iel .gt. 0) then
+    do ieqn = 1,g_neqns
+          rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
+    end do !ieqn
+    rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
+    rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
+    rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
+  end if
+
+  if (ier .lt. (imax+1)) then
+    do ieqn = 1,g_neqns
+          rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
+    end do !ieqn
+    rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
+    rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
+    rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
+  end if
+
+  end do !ifc
+
+  !do iel = 1,imax
+  !print*, iel, rhsel(1,iel), rhsel(2,iel), rhsel(3,iel), rhsel(4,iel), rhsel(5,iel), rhsel(6,iel)
+  !end do !iel
+  !print*, " "
+
+end subroutine flux_p0p1_mm6eq
+
+!-------------------------------------------------------------------------------
 !----- Interface pressure correction (hyperbolization)
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 
 subroutine get_pugradalpha(ucons, rhsel)
 
@@ -137,9 +224,9 @@ real*8  :: dx, al1, al2, p1, p2, u_conv, pr, &
 
 end subroutine get_pugradalpha
 
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 
 subroutine llf_mm6eq(ul, ur, flux, lplus, lminu)
 
@@ -244,9 +331,9 @@ real*8 :: lambda
 
 end subroutine llf_mm6eq
 
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 !----- 2fluid AUSM+UP:
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 
 subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
 
@@ -368,9 +455,9 @@ real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
 
 end subroutine ausmplus_mm6eq
 
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:
-!-------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 subroutine splitmach_as(fa, mach, msplus, msminu, psplus, psminu)
 
 real*8, intent(in) :: fa, mach
@@ -396,16 +483,18 @@ real*8             :: alph_fa, msplus(3), msminu(3), psplus, psminu
     
         msplus(3) = msplus(2)* (1.d0 - 2.d0*msminu(2))
         msminu(3) = msminu(2)* (1.d0 + 2.d0*msplus(2))
-        psplus    = msplus(2)* ((+2.d0 - mach) - (16.d0 * alph_fa)*mach*msminu(2))
-        psminu    = msminu(2)* ((-2.d0 - mach) + (16.d0 * alph_fa)*mach*msplus(2))
+        psplus    = msplus(2)* &
+                    ((+2.d0 - mach) - (16.d0 * alph_fa)*mach*msminu(2))
+        psminu    = msminu(2)* &
+                    ((-2.d0 - mach) + (16.d0 * alph_fa)*mach*msplus(2))
 
     end if
 
 end subroutine splitmach_as
 
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 !----- Boundary conditions:
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 
 subroutine get_bc_mm6eq(ucons)
 
@@ -424,8 +513,10 @@ real*8  :: p1, p2, rho1, rho2, u_conv
      ucons(2,0) = alpha1_fs       * rho1_fs
      ucons(3,0) = (1.0-alpha1_fs) * rho2_fs
      ucons(4,0) = (ucons(3,0)+ucons(2,0)) * u_fs
-     ucons(5,0) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
-     ucons(6,0) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
+     ucons(5,0) = alpha1_fs       * &
+                  eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
+     ucons(6,0) = (1.0-alpha1_fs) * &
+                  eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
 
   else if (g_lbflag .eq. 2) then
      !--- subsonic inflow
@@ -458,8 +549,10 @@ real*8  :: p1, p2, rho1, rho2, u_conv
      ucons(2,imax+1) = alpha1_fs       * rho1_fs
      ucons(3,imax+1) = (1.0-alpha1_fs) * rho2_fs
      ucons(4,imax+1) = (ucons(3,imax+1)+ucons(2,imax+1)) * u_fs
-     ucons(5,imax+1) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
-     ucons(6,imax+1) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
+     ucons(5,imax+1) = alpha1_fs       * &
+                       eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
+     ucons(6,imax+1) = (1.0-alpha1_fs) * &
+                       eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
 
   else if (g_rbflag .eq. 2) then
      !--- subsonic inflow
@@ -472,8 +565,10 @@ real*8  :: p1, p2, rho1, rho2, u_conv
      ucons(2,imax+1) = alpha1_fs       * rho1_fs
      ucons(3,imax+1) = (1.0-alpha1_fs) * rho2_fs
      ucons(4,imax+1) = (ucons(3,imax+1)+ucons(2,imax+1)) * u_fs
-     ucons(5,imax+1) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
-     ucons(6,imax+1) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
+     ucons(5,imax+1) = alpha1_fs       * &
+                       eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
+     ucons(6,imax+1) = (1.0-alpha1_fs) * &
+                       eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
 
   else if (g_rbflag .eq. 3) then
      !--- subsonic outflow
@@ -484,8 +579,10 @@ real*8  :: p1, p2, rho1, rho2, u_conv
      ucons(2,imax+1) = ucons(2,imax)
      ucons(3,imax+1) = ucons(3,imax)
      ucons(4,imax+1) = ucons(4,imax)
-     ucons(5,imax+1) = ucons(1,imax)       * eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_conv)
-     ucons(6,imax+1) = (1.0-ucons(1,imax)) * eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_conv)
+     ucons(5,imax+1) = ucons(1,imax)       * &
+                       eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_conv)
+     ucons(6,imax+1) = (1.0-ucons(1,imax)) * &
+                       eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_conv)
 
   else
      write(*,*) "BC-type not set for flag ", g_rbflag
@@ -494,6 +591,6 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
 end subroutine get_bc_mm6eq
 
-!----------------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 
 END MODULE rhs_flux_mm6eq

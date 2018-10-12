@@ -56,6 +56,7 @@ allocate(coord(0:imax+2))
 !----- Mesh generation:
 call gen_mesh()
 
+!----- Screen output:
 write(*,*) " "
 write(*,*) "PREPROCESSING FINISHED."
 write(*,*) " nelem = ", imax
@@ -82,6 +83,7 @@ end if
 !----- Time-stepping:
 dt = dt_u
 
+!----- Diagnostics file:
 open(33,file='diag.dat',status='unknown')
 
 write(33,'(7A12)') "# tstep,", &   !1
@@ -94,9 +96,25 @@ write(33,'(7A12)') "# tstep,", &   !1
 
 !--- Explicit TVD-RK3:
 if (i_system .eq. 0) then
-   call ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
+  call ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
+
 else if (i_system .eq. 1) then
-   call ExplicitRK3_mm6eq(ucons, uconsn, uprim, uprimn)
+
+  select case(nsdiscr)
+
+  case(0)
+    call ExplicitRK3_mm6eq(flux_p0_mm6eq, ucons, uconsn, uprim, uprimn)
+
+  case(1)
+    call ExplicitRK3_mm6eq(flux_p0p1_mm6eq, ucons, uconsn, uprim, uprimn)
+
+  case default
+    write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
+               nsdiscr
+    call exit
+
+  end select
+
 end if
 
 close(33)
