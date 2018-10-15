@@ -25,15 +25,15 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            u_conv_l, u_conv_r, uf, pr, p1, p2, &
            alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
 
-real*8, intent(in) :: ucons(g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
   do ifc = 1,imax+1
 
   iel = ifc - 1
   ier = ifc
 
-  ul(:) = ucons(:,iel)
-  ur(:) = ucons(:,ier)
+  ul(:) = ucons(1,:,iel)
+  ur(:) = ucons(1,:,ier)
 
   !--- Conservative fluxes
 
@@ -47,25 +47,25 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
   endif
 
   !--- Non-conservative terms
-  alp1f = lplus*ucons(1,iel) + lminu*ucons(1,ier)
-  alp2f = lplus*(1.0-ucons(1,iel)) + lminu*(1.0-ucons(1,ier))
+  alp1f = lplus*ucons(1,1,iel) + lminu*ucons(1,1,ier)
+  alp2f = lplus*(1.0-ucons(1,1,iel)) + lminu*(1.0-ucons(1,1,ier))
 
   ! left element
-  u_conv_l = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
-               ucons(5,iel)/ucons(1,iel), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
-               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv_l)
-  pr = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
+  u_conv_l = ucons(1,4,iel)/(ucons(1,2,iel)+ucons(1,3,iel))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,iel)/ucons(1,1,iel), &
+               ucons(1,5,iel)/ucons(1,1,iel), u_conv_l)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,iel)/(1.0-ucons(1,1,iel)),&
+               ucons(1,6,iel)/(1.0-ucons(1,1,iel)), u_conv_l)
+  pr = ucons(1,1,iel)*p1 + (1.0-ucons(1,1,iel))*p2
   ncnfl = pr * u_conv_l
 
   ! right element
-  u_conv_r = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
-               ucons(5,ier)/ucons(1,ier), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
-               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv_r)
-  pr = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
+  u_conv_r = ucons(1,4,ier)/(ucons(1,2,ier)+ucons(1,3,ier))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,ier)/ucons(1,1,ier), &
+               ucons(1,5,ier)/ucons(1,1,ier), u_conv_r)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,ier)/(1.0-ucons(1,1,ier)),&
+               ucons(1,6,ier)/(1.0-ucons(1,1,ier)), u_conv_r)
+  pr = ucons(1,1,ier)*p1 + (1.0-ucons(1,1,ier))*p2
   ncnfr = pr * u_conv_r
 
   uf = lmag*(lplus+lminu)
@@ -77,7 +77,7 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
+    rhsel(1,iel) = rhsel(1,iel) + ucons(1,1,iel) * uf
     rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
     rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
@@ -86,7 +86,7 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
+    rhsel(1,ier) = rhsel(1,ier) - ucons(1,1,ier) * uf
     rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
     rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
@@ -112,15 +112,19 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            u_conv_l, u_conv_r, uf, pr, p1, p2, &
            alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
 
-real*8, intent(in) :: ucons(g_neqns,0:imax+1)
+real*8  :: ucons(ndof,g_neqns,0:imax+1)
+
+  call reconstruction(ucons)
 
   do ifc = 1,imax+1
 
   iel = ifc - 1
   ier = ifc
 
-  ul(:) = ucons(:,iel)
-  ur(:) = ucons(:,ier)
+  do ieqn = 1,g_neqns
+    ul(ieqn) = ucons(1,ieqn,iel) + 0.5 * ucons(2,ieqn,iel)
+    ur(ieqn) = ucons(1,ieqn,ier) - 0.5 * ucons(2,ieqn,ier)
+  end do !ieqn
 
   !--- Conservative fluxes
 
@@ -134,25 +138,25 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
   endif
 
   !--- Non-conservative terms
-  alp1f = lplus*ucons(1,iel) + lminu*ucons(1,ier)
-  alp2f = lplus*(1.0-ucons(1,iel)) + lminu*(1.0-ucons(1,ier))
+  alp1f = lplus*ul(1) + lminu*ur(1)
+  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
 
   ! left element
-  u_conv_l = ucons(4,iel)/(ucons(2,iel)+ucons(3,iel))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,iel)/ucons(1,iel), &
-               ucons(5,iel)/ucons(1,iel), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,iel)/(1.0-ucons(1,iel)),&
-               ucons(6,iel)/(1.0-ucons(1,iel)), u_conv_l)
-  pr = ucons(1,iel)*p1 + (1.0-ucons(1,iel))*p2
+  u_conv_l = ucons(1,4,iel)/(ucons(1,2,iel)+ucons(1,3,iel))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,iel)/ucons(1,1,iel), &
+               ucons(1,5,iel)/ucons(1,1,iel), u_conv_l)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,iel)/(1.0-ucons(1,1,iel)),&
+               ucons(1,6,iel)/(1.0-ucons(1,1,iel)), u_conv_l)
+  pr = ucons(1,1,iel)*p1 + (1.0-ucons(1,1,iel))*p2
   ncnfl = pr * u_conv_l
 
   ! right element
-  u_conv_r = ucons(4,ier)/(ucons(2,ier)+ucons(3,ier))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(2,ier)/ucons(1,ier), &
-               ucons(5,ier)/ucons(1,ier), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(3,ier)/(1.0-ucons(1,ier)),&
-               ucons(6,ier)/(1.0-ucons(1,ier)), u_conv_r)
-  pr = ucons(1,ier)*p1 + (1.0-ucons(1,ier))*p2
+  u_conv_r = ucons(1,4,ier)/(ucons(1,2,ier)+ucons(1,3,ier))
+  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,ier)/ucons(1,1,ier), &
+               ucons(1,5,ier)/ucons(1,1,ier), u_conv_r)
+  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,ier)/(1.0-ucons(1,1,ier)),&
+               ucons(1,6,ier)/(1.0-ucons(1,1,ier)), u_conv_r)
+  pr = ucons(1,1,ier)*p1 + (1.0-ucons(1,1,ier))*p2
   ncnfr = pr * u_conv_r
 
   uf = lmag*(lplus+lminu)
@@ -164,7 +168,7 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + ucons(1,iel) * uf
+    rhsel(1,iel) = rhsel(1,iel) + ucons(1,1,iel) * uf
     rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
     rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
@@ -173,7 +177,7 @@ real*8, intent(in) :: ucons(g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - ucons(1,ier) * uf
+    rhsel(1,ier) = rhsel(1,ier) - ucons(1,1,ier) * uf
     rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
     rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
@@ -193,7 +197,7 @@ end subroutine flux_p0p1_mm6eq
 
 subroutine get_pugradalpha(ucons, rhsel)
 
-real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: dx, al1, al2, p1, p2, u_conv, pr, &
@@ -204,16 +208,16 @@ real*8  :: dx, al1, al2, p1, p2, u_conv, pr, &
 
     dx = 2.0 * (coord(ie+1)-coord(ie))
 
-    u_conv = ucons(4,ie)/(ucons(2,ie)+ucons(3,ie))
-    al1 = ucons(1,ie)
+    u_conv = ucons(1,4,ie)/(ucons(1,2,ie)+ucons(1,3,ie))
+    al1 = ucons(1,1,ie)
     al2 = 1.0 - al1
-    p1  = eos3_pr(g_gam1, g_pc1, ucons(2,ie)/al1, ucons(5,ie)/al1, u_conv)
-    p2  = eos3_pr(g_gam2, g_pc2, ucons(3,ie)/al2, ucons(6,ie)/al2, u_conv)
+    p1  = eos3_pr(g_gam1, g_pc1, ucons(1,2,ie)/al1, ucons(1,5,ie)/al1, u_conv)
+    p2  = eos3_pr(g_gam2, g_pc2, ucons(1,3,ie)/al2, ucons(1,6,ie)/al2, u_conv)
     pr  = al1*p1+al2*p2
 
-    fwddiff = ( ucons(1,ie+1) - ucons(1,ie) ) / (0.5*dx)
-    bwddiff = ( ucons(1,ie) - ucons(1,ie-1) ) / (0.5*dx)
-    cntdiff = (ucons(1,ie+1) - ucons(1,ie-1)) / dx
+    fwddiff = ( ucons(1,1,ie+1) - ucons(1,1,ie) ) / (0.5*dx)
+    bwddiff = ( ucons(1,1,ie) - ucons(1,1,ie-1) ) / (0.5*dx)
+    cntdiff = (ucons(1,1,ie+1) - ucons(1,1,ie-1)) / dx
 
     gradal1 = mclim(fwddiff,cntdiff,bwddiff)
 
@@ -498,39 +502,39 @@ end subroutine splitmach_as
 
 subroutine get_bc_mm6eq(ucons)
 
-real*8  :: ucons(g_neqns,0:imax+1)
+real*8  :: ucons(ndof,g_neqns,0:imax+1)
 real*8  :: p1, p2, rho1, rho2, u_conv
 
   !----- left boundary
 
   if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
-     ucons(:,0) = ucons(:,1)
+     ucons(1,:,0) = ucons(1,:,1)
 
   else if (g_lbflag .eq. 1) then
      !--- supersonic inflow
-     ucons(1,0) = alpha1_fs
-     ucons(2,0) = alpha1_fs       * rho1_fs
-     ucons(3,0) = (1.0-alpha1_fs) * rho2_fs
-     ucons(4,0) = (ucons(3,0)+ucons(2,0)) * u_fs
-     ucons(5,0) = alpha1_fs       * &
+     ucons(1,1,0) = alpha1_fs
+     ucons(1,2,0) = alpha1_fs       * rho1_fs
+     ucons(1,3,0) = (1.0-alpha1_fs) * rho2_fs
+     ucons(1,4,0) = (ucons(1,3,0)+ucons(1,2,0)) * u_fs
+     ucons(1,5,0) = alpha1_fs       * &
                   eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
-     ucons(6,0) = (1.0-alpha1_fs) * &
+     ucons(1,6,0) = (1.0-alpha1_fs) * &
                   eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
 
   else if (g_lbflag .eq. 2) then
      !--- subsonic inflow
-     u_conv = ucons(4,1)/(ucons(2,1)+ucons(3,1))
-     p1  = eos3_pr(g_gam1, g_pc1, ucons(2,1)/ucons(1,1), &
-                   ucons(5,1)/ucons(1,1), u_conv)
-     p2  = eos3_pr(g_gam2, g_pc2, ucons(3,1)/(1.0-ucons(1,1)),&
-                   ucons(6,1)/(1.0-ucons(1,1)), u_conv)
-     ucons(1,0) = alpha1_fs
-     ucons(2,0) = alpha1_fs       * rho1_fs
-     ucons(3,0) = (1.0-alpha1_fs) * rho2_fs
-     ucons(4,0) = (ucons(3,0)+ucons(2,0)) * u_fs
-     ucons(5,0) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
-     ucons(6,0) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
+     u_conv = ucons(1,4,1)/(ucons(1,2,1)+ucons(1,3,1))
+     p1  = eos3_pr(g_gam1, g_pc1, ucons(1,2,1)/ucons(1,1,1), &
+                   ucons(1,5,1)/ucons(1,1,1), u_conv)
+     p2  = eos3_pr(g_gam2, g_pc2, ucons(1,3,1)/(1.0-ucons(1,1,1)),&
+                   ucons(1,6,1)/(1.0-ucons(1,1,1)), u_conv)
+     ucons(1,1,0) = alpha1_fs
+     ucons(1,2,0) = alpha1_fs       * rho1_fs
+     ucons(1,3,0) = (1.0-alpha1_fs) * rho2_fs
+     ucons(1,4,0) = (ucons(1,3,0)+ucons(1,2,0)) * u_fs
+     ucons(1,5,0) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
+     ucons(1,6,0) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
 
   else
      write(*,*) "BC-type not set for flag ", g_lbflag
@@ -541,47 +545,47 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
   if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
-     ucons(:,imax+1) = ucons(:,imax)
+     ucons(1,:,imax+1) = ucons(1,:,imax)
 
   else if (g_rbflag .eq. 1) then
      !--- supersonic inflow
-     ucons(1,imax+1) = alpha1_fs
-     ucons(2,imax+1) = alpha1_fs       * rho1_fs
-     ucons(3,imax+1) = (1.0-alpha1_fs) * rho2_fs
-     ucons(4,imax+1) = (ucons(3,imax+1)+ucons(2,imax+1)) * u_fs
-     ucons(5,imax+1) = alpha1_fs       * &
+     ucons(1,1,imax+1) = alpha1_fs
+     ucons(1,2,imax+1) = alpha1_fs       * rho1_fs
+     ucons(1,3,imax+1) = (1.0-alpha1_fs) * rho2_fs
+     ucons(1,4,imax+1) = (ucons(1,3,imax+1)+ucons(1,2,imax+1)) * u_fs
+     ucons(1,5,imax+1) = alpha1_fs       * &
                        eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1_fs, u_fs)
-     ucons(6,imax+1) = (1.0-alpha1_fs) * &
+     ucons(1,6,imax+1) = (1.0-alpha1_fs) * &
                        eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2_fs, u_fs)
 
   else if (g_rbflag .eq. 2) then
      !--- subsonic inflow
-     u_conv = ucons(4,imax)/(ucons(2,imax)+ucons(3,imax))
-     p1  = eos3_pr(g_gam1, g_pc1, ucons(2,imax)/ucons(1,imax), &
-                   ucons(5,imax)/ucons(1,imax), u_conv)
-     p2  = eos3_pr(g_gam2, g_pc2, ucons(3,imax)/(1.0-ucons(1,imax)),&
-                   ucons(6,imax)/(1.0-ucons(1,imax)), u_conv)
-     ucons(1,imax+1) = alpha1_fs
-     ucons(2,imax+1) = alpha1_fs       * rho1_fs
-     ucons(3,imax+1) = (1.0-alpha1_fs) * rho2_fs
-     ucons(4,imax+1) = (ucons(3,imax+1)+ucons(2,imax+1)) * u_fs
-     ucons(5,imax+1) = alpha1_fs       * &
+     u_conv = ucons(1,4,imax)/(ucons(1,2,imax)+ucons(1,3,imax))
+     p1  = eos3_pr(g_gam1, g_pc1, ucons(1,2,imax)/ucons(1,1,imax), &
+                   ucons(1,5,imax)/ucons(1,1,imax), u_conv)
+     p2  = eos3_pr(g_gam2, g_pc2, ucons(1,3,imax)/(1.0-ucons(1,1,imax)),&
+                   ucons(1,6,imax)/(1.0-ucons(1,1,imax)), u_conv)
+     ucons(1,1,imax+1) = alpha1_fs
+     ucons(1,2,imax+1) = alpha1_fs       * rho1_fs
+     ucons(1,3,imax+1) = (1.0-alpha1_fs) * rho2_fs
+     ucons(1,4,imax+1) = (ucons(1,3,imax+1)+ucons(1,2,imax+1)) * u_fs
+     ucons(1,5,imax+1) = alpha1_fs       * &
                        eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
-     ucons(6,imax+1) = (1.0-alpha1_fs) * &
+     ucons(1,6,imax+1) = (1.0-alpha1_fs) * &
                        eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
 
   else if (g_rbflag .eq. 3) then
      !--- subsonic outflow
-     u_conv = ucons(4,imax)/(ucons(2,imax)+ucons(3,imax))
-     rho1 = ucons(2,imax) / ucons(1,imax)
-     rho2 = ucons(3,imax) / (1.0-ucons(1,imax))
-     ucons(1,imax+1) = ucons(1,imax)
-     ucons(2,imax+1) = ucons(2,imax)
-     ucons(3,imax+1) = ucons(3,imax)
-     ucons(4,imax+1) = ucons(4,imax)
-     ucons(5,imax+1) = ucons(1,imax)       * &
+     u_conv = ucons(1,4,imax)/(ucons(1,2,imax)+ucons(1,3,imax))
+     rho1 = ucons(1,2,imax) / ucons(1,1,imax)
+     rho2 = ucons(1,3,imax) / (1.0-ucons(1,1,imax))
+     ucons(1,1,imax+1) = ucons(1,1,imax)
+     ucons(1,2,imax+1) = ucons(1,2,imax)
+     ucons(1,3,imax+1) = ucons(1,3,imax)
+     ucons(1,4,imax+1) = ucons(1,4,imax)
+     ucons(1,5,imax+1) = ucons(1,1,imax)       * &
                        eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_conv)
-     ucons(6,imax+1) = (1.0-ucons(1,imax)) * &
+     ucons(1,6,imax+1) = (1.0-ucons(1,1,imax)) * &
                        eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_conv)
 
   else
@@ -590,6 +594,68 @@ real*8  :: p1, p2, rho1, rho2, u_conv
   end if
 
 end subroutine get_bc_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P0P1 reconstruction:
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction(ucons)
+
+integer :: ie, ieqn, ifc
+real*8  :: ui, ug, umin, umax, diff, phi, theta(imax), thetal
+real*8  :: ucons(ndof,g_neqns,0:imax+1)
+
+  !--- central difference reconstruction (least-squares for uniform meshes)
+  do ie = 1,imax
+    ucons(2,:,ie) = 0.5 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+  end do !ie
+
+  !--- limiter
+  do ieqn = 1,g_neqns
+
+    ! 1. compute limiter function
+    do ie = 1,imax
+      ui = ucons(1,ieqn,ie)
+
+      ! find min and max in neighborhood
+      umax = max( max(ucons(1,ieqn,ie-1), ui), ucons(1,ieqn,ie+1) )
+      umin = min( min(ucons(1,ieqn,ie-1), ui), ucons(1,ieqn,ie+1) )
+
+      theta(ie) = 1.0
+
+      do ifc = 1,2
+        ! unlimited 2nd order solution
+        ug = ucons(1,ieqn,ie) + ((-1.0)**ifc) * 0.5 * ucons(2,ieqn,ie)
+
+        ! bounds
+        diff = ug-ui
+        if (diff > 1.0d-16) then
+          phi = (umax-ui)/(2.0*diff)
+
+        else if (diff < 1.0d-16) then
+          phi = (umin-ui)/(2.0*diff)
+
+        else
+          phi = 1.0
+
+        end if
+
+        ! limiter function
+        thetal = max( 0.0, max( min(2.0*phi, 1.0), min(phi, 2.0) ) )
+        theta(ie) = min(thetal, theta(ie))
+
+      end do !ifc
+      
+    end do !ie
+
+    ! 2. limit 2nd dofs
+    do ie = 1,imax
+      ucons(2,ieqn,ie) = theta(ie) * ucons(2,ieqn,ie)
+    end do !ie
+
+  end do !ieqn
+
+end subroutine reconstruction
 
 !-------------------------------------------------------------------------------
 

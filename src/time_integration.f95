@@ -21,7 +21,8 @@ subroutine ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
 integer :: itstep, ielem, ieqn, istage
 real*8  :: vol,time
 real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
+           ucons(ndof,g_neqns,0:imax+1),uconsn(ndof,g_neqns,0:imax+1), &
+           uconsi(ndof,g_neqns,0:imax+1), &
            k1(3),k2(3)
 real*8  :: rhsel(g_neqns,imax)
 
@@ -59,15 +60,15 @@ real*8  :: rhsel(g_neqns,imax)
 
               ! gravity
               if (iprob.eq.2) then
-                 rhsel(2,ielem) = rhsel(2,ielem) + uconsn(1,ielem)*9.81*vol
-                 rhsel(4,ielem) = rhsel(4,ielem) + uconsn(3,ielem)*9.81*vol
+                 rhsel(2,ielem) = rhsel(2,ielem) + uconsn(1,1,ielem)*9.81*vol
+                 rhsel(4,ielem) = rhsel(4,ielem) + uconsn(1,3,ielem)*9.81*vol
               end if
 
               do ieqn  = 1,g_neqns
 
-                   ucons(ieqn,ielem) =   k1(istage) *   uconsn(ieqn,ielem) &
-                                       + k2(istage) * ( uconsi(ieqn,ielem) &
-                                                      + dt * rhsel(ieqn,ielem)/ vol)
+                 ucons(1, ieqn,ielem) =   k1(istage) *   uconsn(1,ieqn,ielem) &
+                                        + k2(istage) * ( uconsi(1,ieqn,ielem) &
+                                                       + dt * rhsel(ieqn,ielem)/ vol)
 
               end do !ieqn
               end do !ielem
@@ -95,7 +96,7 @@ real*8  :: rhsel(g_neqns,imax)
            end if
 
            !--- solution update
-           uconsn(:,:)   = ucons(:,:)
+           uconsn(:,:,:) = ucons(:,:,:)
 
            !----- File-output:
            if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
@@ -127,7 +128,8 @@ external :: rhs_mm6eq
 integer  :: itstep, ielem, ieqn, istage
 real*8   :: vol,time
 real*8   :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
-            ucons(g_neqns,0:imax+1),uconsn(g_neqns,0:imax+1),uconsi(g_neqns,0:imax+1), &
+            ucons(ndof,g_neqns,0:imax+1),uconsn(ndof,g_neqns,0:imax+1), &
+            uconsi(ndof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_neqns,imax), cons_err(6)
 
@@ -153,7 +155,6 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
 
         rhsel(:,:) = 0.d0
 
-        call reconstruction(uconsi)
         call rhs_mm6eq(uconsi, rhsel)
 
         do ielem = 1,imax
@@ -162,9 +163,9 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
 
         do ieqn  = 1,g_neqns
 
-             ucons(ieqn,ielem) =   k1(istage) *   uconsn(ieqn,ielem) &
-                                 + k2(istage) * ( uconsi(ieqn,ielem) &
-                                                + dt * rhsel(ieqn,ielem)/ vol)
+           ucons(1, ieqn,ielem) =   k1(istage) *   uconsn(1,ieqn,ielem) &
+                                  + k2(istage) * ( uconsi(1,ieqn,ielem) &
+                                                 + dt * rhsel(ieqn,ielem)/ vol)
 
         end do !ieqn
         end do !ielem
@@ -196,7 +197,7 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
      end if
 
      !--- solution update
-     uconsn(:,:)   = ucons(:,:)
+     uconsn(:,:,:) = ucons(:,:,:)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
@@ -239,7 +240,7 @@ real*8, intent(in) :: uprimn(ndof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: alpha1, u1, u2, &
-           ucons(g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
+           ucons(ndof,g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
 
         do ie = 1,imax
            alpha1 = uprim(1,1,ie)
@@ -249,12 +250,12 @@ real*8  :: alpha1, u1, u2, &
            !--- phase-1 disappearing
            if (alpha1 .le. 10.0 * alphamin) then
               uprim(1,3,ie) = uprimn(1,3,ie)
-              ucons(2,ie)   = ucons(1,ie) * uprim(1,3,ie)
+              ucons(1,2,ie)   = ucons(1,1,ie) * uprim(1,3,ie)
 
            !--- phase-2 disappearing
            elseif (alpha1 .ge. 1.0-(10.0*alphamin)) then
               uprim(1,4,ie) = uprimn(1,4,ie)
-              ucons(4,ie)   = ucons(3,ie) * uprim(1,4,ie)
+              ucons(1,4,ie)   = ucons(1,3,ie) * uprim(1,4,ie)
 
            end if
 
@@ -271,7 +272,7 @@ subroutine blend_disphase(ucons, uprim)
 
 integer :: ie
 real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
-           ucons(g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
+           ucons(ndof,g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
 
         epsmin = 1.0  * alphamin
         epsmax = 10.0 * alphamin
@@ -299,8 +300,8 @@ real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
 
               uprim(1,3,ie) = u1
 
-              ucons(1,ie) = alpha1 * rho
-              ucons(2,ie) = ucons(1,ie) * uprim(1,3,ie)
+              ucons(1,1,ie) = alpha1 * rho
+              ucons(1,2,ie) = ucons(1,1,ie) * uprim(1,3,ie)
 
            !--- phase-2 disappearing
            elseif (alpha2 .lt. epsmax) then
@@ -318,8 +319,8 @@ real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
 
               uprim(1,4,ie) = u2
 
-              ucons(3,ie) = alpha2 * rho
-              ucons(4,ie) = ucons(3,ie) * uprim(1,4,ie)
+              ucons(1,3,ie) = alpha2 * rho
+              ucons(1,4,ie) = ucons(1,3,ie) * uprim(1,4,ie)
 
            end if
 
@@ -337,7 +338,7 @@ subroutine blend_disphase_mm6eq(ucons)
 integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, xi, gxi, rho, epsmin, epsmax, &
-           ucons(g_neqns,0:imax+1)
+           ucons(ndof,g_neqns,0:imax+1)
 
   epsmin = 1.0  * alphamin
   epsmax = 10.0 * alphamin
@@ -345,15 +346,15 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
   do ie = 1,imax
 
     ! conserved variables
-    al1 = ucons(1,ie)
+    al1 = ucons(1,1,ie)
     al2 = 1.0 -al1
-    rho1 = ucons(2,ie) / al1
-    rho2 = ucons(3,ie) / al2
-    rhoe1 = ucons(5,ie) / al1
-    rhoe2 = ucons(6,ie) / al2
+    rho1 = ucons(1,2,ie) / al1
+    rho2 = ucons(1,3,ie) / al2
+    rhoe1 = ucons(1,5,ie) / al1
+    rhoe2 = ucons(1,6,ie) / al2
 
     ! primitive variables
-    u = ucons(4,ie) / (ucons(2,ie)+ucons(3,ie))
+    u = ucons(1,4,ie) / (ucons(1,2,ie)+ucons(1,3,ie))
     p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
     p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
     t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
@@ -379,8 +380,8 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
 
       ! update conserved variables
-      ucons(2,ie) = al1*rho1
-      ucons(5,ie) = al1*rhoe1
+      ucons(1,2,ie) = al1*rho1
+      ucons(1,5,ie) = al1*rhoe1
 
     !--- phase-2 disappearing
     elseif (al2 .lt. epsmax) then
@@ -401,8 +402,8 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
       rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
 
-      ucons(3,ie) = al2*rho2
-      ucons(6,ie) = al2*rhoe2
+      ucons(1,3,ie) = al2*rho2
+      ucons(1,6,ie) = al2*rhoe2
 
     end if
 
@@ -417,7 +418,7 @@ end subroutine blend_disphase_mm6eq
 subroutine meconservation_mm6eq(its, ucons, err)
 
 integer, intent(in) :: its
-real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: mass_1, tenergy_1, massi_1, tenergyi_1, &
@@ -447,13 +448,13 @@ real*8  :: err(6)
   do ie = 1,imax
 
     !--- mass
-    mass_1 = ucons(2,ie)
-    mass_2 = ucons(3,ie)
+    mass_1 = ucons(1,2,ie)
+    mass_2 = ucons(1,3,ie)
     mass_m = mass_1 + mass_2
 
     !--- total energy
-    tenergy_1 = ucons(5,ie)
-    tenergy_2 = ucons(6,ie)
+    tenergy_1 = ucons(1,5,ie)
+    tenergy_2 = ucons(1,6,ie)
     tenergy_m = tenergy_1 + tenergy_2
 
     if (its .eq. 0) then

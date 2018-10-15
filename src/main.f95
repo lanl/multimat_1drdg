@@ -19,7 +19,7 @@ implicit none
 
 !----- Local variable definitions:
 real*8, allocatable :: uprim(:,:,:), uprimn(:,:,:), &
-                       ucons(:,:), uconsn(:,:)
+                       ucons(:,:,:), uconsn(:,:,:)
 
 !----- Read control file:
 call read_cntl()
@@ -49,7 +49,7 @@ end if
 
 !----- Allocation:
 allocate(uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-         ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1))
+         ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1))
 
 allocate(coord(0:imax+2))
 

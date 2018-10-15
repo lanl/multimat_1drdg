@@ -130,7 +130,7 @@ end function
 
 subroutine decode_uprim(ucons, uprim)
 
-real*8, intent(in) :: ucons(g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
 integer :: it, itNewt, ie
 real*8  :: pres, pres0, coefa, coefb, taitrel, funcp, dfuncp, rho1
@@ -145,8 +145,8 @@ real*8  :: uprim(ndof,g_neqns,0:imax+1)
         !--- Newton loop to find correct pressure
         do it = 1,itNewt
 
-           coefa = ucons(1,ie) * rgas * tinf
-           coefb = ucons(3,ie) / rho0
+           coefa = ucons(1,1,ie) * rgas * tinf
+           coefb = ucons(1,3,ie) / rho0
 
            taitrel = 1.0 + n0/k0*(pres - p0)
 
@@ -176,10 +176,10 @@ real*8  :: uprim(ndof,g_neqns,0:imax+1)
 
         rho1 = eos1_density(pres)
 
-        uprim(1,1,ie) = ucons(1,ie)/rho1
+        uprim(1,1,ie) = ucons(1,1,ie)/rho1
         uprim(1,2,ie) = pres
-        uprim(1,3,ie) = ucons(2,ie)/ucons(1,ie)
-        uprim(1,4,ie) = ucons(4,ie)/ucons(3,ie)
+        uprim(1,3,ie) = ucons(1,2,ie)/ucons(1,1,ie)
+        uprim(1,4,ie) = ucons(1,4,ie)/ucons(1,3,ie)
 
         end do !ie
 

@@ -111,15 +111,15 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
+real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(ndof,g_neqns,0:imax+1)
 
         do ifc = 1,imax+1
 
         iel = ifc - 1
         ier = ifc
 
-        ul(:) = ucons(:,iel)
-        ur(:) = ucons(:,ier)
+        ul(:) = ucons(1,:,iel)
+        ur(:) = ucons(1,:,ier)
 
         vl(:) = uprim(1,:,iel)
         vr(:) = uprim(1,:,ier)
@@ -175,7 +175,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
+real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(ndof,g_neqns,0:imax+1)
 
         call reconstruct_uprim(uprim)
 
@@ -619,18 +619,18 @@ end subroutine LDFSS_psreal
 
 subroutine get_bc_4eq(ucons)
 
-real*8  :: rho_g, u_g, pr_g, ucons(g_neqns,0:imax+1)
+real*8  :: rho_g, u_g, pr_g, ucons(ndof,g_neqns,0:imax+1)
 
         !--- extrapolation
         if ((iprob .eq. 0) .or. (iprob .eq. 2)) then
-           ucons(1,0) = alpha1_fs       * rho1_fs
-           ucons(2,0) = alpha1_fs       * rho1_fs * u1_fs
-           ucons(3,0) = (1.0-alpha1_fs) * rho2_fs
-           ucons(4,0) = (1.0-alpha1_fs) * rho2_fs * u2_fs
-           ucons(:,imax+1) = ucons(:,imax)
+           ucons(1,1,0) = alpha1_fs       * rho1_fs
+           ucons(1,2,0) = alpha1_fs       * rho1_fs * u1_fs
+           ucons(1,3,0) = (1.0-alpha1_fs) * rho2_fs
+           ucons(1,4,0) = (1.0-alpha1_fs) * rho2_fs * u2_fs
+           ucons(1,:,imax+1) = ucons(1,:,imax)
         else if (iprob .eq. 1) then
-           ucons(:,0) = ucons(:,1)
-           ucons(:,imax+1) = ucons(:,imax)
+           ucons(1,:,0) = ucons(1,:,1)
+           ucons(1,:,imax+1) = ucons(1,:,imax)
         else
            write(*,*) "BC's not set for iprob = ", iprob
         end if

@@ -118,7 +118,7 @@ subroutine init_soln_4eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
 real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1)
+           ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1)
 real*8  :: xf, pl, pr
 
         !--- SCD
@@ -140,16 +140,16 @@ real*8  :: xf, pl, pr
               pr = 1.1d5
 
               if (xf .le. 0.5) then
-                 ucons(1,ielem) = alphamin * eos1_density(pl)
-                 ucons(2,ielem) = ucons(1,ielem) * u1_fs
-                 ucons(3,ielem) = (1.0-alphamin) * eos2_density(pl)
-                 ucons(4,ielem) = ucons(3,ielem) * u2_fs
+                 ucons(1,1,ielem) = alphamin * eos1_density(pl)
+                 ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
+                 ucons(1,3,ielem) = (1.0-alphamin) * eos2_density(pl)
+                 ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
                  uprim(1,2,ielem) = pl
               else
-                 ucons(1,ielem) = (1.0-alphamin) * eos1_density(pr)
-                 ucons(2,ielem) = ucons(1,ielem) * u1_fs
-                 ucons(3,ielem) = alphamin * eos2_density(pr)
-                 ucons(4,ielem) = ucons(3,ielem) * u2_fs
+                 ucons(1,1,ielem) = (1.0-alphamin) * eos1_density(pr)
+                 ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
+                 ucons(1,3,ielem) = alphamin * eos2_density(pr)
+                 ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
                  uprim(1,2,ielem) = pr
               end if
 
@@ -167,16 +167,16 @@ real*8  :: xf, pl, pr
               pr = 101325.0
 
               if (xf .le. 0.7) then
-                 ucons(1,ielem) = alphamin * eos1_density(pl)
-                 ucons(2,ielem) = 0.0
-                 ucons(3,ielem) = (1.0-alphamin) * eos2_density(pl)
-                 ucons(4,ielem) = 0.0
+                 ucons(1,1,ielem) = alphamin * eos1_density(pl)
+                 ucons(1,2,ielem) = 0.0
+                 ucons(1,3,ielem) = (1.0-alphamin) * eos2_density(pl)
+                 ucons(1,4,ielem) = 0.0
                  uprim(1,2,ielem) = pl
               else
-                 ucons(1,ielem) = (1.0-alphamin) * eos1_density(pr)
-                 ucons(2,ielem) = 0.0
-                 ucons(3,ielem) = alphamin * eos2_density(pr)
-                 ucons(4,ielem) = 0.0
+                 ucons(1,1,ielem) = (1.0-alphamin) * eos1_density(pr)
+                 ucons(1,2,ielem) = 0.0
+                 ucons(1,3,ielem) = alphamin * eos2_density(pr)
+                 ucons(1,4,ielem) = 0.0
                  uprim(1,2,ielem) = pr
               end if
 
@@ -200,10 +200,10 @@ real*8  :: xf, pl, pr
               pl = 1.1d5
               pr = 1.1d5
 
-              ucons(1,ielem) = alpha1_fs * eos1_density(pl)
-              ucons(2,ielem) = ucons(1,ielem) * u1_fs
-              ucons(3,ielem) = (1.0-alpha1_fs) * eos2_density(pl)
-              ucons(4,ielem) = ucons(3,ielem) * u2_fs
+              ucons(1,1,ielem) = alpha1_fs * eos1_density(pl)
+              ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
+              ucons(1,3,ielem) = (1.0-alpha1_fs) * eos2_density(pl)
+              ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
               uprim(1,2,ielem) = pl
 
            end do !ielem
@@ -218,7 +218,7 @@ real*8  :: xf, pl, pr
         call decode_uprim(ucons,uprim)
 
         uprimn(:,:,:) = uprim(:,:,:)
-        uconsn(:,:)   = ucons(:,:)
+        uconsn(:,:,:) = ucons(:,:,:)
 
         call gnuplot_flow_4eq(uprim, ucons, 0)
 
@@ -233,7 +233,7 @@ subroutine init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
 real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(g_neqns,0:imax+1), uconsn(g_neqns,0:imax+1)
+           ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1)
 real*8  :: xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -271,21 +271,21 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,ielem) = alphamin
-           ucons(2,ielem) = alphamin * rho1
-           ucons(3,ielem) = (1.0-alphamin) * rho2
-           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
-           ucons(5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,1,ielem) = alphamin
+           ucons(1,2,ielem) = alphamin * rho1
+           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,ielem) = 1.0-alphamin
-           ucons(2,ielem) = (1.0-alphamin) * rho1
-           ucons(3,ielem) = alphamin * rho2
-           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
-           ucons(5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,1,ielem) = 1.0-alphamin
+           ucons(1,2,ielem) = (1.0-alphamin) * rho1
+           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
      end do !ielem
@@ -327,21 +327,21 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,ielem) = alphamin
-           ucons(2,ielem) = alphamin * rho1
-           ucons(3,ielem) = (1.0-alphamin) * rho2
-           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
-           ucons(5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,1,ielem) = alphamin
+           ucons(1,2,ielem) = alphamin * rho1
+           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,ielem) = 1.0-alphamin
-           ucons(2,ielem) = (1.0-alphamin) * rho1
-           ucons(3,ielem) = alphamin * rho2
-           ucons(4,ielem) = (ucons(2,ielem)+ucons(3,ielem)) * u_fs
-           ucons(5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,1,ielem) = 1.0-alphamin
+           ucons(1,2,ielem) = (1.0-alphamin) * rho1
+           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
      end do !ielem
@@ -356,7 +356,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
   !call decode_uprim(ucons,uprim)
 
   uprimn(:,:,:) = uprim(:,:,:)
-  uconsn(:,:)   = ucons(:,:)
+  uconsn(:,:,:) = ucons(:,:,:)
 
   call gnuplot_flow_mm6eq(ucons, 0)
 
@@ -369,7 +369,8 @@ end subroutine init_soln_mm6eq
 subroutine gnuplot_flow_4eq(uprim, ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(g_neqns,0:imax+1)
+real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1), &
+                       ucons(ndof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, pres, rhomix, umix, &
@@ -397,7 +398,7 @@ character(len=100) :: filename2,filename3
            umix   = alp1*  u1 + alp2*  u2
 
            write(23,'(11E16.6)') xcc, alp1, rhomix, pres, umix, u1, u2, &
-                                ucons(1,ielem), ucons(2,ielem), ucons(3,ielem), ucons(4,ielem)
+                                ucons(1,1,ielem), ucons(1,2,ielem), ucons(1,3,ielem), ucons(1,4,ielem)
 
         end do !ielem
 
@@ -410,7 +411,7 @@ end subroutine gnuplot_flow_4eq
 subroutine gnuplot_flow_mm6eq(ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: ucons(g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, rhoe_mix, &
@@ -437,14 +438,14 @@ character(len=100) :: filename2,filename3
   do ielem = 1,imax
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
-     alp1 = ucons(1,ielem)
+     alp1 = ucons(1,1,ielem)
      alp2 = 1.0 - alp1
-     rho1 = ucons(2,ielem)/alp1
-     rho2 = ucons(3,ielem)/alp2
-     rhomix = ucons(2,ielem) + ucons(3,ielem) !alp1*rho1 + alp2*rho2
-     umix = ucons(4,ielem)/rhomix
-     rhoe1 = ucons(5,ielem)/alp1
-     rhoe2 = ucons(6,ielem)/alp2
+     rho1 = ucons(1,2,ielem)/alp1
+     rho2 = ucons(1,3,ielem)/alp2
+     rhomix = ucons(1,2,ielem) + ucons(1,3,ielem) !alp1*rho1 + alp2*rho2
+     umix = ucons(1,4,ielem)/rhomix
+     rhoe1 = ucons(1,5,ielem)/alp1
+     rhoe2 = ucons(1,6,ielem)/alp2
      p1   = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, umix)
      p2   = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, umix)
      t1   = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, umix)
