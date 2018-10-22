@@ -602,7 +602,8 @@ end subroutine get_bc_mm6eq
 subroutine reconstruction(ucons)
 
 integer :: ie, ieqn, ifc
-real*8  :: ui, ug, umin, umax, diff, phi, theta(imax), thetal
+real*8  :: ui, ug, umin, umax, diff, phi, theta(imax), thetal, beta_lim
+!real*8  :: fwd, bwd, cnt
 real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
@@ -610,7 +611,23 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
     ucons(2,:,ie) = 0.5 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
+  !do ieqn = 1,g_neqns
+  !  do ie = 1,imax
+
+  !    fwd = ucons(1,ieqn,ie+1)-ucons(1,ieqn,ie)
+  !    bwd = ucons(1,ieqn,ie)-ucons(1,ieqn,ie-1)
+  !    cnt = 0.5*(ucons(1,ieqn,ie+1)-ucons(1,ieqn,ie-1))
+
+  !    ucons(2,ieqn,ie) = mclim(fwd,bwd,cnt)
+
+  !  end do !ie
+  !end do !ieqn
+
   !--- limiter
+  ! beta = 2 : Superbee
+  !      = 1 : Minmod
+  beta_lim = 2.0
+
   do ieqn = 1,g_neqns
 
     ! 1. compute limiter function
@@ -629,10 +646,10 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
         ! bounds
         diff = ug-ui
-        if (diff > 1.0d-16) then
+        if (diff > 1.0d-14) then
           phi = (umax-ui)/(2.0*diff)
 
-        else if (diff < 1.0d-16) then
+        else if (diff < -1.0d-14) then
           phi = (umin-ui)/(2.0*diff)
 
         else
@@ -641,7 +658,7 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
         end if
 
         ! limiter function
-        thetal = max( 0.0, max( min(2.0*phi, 1.0), min(phi, 2.0) ) )
+        thetal = max( 0.0, max( min(beta_lim*phi, 1.0), min(phi, beta_lim) ) )
         theta(ie) = min(thetal, theta(ie))
 
       end do !ifc

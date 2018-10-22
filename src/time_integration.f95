@@ -172,6 +172,7 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
 
         call get_bc_mm6eq(ucons)
         !call blend_disphase_mm6eq(ucons)
+        call ignore_tinyphase_mm6eq(ucons)
 
         uconsi = ucons
         uprimn = uprim
@@ -410,6 +411,70 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
   end do !ie
 
 end subroutine blend_disphase_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Tiny phase treatment for mm6eq:
+!----- ignore it
+!----------------------------------------------------------------------------------------------
+
+subroutine ignore_tinyphase_mm6eq(ucons)
+
+integer :: ie
+real*8  :: al1, p1, t1, rho1, rhoe1, u, &
+           al2, p2, t2, rho2, rhoe2, &
+           ucons(ndof,g_neqns,0:imax+1)
+
+  do ie = 1,imax
+
+    ! conserved variables
+    al1 = ucons(1,1,ie)
+    al2 = 1.0 -al1
+    rho1 = ucons(1,2,ie) / al1
+    rho2 = ucons(1,3,ie) / al2
+    rhoe1 = ucons(1,5,ie) / al1
+    rhoe2 = ucons(1,6,ie) / al2
+
+    ! primitive variables
+    u = ucons(1,4,ie) / (ucons(1,2,ie)+ucons(1,3,ie))
+    p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
+    p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
+    t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
+    t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+  
+    !--- phase-1 disappearing
+    if (al1 .le. 1.0e-14) then
+
+      ! copy pressure and temperature
+      p1 = p2
+      t1 = t2
+
+      ! consistently update derived quantities
+      rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
+      rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
+
+      ! update conserved variables
+      ucons(1,2,ie) = al1*rho1
+      ucons(1,5,ie) = al1*rhoe1
+
+    !--- phase-2 disappearing
+    elseif (al2 .le. 1.0e-14) then
+
+      ! copy pressure and temperature
+      p2 = p1
+      t2 = t1
+
+      ! consistently update derived quantities
+      rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
+      rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
+
+      ucons(1,3,ie) = al2*rho2
+      ucons(1,6,ie) = al2*rhoe2
+
+    end if
+
+  end do !ie
+
+end subroutine ignore_tinyphase_mm6eq
 
 !----------------------------------------------------------------------------------------------
 !----- Compute mass and energy conservation for the mm6eq system:
