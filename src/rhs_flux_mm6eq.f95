@@ -21,13 +21,15 @@ subroutine flux_p0_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
-           intflux(g_neqns), rhsel(g_neqns,imax), &
-           u_conv_l, u_conv_r, uf, pr, p1, p2, &
-           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
+           ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_neqns,imax), &
+           lplus, lminu, lmag
 
 real*8, intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
   do ifc = 1,imax+1
+
+  intflux = 0.0
+  ncnflux = 0.0
 
   iel = ifc - 1
   ier = ifc
@@ -35,60 +37,31 @@ real*8, intent(in) :: ucons(ndof,g_neqns,0:imax+1)
   ul(:) = ucons(1,:,iel)
   ur(:) = ucons(1,:,ier)
 
-  !--- Conservative fluxes
+  !--- fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, lplus, lminu)
+     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call llf_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
      stop
   endif
 
-  !--- Non-conservative terms
-  alp1f = lplus*ucons(1,1,iel) + lminu*ucons(1,1,ier)
-  alp2f = lplus*(1.0-ucons(1,1,iel)) + lminu*(1.0-ucons(1,1,ier))
-
-  ! left element
-  u_conv_l = ucons(1,4,iel)/(ucons(1,2,iel)+ucons(1,3,iel))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,iel)/ucons(1,1,iel), &
-               ucons(1,5,iel)/ucons(1,1,iel), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,iel)/(1.0-ucons(1,1,iel)),&
-               ucons(1,6,iel)/(1.0-ucons(1,1,iel)), u_conv_l)
-  pr = ucons(1,1,iel)*p1 + (1.0-ucons(1,1,iel))*p2
-  ncnfl = pr * u_conv_l
-
-  ! right element
-  u_conv_r = ucons(1,4,ier)/(ucons(1,2,ier)+ucons(1,3,ier))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,ier)/ucons(1,1,ier), &
-               ucons(1,5,ier)/ucons(1,1,ier), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,ier)/(1.0-ucons(1,1,ier)),&
-               ucons(1,6,ier)/(1.0-ucons(1,1,ier)), u_conv_r)
-  pr = ucons(1,1,ier)*p1 + (1.0-ucons(1,1,ier))*p2
-  ncnfr = pr * u_conv_r
-
-  uf = lmag*(lplus+lminu)
-
-  !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
-  !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
-
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
+          rhsel(ieqn,iel) = rhsel(ieqn,iel) - ncnflux(ieqn,1)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + ucons(1,1,iel) * uf
-    rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
-    rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
 
   if (ier .lt. (imax+1)) then
     do ieqn = 1,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
+          rhsel(ieqn,ier) = rhsel(ieqn,ier) + ncnflux(ieqn,2)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - ucons(1,1,ier) * uf
-    rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
-    rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
 
   end do !ifc
@@ -108,15 +81,17 @@ subroutine flux_p0p1_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
-           intflux(g_neqns), rhsel(g_neqns,imax), &
-           u_conv_l, u_conv_r, uf, pr, p1, p2, &
-           alp1f, alp2f, ncnfl, ncnfr, lplus, lminu, lmag
+           ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_neqns,imax), &
+           lplus, lminu, lmag
 
 real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
   call reconstruction(ucons)
 
   do ifc = 1,imax+1
+
+  intflux = 0.0
+  ncnflux = 0.0
 
   iel = ifc - 1
   ier = ifc
@@ -129,57 +104,30 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
   !--- Conservative fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, lplus, lminu)
+     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call llf_nonconserv(ul, ur, ucons(1,:,iel), ucons(1,:,ier), &
+                         lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_nonconserv(ul, ur, ucons(1,:,iel), ucons(1,:,ier), &
+                              lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
      stop
   endif
 
-  !--- Non-conservative terms
-  alp1f = lplus*ul(1) + lminu*ur(1)
-  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
-
-  ! left element
-  u_conv_l = ucons(1,4,iel)/(ucons(1,2,iel)+ucons(1,3,iel))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,iel)/ucons(1,1,iel), &
-               ucons(1,5,iel)/ucons(1,1,iel), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,iel)/(1.0-ucons(1,1,iel)),&
-               ucons(1,6,iel)/(1.0-ucons(1,1,iel)), u_conv_l)
-  pr = ucons(1,1,iel)*p1 + (1.0-ucons(1,1,iel))*p2
-  ncnfl = pr * u_conv_l
-
-  ! right element
-  u_conv_r = ucons(1,4,ier)/(ucons(1,2,ier)+ucons(1,3,ier))
-  p1 = eos3_pr(g_gam1, g_pc1, ucons(1,2,ier)/ucons(1,1,ier), &
-               ucons(1,5,ier)/ucons(1,1,ier), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, ucons(1,3,ier)/(1.0-ucons(1,1,ier)),&
-               ucons(1,6,ier)/(1.0-ucons(1,1,ier)), u_conv_r)
-  pr = ucons(1,1,ier)*p1 + (1.0-ucons(1,1,ier))*p2
-  ncnfr = pr * u_conv_r
-
-  uf = lmag*(lplus+lminu)
-
-  !print*, ifc, intflux(1), intflux(2), intflux(3), intflux(4), intflux(5), intflux(6)
-  !print*, ifc, ncnfl, ncnfr, alp1f, alp2f
-
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(ieqn,iel) = rhsel(ieqn,iel) - intflux(ieqn)
+          rhsel(ieqn,iel) = rhsel(ieqn,iel) - ncnflux(ieqn,1)
     end do !ieqn
-    rhsel(1,iel) = rhsel(1,iel) + ucons(1,1,iel) * uf
-    rhsel(5,iel) = rhsel(5,iel) + alp1f * ncnfl
-    rhsel(6,iel) = rhsel(6,iel) + alp2f * ncnfl
   end if
 
   if (ier .lt. (imax+1)) then
     do ieqn = 1,g_neqns
           rhsel(ieqn,ier) = rhsel(ieqn,ier) + intflux(ieqn)
+          rhsel(ieqn,ier) = rhsel(ieqn,ier) + ncnflux(ieqn,2)
     end do !ieqn
-    rhsel(1,ier) = rhsel(1,ier) - ucons(1,1,ier) * uf
-    rhsel(5,ier) = rhsel(5,ier) - alp1f * ncnfr
-    rhsel(6,ier) = rhsel(6,ier) - alp2f * ncnfr
   end if
 
   end do !ifc
@@ -192,51 +140,14 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
 end subroutine flux_p0p1_mm6eq
 
 !-------------------------------------------------------------------------------
-!----- Interface pressure correction (hyperbolization)
-!-------------------------------------------------------------------------------
-
-subroutine get_pugradalpha(ucons, rhsel)
-
-real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
-
-integer :: ie
-real*8  :: dx, al1, al2, p1, p2, u_conv, pr, &
-           fwddiff,cntdiff,bwddiff, &
-           gradal1, rhsel(g_neqns,imax)
-
-  do ie = 1,imax
-
-    dx = 2.0 * (coord(ie+1)-coord(ie))
-
-    u_conv = ucons(1,4,ie)/(ucons(1,2,ie)+ucons(1,3,ie))
-    al1 = ucons(1,1,ie)
-    al2 = 1.0 - al1
-    p1  = eos3_pr(g_gam1, g_pc1, ucons(1,2,ie)/al1, ucons(1,5,ie)/al1, u_conv)
-    p2  = eos3_pr(g_gam2, g_pc2, ucons(1,3,ie)/al2, ucons(1,6,ie)/al2, u_conv)
-    pr  = al1*p1+al2*p2
-
-    fwddiff = ( ucons(1,1,ie+1) - ucons(1,1,ie) ) / (0.5*dx)
-    bwddiff = ( ucons(1,1,ie) - ucons(1,1,ie-1) ) / (0.5*dx)
-    cntdiff = (ucons(1,1,ie+1) - ucons(1,1,ie-1)) / dx
-
-    gradal1 = mclim(fwddiff,cntdiff,bwddiff)
-
-    rhsel(5,ie) = rhsel(5,ie) + pr*u_conv*gradal1*dx*0.5
-    rhsel(6,ie) = rhsel(6,ie) - pr*u_conv*gradal1*dx*0.5
-
-  end do !ie
-
-end subroutine get_pugradalpha
-
-!-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------
 
-subroutine llf_mm6eq(ul, ur, flux, lplus, lminu)
+subroutine llf_mm6eq(ul, ur, flux, lplus, lminu, lmag)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
-real*8 :: flux(g_neqns), lplus, lminu
+real*8 :: flux(g_neqns), lplus, lminu, lmag
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
           arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
@@ -333,7 +244,54 @@ real*8 :: lambda
   lplus = 0.5
   lminu = 0.5
 
+  lmag = lambda
+
 end subroutine llf_mm6eq
+
+!-------------------------------------------------------------------------------
+
+subroutine llf_nonconserv(ul, ur, uavgl, uavgr, lplus, lminu, lmag, ncnflux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      uavgl(g_neqns), uavgr(g_neqns), &
+                      lplus, lminu, lmag
+
+real*8  :: ncnflux(g_neqns,2), &
+           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           alp1f, alp2f, ncnfl, ncnfr
+
+  alp1f = lplus*ul(1) + lminu*ur(1)
+  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
+
+  ! left element
+  u_conv_l = uavgl(4)/(uavgl(2)+uavgl(3))
+  p1 = eos3_pr(g_gam1, g_pc1, uavgl(2)/uavgl(1), &
+               uavgl(5)/uavgl(1), u_conv_l)
+  p2 = eos3_pr(g_gam2, g_pc2, uavgl(3)/(1.0-uavgl(1)),&
+               uavgl(6)/(1.0-uavgl(1)), u_conv_l)
+  pr = uavgl(1)*p1 + (1.0-uavgl(1))*p2
+  ncnfl = pr * u_conv_l
+
+  ! right element
+  u_conv_r = uavgr(4)/(uavgr(2)+uavgr(3))
+  p1 = eos3_pr(g_gam1, g_pc1, uavgr(2)/uavgr(1), &
+               uavgr(5)/uavgr(1), u_conv_r)
+  p2 = eos3_pr(g_gam2, g_pc2, uavgr(3)/(1.0-uavgr(1)),&
+               uavgr(6)/(1.0-uavgr(1)), u_conv_r)
+  pr = uavgr(1)*p1 + (1.0-uavgr(1))*p2
+  ncnfr = pr * u_conv_r
+
+  uf = 0.5 * (u_conv_r-u_conv_l)
+
+  ncnflux(1,1) = - ur(1) * uf
+  ncnflux(5,1) = - alp1f * ncnfl
+  ncnflux(6,1) = - alp2f * ncnfl
+
+  ncnflux(1,2) = + ul(1) * uf
+  ncnflux(5,2) = - alp1f * ncnfr
+  ncnflux(6,2) = - alp2f * ncnfr
+
+end subroutine llf_nonconserv
 
 !-------------------------------------------------------------------------------
 !----- 2fluid AUSM+UP:
@@ -458,6 +416,52 @@ real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
   lambda_minu = lambda_minu/(lambda_mag)
 
 end subroutine ausmplus_mm6eq
+
+!-------------------------------------------------------------------------------
+
+subroutine ausmplus_nonconserv(ul, ur, uavgl, uavgr, lplus, lminu, lmag, &
+                               ncnflux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      uavgl(g_neqns), uavgr(g_neqns), &
+                      lplus, lminu, lmag
+
+real*8  :: ncnflux(g_neqns,2), &
+           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           alp1f, alp2f, ncnfl, ncnfr
+
+  alp1f = lplus*ul(1) + lminu*ur(1)
+  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
+
+  ! left element
+  u_conv_l = uavgl(4)/(uavgl(2)+uavgl(3))
+  p1 = eos3_pr(g_gam1, g_pc1, uavgl(2)/uavgl(1), &
+               uavgl(5)/uavgl(1), u_conv_l)
+  p2 = eos3_pr(g_gam2, g_pc2, uavgl(3)/(1.0-uavgl(1)),&
+               uavgl(6)/(1.0-uavgl(1)), u_conv_l)
+  pr = uavgl(1)*p1 + (1.0-uavgl(1))*p2
+  ncnfl = pr * u_conv_l
+
+  ! right element
+  u_conv_r = uavgr(4)/(uavgr(2)+uavgr(3))
+  p1 = eos3_pr(g_gam1, g_pc1, uavgr(2)/uavgr(1), &
+               uavgr(5)/uavgr(1), u_conv_r)
+  p2 = eos3_pr(g_gam2, g_pc2, uavgr(3)/(1.0-uavgr(1)),&
+               uavgr(6)/(1.0-uavgr(1)), u_conv_r)
+  pr = uavgr(1)*p1 + (1.0-uavgr(1))*p2
+  ncnfr = pr * u_conv_r
+
+  uf = lmag*(lplus+lminu)
+
+  ncnflux(1,1) = - uavgl(1) * uf
+  ncnflux(5,1) = - alp1f * ncnfl
+  ncnflux(6,1) = - alp2f * ncnfl
+
+  ncnflux(1,2) = - uavgr(1) * uf
+  ncnflux(5,2) = - alp1f * ncnfr
+  ncnflux(6,2) = - alp2f * ncnfr
+
+end subroutine ausmplus_nonconserv
 
 !-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:
