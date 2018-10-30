@@ -311,14 +311,17 @@ real*8 :: arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
           rhou_r, u_r, m_r, rho_r, p_r
 real*8 :: a1_12,rho1_12,al1_12,mdot1_12, &
           a2_12,rho2_12,al2_12,mdot2_12, &
-          f_a,rho_12,m_12,p_12,ac_12!,m_p,p_u
+          f_a,rho_12,m_12,p_12,ac_12,m_p,p_u
 real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
 real*8 :: psplus_l,psplus_r,psminu_l,psminu_r
-!real*8 :: temp,temp1,temp2,num,den
+real*8 :: temp!,temp1,temp2,num,den
   
 real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
   
-!real*8 :: k_p, k_u
+real*8 :: k_p, k_u
+
+  k_p = 1.0;
+  k_u = 0.1;
 
   flux(:) = 0.0
   
@@ -390,13 +393,13 @@ real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
   call splitmach_as(f_a,m_r,msplus_r,msminu_r,psplus_r,psminu_r)
   
   ! "p"
-  !temp  = c10 - (c05*(vn_l*vn_l + vn_r*vn_r)/(ac_12*ac_12))
-  !m_p   = -k_p* (max(temp,c00))* (p_r-p_l) / (f_a* rho_12*ac_12*ac_12)
-  m_12 = msplus_l(3) + msminu_r(3)! + m_p
+  temp  = 1.0 - (0.5*(u_l*u_l + u_r*u_r)/(ac_12*ac_12))
+  m_p   = -k_p* (max(temp,0.0))* (p_r-p_l) / (f_a* rho_12*ac_12*ac_12)
+  m_12 = msplus_l(3) + msminu_r(3) + m_p
   
   ! "u"
-  !p_u   = -k_u* (c10-psplus_l* psminu_r)* f_a* rho_12* vnrel* (vn_r-vn_l)
-  p_12 = psplus_l*p_l + psminu_r*p_r! + p_u
+  p_u   = -k_u* psplus_l* psminu_r* f_a* rho_12* ac_12* (u_r-u_l)
+  p_12 = psplus_l*p_l + psminu_r*p_r + p_u
   
   lambda = ac_12 * m_12
   

@@ -298,8 +298,6 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
 
      alpha1_fs = alphamin
      u_fs = 0.0
-     pr1_fs = 1.d5
-     pr2_fs = 1.d5
      t1_fs = 300.0
      t2_fs = 300.0
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
@@ -327,21 +325,21 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = alphamin
-           ucons(1,2,ielem) = alphamin * rho1
-           ucons(1,3,ielem) = (1.0-alphamin) * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
-        else
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
            ucons(1,1,ielem) = 1.0-alphamin
            ucons(1,2,ielem) = (1.0-alphamin) * rho1
            ucons(1,3,ielem) = alphamin * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+        else
+           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
+           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
+           ucons(1,1,ielem) = alphamin
+           ucons(1,2,ielem) = alphamin * rho1
+           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
      end do !ielem
