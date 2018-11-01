@@ -118,9 +118,10 @@ function eos3_ss(gam, p_c, rho, pr)
 
 real*8, intent(in) :: gam, p_c, rho, pr
 
-real*8  :: eos3_ss
+real*8  :: pre, eos3_ss
 
-    eos3_ss = dsqrt(gam *(pr+p_c)/rho);
+    pre = max(pr+p_c, 1.0d-14);
+    eos3_ss = dsqrt(gam *(pre+p_c)/rho);
 
 end function
 

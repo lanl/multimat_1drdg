@@ -58,7 +58,7 @@ subroutine gen_mesh()
 integer :: ipoin
 real*8  :: ldomn, dx
 
-        if (iprob.eq.2) then
+        if ((iprob.eq.2) .and. (i_system.eq.0)) then
                 ldomn = 12.0
         else
                 ldomn = 1.0
@@ -290,7 +290,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
-  !--- Shocktube
+  !--- Sod Shocktube
   !----------
   else if (iprob .eq. 1) then
 
@@ -316,6 +316,60 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
      p2r = 0.1*pr2_fs
      t1r = 0.8*t1_fs
      t2r = 0.8*t2_fs
+     ur  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.5) then
+           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
+           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
+           ucons(1,1,ielem) = 1.0-alphamin
+           ucons(1,2,ielem) = (1.0-alphamin) * rho1
+           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+        else
+           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
+           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
+           ucons(1,1,ielem) = alphamin
+           ucons(1,2,ielem) = alphamin * rho1
+           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
+           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+        end if
+
+     end do !ielem
+
+  !--- Abgrall's water-air Shocktube
+  !----------
+  else if (iprob .eq. 2) then
+
+     alphamin = 1.d-10
+
+     alpha1_fs = alphamin
+     u_fs = 0.0
+     t1_fs = 247.323
+     t2_fs = 247.323
+     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
+     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr1_fs
+     p2l = pr2_fs
+     t1l = t1_fs
+     t2l = t2_fs
+     ul  = u_fs
+     ! right state
+     p1r = pr1_fs/2.0d3
+     p2r = pr2_fs/2.0d3
+     t1r = 0.028176*t1_fs
+     t2r = 0.028176*t2_fs
      ur  = u_fs
 
      do ielem = 0,imax+1
