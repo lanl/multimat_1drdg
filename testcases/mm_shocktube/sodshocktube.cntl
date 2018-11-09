@@ -12,7 +12,7 @@
 0.0             / Freestream velocity
 1.0d5    1.0d5  / Freestream pressures for 2 phases
 ----------------------------------------------------------------------------------------------
-0               / Space discretization (0: P0; 1:MC-P0P1)
+0    0          / Space discretization (0: P0; 1:MC-P0P1) and limiter
 1.0d-06         / Time-step size
 700             / Maximum number of timesteps
 ----------------------------------------------------------------------------------------------

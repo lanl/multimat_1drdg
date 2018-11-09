@@ -187,5 +187,66 @@ real*8  :: uprim(ndof,g_neqns,0:imax+1)
 end subroutine decode_uprim
 
 !----------------------------------------------------------------------------------------------
+!----- Get primitive variables for a mesh element from conserved
+!----------------------------------------------------------------------------------------------
+
+subroutine get_uprim_mm6eq(ucons, uprim)
+
+real*8, intent(in) :: ucons(g_neqns)
+
+real*8  :: al1, p1, t1, rho1, rhoe1, u, rho, &
+           al2, p2, t2, rho2, rhoe2
+real*8  :: uprim(g_neqns)
+
+  ! conserved variables
+  al1 = ucons(1)
+  al2 = 1.0 -al1
+  rho1 = ucons(2) / al1
+  rho2 = ucons(3) / al2
+  rhoe1 = ucons(5) / al1
+  rhoe2 = ucons(6) / al2
+
+  ! primitive variables
+  rho  = ucons(2) + ucons(3)
+  u = ucons(4) / rho
+  p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
+  p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
+  t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
+  t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+
+  !--- phase-1 disappearing
+  if (al1 .le. alphamin) then
+
+    ! copy pressure and temperature
+    p1 = p2
+    t1 = t2
+
+    ! consistently update derived quantities
+    rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
+    rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
+
+  !--- phase-2 disappearing
+  elseif (al2 .le. alphamin) then
+
+    ! copy pressure and temperature
+    p2 = p1
+    t2 = t1
+
+    ! consistently update derived quantities
+    rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
+    rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
+
+  end if
+
+  uprim(1) = al1
+  uprim(2) = p1
+  uprim(3) = p2
+  uprim(4) = u
+  uprim(5) = t1
+  uprim(6) = t2
+
+end subroutine get_uprim_mm6eq
+
+!----------------------------------------------------------------------------------------------
 
 END MODULE eos

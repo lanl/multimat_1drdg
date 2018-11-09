@@ -339,6 +339,7 @@ subroutine blend_disphase_mm6eq(ucons)
 integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, xi, gxi, rho, epsmin, epsmax, &
+           uconsi(g_neqns), uprimi(g_neqns), &
            ucons(ndof,g_neqns,0:imax+1)
 
   epsmin = 1.0  * alphamin
@@ -354,12 +355,15 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
     rhoe1 = ucons(1,5,ie) / al1
     rhoe2 = ucons(1,6,ie) / al2
 
+    uconsi(:) = ucons(1,:,ie)
+    call get_uprim_mm6eq(uconsi, uprimi)
+
     ! primitive variables
-    u = ucons(1,4,ie) / (ucons(1,2,ie)+ucons(1,3,ie))
-    p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
-    p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
-    t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
-    t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+    u = uprimi(4)
+    p1 = uprimi(2)
+    p2 = uprimi(3)
+    t1 = uprimi(5)
+    t2 = uprimi(6)
   
     !--- phase-1 disappearing
     if (al1 .lt. epsmax) then
@@ -422,6 +426,7 @@ subroutine ignore_tinyphase_mm6eq(ucons)
 integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, &
+           uconsi(g_neqns), uprimi(g_neqns), &
            ucons(ndof,g_neqns,0:imax+1)
 
   do ie = 1,imax
@@ -434,12 +439,15 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
     rhoe1 = ucons(1,5,ie) / al1
     rhoe2 = ucons(1,6,ie) / al2
 
+    uconsi(:) = ucons(1,:,ie)
+    call get_uprim_mm6eq(uconsi, uprimi)
+
     ! primitive variables
-    u = ucons(1,4,ie) / (ucons(1,2,ie)+ucons(1,3,ie))
-    p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
-    p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
-    t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
-    t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+    u = uprimi(4)
+    p1 = uprimi(2)
+    p2 = uprimi(3)
+    t1 = uprimi(5)
+    t2 = uprimi(6)
   
     !--- phase-1 disappearing
     if (al1 .le. 1.0e-14) then
@@ -467,6 +475,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
       rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
 
+      ! update conserved variables
       ucons(1,3,ie) = al2*rho2
       ucons(1,6,ie) = al2*rhoe2
 

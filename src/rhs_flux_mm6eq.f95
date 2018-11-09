@@ -80,7 +80,7 @@ end subroutine flux_p0_mm6eq
 subroutine flux_p0p1_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
-real*8  :: ul(g_neqns), ur(g_neqns), &
+real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_neqns,imax), &
            lplus, lminu, lmag
 
@@ -99,17 +99,20 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
   do ieqn = 1,g_neqns
     ul(ieqn) = ucons(1,ieqn,iel) + 0.5 * ucons(2,ieqn,iel)
     ur(ieqn) = ucons(1,ieqn,ier) - 0.5 * ucons(2,ieqn,ier)
+
+    uavgl(ieqn) = ucons(1,ieqn,iel)
+    uavgr(ieqn) = ucons(1,ieqn,ier)
   end do !ieqn
 
-  !--- Conservative fluxes
+  !--- fluxes
 
   if (i_flux .eq. 1) then
      call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call llf_nonconserv(ul, ur, ucons(1,:,iel), ucons(1,:,ier), &
+     call llf_nonconserv(ul, ur, uavgl, uavgr, &
                          lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv(ul, ur, ucons(1,:,iel), ucons(1,:,ier), &
+     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
                               lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
@@ -148,6 +151,7 @@ subroutine llf_mm6eq(ul, ur, flux, lplus, lminu, lmag)
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
 real*8 :: flux(g_neqns), lplus, lminu, lmag
+real*8 :: up_l(g_neqns), up_r(g_neqns)
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
           arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
@@ -172,13 +176,15 @@ real*8 :: lambda
   e1_l    = ul(5)
   e2_l    = ul(6)
   al2_l   = 1.0 - al1_l
+
+  call get_uprim_mm6eq(ul, up_l)
   
   rho_l  = arho1_l + arho2_l
   rho1_l = arho1_l / al1_l
   rho2_l = arho2_l / al2_l
   u_l    = rhou_l / rho_l
-  p1_l   = eos3_pr(g_gam1, g_pc1, rho1_l, (e1_l/al1_l), u_l)
-  p2_l   = eos3_pr(g_gam2, g_pc2, rho2_l, (e2_l/al2_l), u_l)
+  p1_l   = up_l(2)
+  p2_l   = up_l(3)
   p_l    = al1_l*p1_l+al2_l*p2_l
   a1_l   = eos3_ss(g_gam1, g_pc1, rho1_l, p1_l)
   h1_l   = e1_l + al1_l*p1_l
@@ -193,13 +199,15 @@ real*8 :: lambda
   e1_r    = ur(5)
   e2_r    = ur(6)
   al2_r   = 1.0 - al1_r
+
+  call get_uprim_mm6eq(ur, up_r)
   
   rho_r  = arho1_r + arho2_r
   rho1_r = arho1_r / al1_r
   rho2_r = arho2_r / al2_r
   u_r    = rhou_r / rho_r
-  p1_r   = eos3_pr(g_gam1, g_pc1, rho1_r, (e1_r/al1_r), u_r)
-  p2_r   = eos3_pr(g_gam2, g_pc2, rho2_r, (e2_r/al2_r), u_r)
+  p1_r   = up_r(2)
+  p2_r   = up_r(3)
   p_r    = al1_r*p1_r+al2_r*p2_r
   a1_r   = eos3_ss(g_gam1, g_pc1, rho1_r, p1_r)
   h1_r   = e1_r + al1_r*p1_r
@@ -257,29 +265,24 @@ real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       lplus, lminu, lmag
 
 real*8  :: ncnflux(g_neqns,2), &
-           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           uprim_avg(g_neqns), &
+           u_conv_l, u_conv_r, uf, p, &
            alp1f, alp2f, ncnfl, ncnfr
 
   alp1f = lplus*ul(1) + lminu*ur(1)
   alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
 
   ! left element
-  u_conv_l = uavgl(4)/(uavgl(2)+uavgl(3))
-  p1 = eos3_pr(g_gam1, g_pc1, uavgl(2)/uavgl(1), &
-               uavgl(5)/uavgl(1), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, uavgl(3)/(1.0-uavgl(1)),&
-               uavgl(6)/(1.0-uavgl(1)), u_conv_l)
-  pr = uavgl(1)*p1 + (1.0-uavgl(1))*p2
-  ncnfl = pr * u_conv_l
+  call get_uprim_mm6eq(uavgl, uprim_avg)
+  u_conv_l = uprim_avg(4)
+  p = uavgl(1)*uprim_avg(2) + (1.0-uavgl(1))*uprim_avg(3)
+  ncnfl = p * u_conv_l
 
   ! right element
-  u_conv_r = uavgr(4)/(uavgr(2)+uavgr(3))
-  p1 = eos3_pr(g_gam1, g_pc1, uavgr(2)/uavgr(1), &
-               uavgr(5)/uavgr(1), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, uavgr(3)/(1.0-uavgr(1)),&
-               uavgr(6)/(1.0-uavgr(1)), u_conv_r)
-  pr = uavgr(1)*p1 + (1.0-uavgr(1))*p2
-  ncnfr = pr * u_conv_r
+  call get_uprim_mm6eq(uavgr, uprim_avg)
+  u_conv_r = uprim_avg(4)
+  p = uavgr(1)*uprim_avg(2) + (1.0-uavgr(1))*uprim_avg(3)
+  ncnfr = p * u_conv_r
 
   uf = 0.5 * (u_conv_r-u_conv_l)
 
@@ -302,6 +305,7 @@ subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
 
 real*8 :: flux(g_neqns)
+real*8 :: up_l(g_neqns), up_r(g_neqns)
 real*8 :: al1_l, al1_r, al2_l, al2_r
 real*8 :: arho1_l,rho1_l,e1_l,a1_l,h1_l,p1_l, &
           arho2_l,rho2_l,e2_l,a2_l,h2_l,p2_l, &
@@ -333,13 +337,15 @@ real*8 :: k_p, k_u
   e1_l    = ul(5)
   e2_l    = ul(6)
   al2_l   = 1.0 - al1_l
+
+  call get_uprim_mm6eq(ul, up_l)
   
   rho_l  = arho1_l + arho2_l
   rho1_l = arho1_l / al1_l
   rho2_l = arho2_l / al2_l
   u_l    = rhou_l / rho_l
-  p1_l   = eos3_pr(g_gam1, g_pc1, rho1_l, (e1_l/al1_l), u_l)
-  p2_l   = eos3_pr(g_gam2, g_pc2, rho2_l, (e2_l/al2_l), u_l)
+  p1_l   = up_l(2)
+  p2_l   = up_l(3)
   p_l    = al1_l*p1_l+al2_l*p2_l
   a1_l   = eos3_ss(g_gam1, g_pc1, rho1_l, p1_l)
   h1_l   = e1_l + al1_l*p1_l
@@ -354,13 +360,15 @@ real*8 :: k_p, k_u
   e1_r    = ur(5)
   e2_r    = ur(6)
   al2_r   = 1.0 - al1_r
+
+  call get_uprim_mm6eq(ur, up_r)
   
   rho_r  = arho1_r + arho2_r
   rho1_r = arho1_r / al1_r
   rho2_r = arho2_r / al2_r
   u_r    = rhou_r / rho_r
-  p1_r   = eos3_pr(g_gam1, g_pc1, rho1_r, (e1_r/al1_r), u_r)
-  p2_r   = eos3_pr(g_gam2, g_pc2, rho2_r, (e2_r/al2_r), u_r)
+  p1_r   = up_r(2)
+  p2_r   = up_r(3)
   p_r    = al1_r*p1_r+al2_r*p2_r
   a1_r   = eos3_ss(g_gam1, g_pc1, rho1_r, p1_r)
   h1_r   = e1_r + al1_r*p1_r
@@ -430,29 +438,24 @@ real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       lplus, lminu, lmag
 
 real*8  :: ncnflux(g_neqns,2), &
-           u_conv_l, u_conv_r, uf, pr, p1, p2, &
+           uprim_avg(g_neqns), &
+           u_conv_l, u_conv_r, uf, p, &
            alp1f, alp2f, ncnfl, ncnfr
 
   alp1f = lplus*ul(1) + lminu*ur(1)
   alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
 
   ! left element
-  u_conv_l = uavgl(4)/(uavgl(2)+uavgl(3))
-  p1 = eos3_pr(g_gam1, g_pc1, uavgl(2)/uavgl(1), &
-               uavgl(5)/uavgl(1), u_conv_l)
-  p2 = eos3_pr(g_gam2, g_pc2, uavgl(3)/(1.0-uavgl(1)),&
-               uavgl(6)/(1.0-uavgl(1)), u_conv_l)
-  pr = uavgl(1)*p1 + (1.0-uavgl(1))*p2
-  ncnfl = pr * u_conv_l
+  call get_uprim_mm6eq(uavgl, uprim_avg)
+  u_conv_l = uprim_avg(4)
+  p = uavgl(1)*uprim_avg(2) + (1.0-uavgl(1))*uprim_avg(3)
+  ncnfl = p * u_conv_l
 
   ! right element
-  u_conv_r = uavgr(4)/(uavgr(2)+uavgr(3))
-  p1 = eos3_pr(g_gam1, g_pc1, uavgr(2)/uavgr(1), &
-               uavgr(5)/uavgr(1), u_conv_r)
-  p2 = eos3_pr(g_gam2, g_pc2, uavgr(3)/(1.0-uavgr(1)),&
-               uavgr(6)/(1.0-uavgr(1)), u_conv_r)
-  pr = uavgr(1)*p1 + (1.0-uavgr(1))*p2
-  ncnfr = pr * u_conv_r
+  call get_uprim_mm6eq(uavgr, uprim_avg)
+  u_conv_r = uprim_avg(4)
+  p = uavgr(1)*uprim_avg(2) + (1.0-uavgr(1))*uprim_avg(3)
+  ncnfr = p * u_conv_r
 
   uf = lmag*(lplus+lminu)
 
@@ -600,6 +603,11 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
   end if
 
+  if (nsdiscr .eq. 1) then
+    ucons(2,:,0) = 0.0
+    ucons(2,:,imax+1) = 0.0
+  end if
+
 end subroutine get_bc_mm6eq
 
 !-------------------------------------------------------------------------------
@@ -608,9 +616,7 @@ end subroutine get_bc_mm6eq
 
 subroutine reconstruction(ucons)
 
-integer :: ie, ieqn, ifc
-real*8  :: ui, ug, umin, umax, diff, phi, theta(imax), thetal, beta_lim
-!real*8  :: fwd, bwd, cnt
+integer :: ie
 real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
@@ -618,34 +624,43 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
     ucons(2,:,ie) = 0.5 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
-  !do ieqn = 1,g_neqns
-  !  do ie = 1,imax
+  if (g_nlim .eq. 1) then
+    call superbee(ucons)
 
-  !    fwd = ucons(1,ieqn,ie+1)-ucons(1,ieqn,ie)
-  !    bwd = ucons(1,ieqn,ie)-ucons(1,ieqn,ie-1)
-  !    cnt = 0.5*(ucons(1,ieqn,ie+1)-ucons(1,ieqn,ie-1))
+  elseif (g_nlim .ne. 0) then
+    write(*,*) "Error: incorrect limiter index in control file: ", g_nlim
+    stop
 
-  !    ucons(2,ieqn,ie) = mclim(fwd,bwd,cnt)
+  end if
 
-  !  end do !ie
-  !end do !ieqn
+end subroutine reconstruction
+
+!-------------------------------------------------------------------------------
+!----- superbee limiter:
+!-------------------------------------------------------------------------------
+
+subroutine superbee(ucons)
+
+integer :: ie, ieqn, ifc
+real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal, beta_lim
+real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
   !--- limiter
   ! beta = 2 : Superbee
   !      = 1 : Minmod
-  beta_lim = 2.0
+  beta_lim = 1.0
 
-  do ieqn = 1,g_neqns
+  do ie = 1,imax
 
     ! 1. compute limiter function
-    do ie = 1,imax
+    theta = 1.0
+
+    do ieqn = 1,g_neqns
       ui = ucons(1,ieqn,ie)
 
       ! find min and max in neighborhood
       umax = max( max(ucons(1,ieqn,ie-1), ui), ucons(1,ieqn,ie+1) )
       umin = min( min(ucons(1,ieqn,ie-1), ui), ucons(1,ieqn,ie+1) )
-
-      theta(ie) = 1.0
 
       do ifc = 1,2
         ! unlimited 2nd order solution
@@ -666,20 +681,20 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
         ! limiter function
         thetal = max( 0.0, max( min(beta_lim*phi, 1.0), min(phi, beta_lim) ) )
-        theta(ie) = min(thetal, theta(ie))
+        theta = min(thetal, theta)
 
       end do !ifc
       
-    end do !ie
+    end do !ieqn
 
     ! 2. limit 2nd dofs
-    do ie = 1,imax
-      ucons(2,ieqn,ie) = theta(ie) * ucons(2,ieqn,ie)
-    end do !ie
+    do ieqn = 1,g_neqns
+      ucons(2,ieqn,ie) = theta * ucons(2,ieqn,ie)
+    end do !ieqn
 
-  end do !ieqn
+  end do !ie
 
-end subroutine reconstruction
+end subroutine superbee
 
 !-------------------------------------------------------------------------------
 

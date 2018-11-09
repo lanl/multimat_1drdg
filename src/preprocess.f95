@@ -37,7 +37,7 @@ integer :: i
         read(12,*) u_fs
         read(12,*) pr1_fs, pr2_fs
         read(12,*) ! blank line
-        read(12,*) nsdiscr
+        read(12,*) nsdiscr, g_nlim
         read(12,*) dt_u
         read(12,*) ntstep
         read(12,*) ! blank line
@@ -288,6 +288,10 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
+        if (nsdiscr .eq. 1) then
+          ucons(2,:,ielem) = 0.0
+        end if
+
      end do !ielem
 
   !--- Sod Shocktube
@@ -325,21 +329,25 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = 1.0-alphamin
-           ucons(1,2,ielem) = (1.0-alphamin) * rho1
-           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,1,ielem) = 1.0-alpha1_fs
+           ucons(1,2,ielem) = (1.0-alpha1_fs) * rho1
+           ucons(1,3,ielem) = alpha1_fs * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,5,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = alpha1_fs * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = alphamin
-           ucons(1,2,ielem) = alphamin * rho1
-           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,1,ielem) = alpha1_fs
+           ucons(1,2,ielem) = alpha1_fs * rho1
+           ucons(1,3,ielem) = (1.0-alpha1_fs) * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,5,ielem) = alpha1_fs * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+        end if
+
+        if (nsdiscr .eq. 1) then
+          ucons(2,:,ielem) = 0.0
         end if
 
      end do !ielem
@@ -394,6 +402,10 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
            ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
            ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+        end if
+
+        if (nsdiscr .eq. 1) then
+          ucons(2,:,ielem) = 0.0
         end if
 
      end do !ielem
@@ -465,8 +477,9 @@ integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
 
 integer :: ielem
-real*8  :: xcc, p1, p2, t1, t2, pmix, tmix, rhomix, umix, rhoe_mix, &
-           rho1, rho2, rhoe1, rhoe2, alp1, alp2
+real*8  :: xcc, pmix, tmix, rhomix, e_mix, &
+           arho1, arho2, arhoe1, arhoe2, alp2
+real*8  :: uconsi(g_neqns), uprimi(g_neqns)
 
 character(len=100) :: filename2,filename3
 
@@ -484,39 +497,36 @@ character(len=100) :: filename2,filename3
                      "p2,", &      !8
                      "t1,", &      !9
                      "t2,", &      !10
-                     "rhoe_m"      !11
+                     "e_m"         !11
 
   do ielem = 1,imax
 
-     xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
-     alp1 = ucons(1,1,ielem)
-     alp2 = 1.0 - alp1
-     rho1 = ucons(1,2,ielem)/alp1
-     rho2 = ucons(1,3,ielem)/alp2
-     rhomix = ucons(1,2,ielem) + ucons(1,3,ielem) !alp1*rho1 + alp2*rho2
-     umix = ucons(1,4,ielem)/rhomix
-     rhoe1 = ucons(1,5,ielem)/alp1
-     rhoe2 = ucons(1,6,ielem)/alp2
-     p1   = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, umix)
-     p2   = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, umix)
-     t1   = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, umix)
-     t2   = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, umix)
-     pmix = alp1*p1 + alp2*p2
-     tmix = alp1*t1 + alp2*t2
-     rhoe_mix = (alp1 * (rhoe1 - 0.5*rho1*umix*umix) + &
-                 alp2 * (rhoe2 - 0.5*rho2*umix*umix)) / rhomix
+     uconsi = ucons(1,:,ielem)
+     call get_uprim_mm6eq(uconsi, uprimi)
 
-     write(23,'(11E16.6)') xcc, &            !1
-                           alp1, &           !2
-                           rhomix*rho_nd, &  !3
-                           umix*a_nd , &     !4
-                           pmix*p_nd, &      !5
-                           tmix*t_nd, &      !6
-                           p1*p_nd, &        !7
-                           p2*p_nd, &        !8
-                           t1*t_nd, &        !9
-                           t2*t_nd, &        !10
-                           rhoe_mix          !11
+     xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
+     alp2 = 1.0 - uprimi(1)
+     arho1 = ucons(1,2,ielem)
+     arho2 = ucons(1,3,ielem)
+     rhomix = ucons(1,2,ielem) + ucons(1,3,ielem)
+     arhoe1 = ucons(1,5,ielem)
+     arhoe2 = ucons(1,6,ielem)
+     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
+     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
+     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
+              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     write(23,'(11E16.6)') xcc, &             !1
+                           uprimi(1), &       !2
+                           rhomix*rho_nd, &   !3
+                           uprimi(4)*a_nd , & !4
+                           pmix*p_nd, &       !5
+                           tmix*t_nd, &       !6
+                           uprimi(2)*p_nd, &  !7
+                           uprimi(3)*p_nd, &  !8
+                           uprimi(5)*t_nd, &  !9
+                           uprimi(6)*t_nd, &  !10
+                           e_mix              !11
 
   end do !ielem
 

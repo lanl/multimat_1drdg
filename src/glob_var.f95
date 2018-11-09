@@ -4,7 +4,7 @@ implicit none
 
 integer :: i_system, &
            imax, g_neqns, ntstep, &
-           nsdiscr, ndof, &
+           nsdiscr, ndof, g_nlim, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen
 real*8  :: dt_u, dt, dt_s
