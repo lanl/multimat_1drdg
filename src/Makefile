@@ -4,6 +4,7 @@ all:
 		glob_var.f95\
 		eos.f95\
 		rhs_flux.f95\
+		reconstruction_mm6eq.f95\
 		rhs_flux_mm6eq.f95\
 		preprocess.f95\
 		time_integration.f95\

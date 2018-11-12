@@ -20,9 +20,9 @@ subroutine ExplicitRK3_4eq(ucons, uconsn, uprim, uprimn)
 
 integer :: itstep, ielem, ieqn, istage
 real*8  :: vol,time
-real*8  :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(ndof,g_neqns,0:imax+1),uconsn(ndof,g_neqns,0:imax+1), &
-           uconsi(ndof,g_neqns,0:imax+1), &
+real*8  :: uprim(g_tdof,g_neqns,0:imax+1),uprimn(g_tdof,g_neqns,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
+           uconsi(g_tdof,g_neqns,0:imax+1), &
            k1(3),k2(3)
 real*8  :: rhsel(g_neqns,imax)
 
@@ -46,10 +46,10 @@ real*8  :: rhsel(g_neqns,imax)
 
               rhsel(:,:) = 0.d0
 
-              if (nsdiscr .eq. 0) then
+              if (g_nsdiscr .eq. 0) then
                  call flux_p0(uprim,uconsi,rhsel)
                  call get_pgradalpha(uprim,rhsel)
-              else if (nsdiscr .eq. 1) then
+              else if (g_nsdiscr .eq. 1) then
                  call flux_p0p1(uprim,uconsi,rhsel)
                  call get_pgradalpha_p0p1(uprim,rhsel)
               end if
@@ -125,13 +125,13 @@ end subroutine ExplicitRK3_4eq
 subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn, uprim, uprimn)
 
 external :: rhs_mm6eq
-integer  :: itstep, ielem, ieqn, istage
+integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: vol,time
-real*8   :: uprim(ndof,g_neqns,0:imax+1),uprimn(ndof,g_neqns,0:imax+1), &
-            ucons(ndof,g_neqns,0:imax+1),uconsn(ndof,g_neqns,0:imax+1), &
-            uconsi(ndof,g_neqns,0:imax+1), &
+real*8   :: uprim(g_tdof,g_neqns,0:imax+1),uprimn(g_tdof,g_neqns,0:imax+1), &
+            ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
+            uconsi(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
-real*8   :: rhsel(g_neqns,imax), cons_err(6)
+real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
   time = 0.d0
 
@@ -153,7 +153,7 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
      !--- RK stages
      do istage = 1,3 !2
 
-        rhsel(:,:) = 0.d0
+        rhsel(:,:,:) = 0.d0
 
         call rhs_mm6eq(uconsi, rhsel)
 
@@ -162,11 +162,13 @@ real*8   :: rhsel(g_neqns,imax), cons_err(6)
         vol = coord(ielem+1)-coord(ielem)
 
         do ieqn  = 1,g_neqns
+        do idof  = 1,g_gdof
 
            ucons(1, ieqn,ielem) =   k1(istage) *   uconsn(1,ieqn,ielem) &
                                   + k2(istage) * ( uconsi(1,ieqn,ielem) &
-                                                 + dt * rhsel(ieqn,ielem)/ vol)
+                                                 + dt * rhsel(idof,ieqn,ielem)/ vol)
 
+        end do !idof
         end do !ieqn
         end do !ielem
 
@@ -237,11 +239,11 @@ end subroutine ExplicitRK3_mm6eq
 
 subroutine limit_disphase(ucons, uprim, uprimn)
 
-real*8, intent(in) :: uprimn(ndof,g_neqns,0:imax+1)
+real*8, intent(in) :: uprimn(g_tdof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: alpha1, u1, u2, &
-           ucons(ndof,g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_neqns,0:imax+1)
 
         do ie = 1,imax
            alpha1 = uprim(1,1,ie)
@@ -273,7 +275,7 @@ subroutine blend_disphase(ucons, uprim)
 
 integer :: ie
 real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
-           ucons(ndof,g_neqns,0:imax+1), uprim(ndof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_neqns,0:imax+1)
 
         epsmin = 1.0  * alphamin
         epsmax = 10.0 * alphamin
@@ -340,7 +342,7 @@ integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, xi, gxi, rho, epsmin, epsmax, &
            uconsi(g_neqns), uprimi(g_neqns), &
-           ucons(ndof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1)
 
   epsmin = 1.0  * alphamin
   epsmax = 10.0 * alphamin
@@ -427,7 +429,7 @@ integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, &
            uconsi(g_neqns), uprimi(g_neqns), &
-           ucons(ndof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
 
@@ -492,7 +494,7 @@ end subroutine ignore_tinyphase_mm6eq
 subroutine meconservation_mm6eq(its, ucons, err)
 
 integer, intent(in) :: its
-real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ie
 real*8  :: mass_1, tenergy_1, massi_1, tenergyi_1, &

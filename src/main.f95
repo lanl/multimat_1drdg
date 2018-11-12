@@ -41,15 +41,22 @@ else if (i_system .eq. 1) then
    g_neqns = 6
 end if
 
-if (nsdiscr .eq. 0) then
-   ndof = 1
+if (g_nsdiscr .eq. 0) then
+   g_tdof = 1
+   g_gdof = 1
+else if (g_nsdiscr .eq. 1) then
+   g_tdof = 2
+   g_gdof = 1
+else if (g_nsdiscr .eq. 11) then
+   g_tdof = 2
+   g_gdof = 2
 else
-   ndof = 2
+   write(*,*) "Error: Incorrect discretization scheme selected:", g_nsdiscr
 end if
 
 !----- Allocation:
-allocate(uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-         ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1))
+allocate(uprim(g_tdof,g_neqns,0:imax+1), uprimn(g_tdof,g_neqns,0:imax+1), &
+         ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1))
 
 allocate(coord(0:imax+2))
 
@@ -100,7 +107,7 @@ if (i_system .eq. 0) then
 
 else if (i_system .eq. 1) then
 
-  select case(nsdiscr)
+  select case(g_nsdiscr)
 
   case(0)
     call ExplicitRK3_mm6eq(flux_p0_mm6eq, ucons, uconsn, uprim, uprimn)
@@ -108,9 +115,12 @@ else if (i_system .eq. 1) then
   case(1)
     call ExplicitRK3_mm6eq(flux_p0p1_mm6eq, ucons, uconsn, uprim, uprimn)
 
+  case(11)
+    call ExplicitRK3_mm6eq(flux_p1_mm6eq, ucons, uconsn, uprim, uprimn)
+
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
-               nsdiscr
+               g_nsdiscr
     call exit
 
   end select

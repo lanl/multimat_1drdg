@@ -19,7 +19,7 @@ CONTAINS
 
 subroutine get_pgradalpha(uprim, rhsel)
 
-real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1)
+real*8,  intent(in) :: uprim(g_tdof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: dx, alpha1, alpha2, u1, u2, pr, rho1, rho2, &
@@ -64,7 +64,7 @@ end subroutine get_pgradalpha
 
 subroutine get_pgradalpha_p0p1(uprim, rhsel)
 
-real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1)
+real*8,  intent(in) :: uprim(g_tdof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: dx, alpha1, alpha2, u1, u2, pr, rho1, rho2, &
@@ -111,7 +111,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(ndof,g_neqns,0:imax+1)
+real*8, intent(in) :: uprim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
 
         do ifc = 1,imax+1
 
@@ -175,7 +175,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            alpha1_l, alpha2_l, alpha1_r, alpha2_r, &
            pflux1_l, pflux2_l, pflux1_r, pflux2_r
 
-real*8, intent(in) :: uprim(ndof,g_neqns,0:imax+1), ucons(ndof,g_neqns,0:imax+1)
+real*8, intent(in) :: uprim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
 
         call reconstruct_uprim(uprim)
 
@@ -619,7 +619,7 @@ end subroutine LDFSS_psreal
 
 subroutine get_bc_4eq(ucons)
 
-real*8  :: rho_g, u_g, pr_g, ucons(ndof,g_neqns,0:imax+1)
+real*8  :: rho_g, u_g, pr_g, ucons(g_tdof,g_neqns,0:imax+1)
 
         !--- extrapolation
         if ((iprob .eq. 0) .or. (iprob .eq. 2)) then
@@ -645,7 +645,7 @@ subroutine reconstruct_uprim(uprim)
 
 integer :: ie, ieqn
 real*8  :: vol, fwddiff, bwddiff, cntdiff, &
-           uprim(ndof,g_neqns,0:imax+1)
+           uprim(g_tdof,g_neqns,0:imax+1)
 
 real*8  :: umin, umax, ui, ug, uplus, psil, psir, psi(imax)
 

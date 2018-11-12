@@ -37,7 +37,7 @@ integer :: i
         read(12,*) u_fs
         read(12,*) pr1_fs, pr2_fs
         read(12,*) ! blank line
-        read(12,*) nsdiscr, g_nlim
+        read(12,*) g_nsdiscr, g_nlim
         read(12,*) dt_u
         read(12,*) ntstep
         read(12,*) ! blank line
@@ -117,8 +117,8 @@ end subroutine nondimen_mm6eq
 subroutine init_soln_4eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
-real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1)
+real*8  :: uprim(g_tdof,g_neqns,0:imax+1), uprimn(g_tdof,g_neqns,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
 real*8  :: xf, pl, pr
 
         !--- SCD
@@ -232,8 +232,8 @@ end subroutine init_soln_4eq
 subroutine init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
 
 integer :: i, ielem
-real*8  :: uprim(ndof,g_neqns,0:imax+1), uprimn(ndof,g_neqns,0:imax+1), &
-           ucons(ndof,g_neqns,0:imax+1), uconsn(ndof,g_neqns,0:imax+1)
+real*8  :: uprim(g_tdof,g_neqns,0:imax+1), uprimn(g_tdof,g_neqns,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
 real*8  :: xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -288,7 +288,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (nsdiscr .eq. 1) then
+        if (g_nsdiscr .eq. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -346,7 +346,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (nsdiscr .eq. 1) then
+        if (g_nsdiscr .eq. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -404,7 +404,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (nsdiscr .eq. 1) then
+        if (g_nsdiscr .eq. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -432,8 +432,8 @@ end subroutine init_soln_mm6eq
 subroutine gnuplot_flow_4eq(uprim, ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: uprim(ndof,g_neqns,0:imax+1), &
-                       ucons(ndof,g_neqns,0:imax+1)
+real*8,  intent(in) :: uprim(g_tdof,g_neqns,0:imax+1), &
+                       ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, pres, rhomix, umix, &
@@ -474,7 +474,7 @@ end subroutine gnuplot_flow_4eq
 subroutine gnuplot_flow_mm6eq(ucons, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: ucons(ndof,g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, pmix, tmix, rhomix, e_mix, &

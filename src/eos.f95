@@ -131,11 +131,11 @@ end function
 
 subroutine decode_uprim(ucons, uprim)
 
-real*8, intent(in) :: ucons(ndof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: it, itNewt, ie
 real*8  :: pres, pres0, coefa, coefb, taitrel, funcp, dfuncp, rho1
-real*8  :: uprim(ndof,g_neqns,0:imax+1)
+real*8  :: uprim(g_tdof,g_neqns,0:imax+1)
 
         do ie = 0,imax+1
 
