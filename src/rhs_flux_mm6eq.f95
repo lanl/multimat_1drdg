@@ -97,8 +97,8 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
   ier = ifc
 
   do ieqn = 1,g_neqns
-    ul(ieqn) = ucons(1,ieqn,iel) + 0.5 * ucons(2,ieqn,iel)
-    ur(ieqn) = ucons(1,ieqn,ier) - 0.5 * ucons(2,ieqn,ier)
+    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
+    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
 
     uavgl(ieqn) = ucons(1,ieqn,iel)
     uavgr(ieqn) = ucons(1,ieqn,ier)
@@ -621,7 +621,7 @@ real*8  :: ucons(ndof,g_neqns,0:imax+1)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
   do ie = 1,imax
-    ucons(2,:,ie) = 0.5 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+    ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
   if (g_nlim .eq. 1) then
@@ -819,7 +819,7 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal, beta_lim
 
     do ifc = 1,2
       ! unlimited 2nd order solution
-      ug = ucons(1,ieqn,0) + ((-1.0)**ifc) * 0.5 * ucons(2,ieqn,0)
+      ug = ucons(1,ieqn,0) + ((-1.0)**ifc) * ucons(2,ieqn,0)
 
       ! bounds
       diff = ug-ui
@@ -866,7 +866,7 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
 
   do ifc = 1,2
     ! unlimited 2nd order solution
-    ug = ucons(1,1,0) + ((-1.0)**ifc) * 0.5 * ucons(2,1,0)
+    ug = ucons(1,1,0) + ((-1.0)**ifc) * ucons(2,1,0)
 
     ! bounds
     diff = ug-ui
