@@ -27,6 +27,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
+  !--- limit reconstructed solution
   if (g_nlim .eq. 1) then
     call min_superbee(ucons)
 
@@ -43,6 +44,31 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end if
 
 end subroutine reconstruction_p0p1
+
+!-------------------------------------------------------------------------------
+!----- P1 limiting:
+!-------------------------------------------------------------------------------
+
+subroutine limiting_p1(ucons)
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  if (g_nlim .eq. 1) then
+    call min_superbee(ucons)
+
+  elseif (g_nlim .eq. 2) then
+    call sconsistent_superbee(ucons)
+
+  elseif (g_nlim .eq. 3) then
+    call sconsistent_oversuperbee(ucons)
+
+  elseif (g_nlim .ne. 0) then
+    write(*,*) "Error: incorrect limiter index in control file: ", g_nlim
+    stop
+
+  end if
+
+end subroutine limiting_p1
 
 !-------------------------------------------------------------------------------
 !----- superbee limiter:
@@ -100,7 +126,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 2.0*alphamin) .and. (al1 .lt. 1.0-2.0*alphamin) ) then
+    if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
 
       !        get primitive variables
       rho1 = ucons(1,2,ie)/al1

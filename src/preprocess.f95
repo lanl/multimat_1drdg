@@ -229,11 +229,10 @@ end subroutine init_soln_4eq
 !----- velocity equilibrium 2fluid model:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
+subroutine init_soln_mm6eq(ucons, uconsn)
 
 integer :: i, ielem
-real*8  :: uprim(g_tdof,g_neqns,0:imax+1), uprimn(g_tdof,g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
 real*8  :: xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -288,7 +287,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (g_nsdiscr .eq. 1) then
+        if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -346,7 +345,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (g_nsdiscr .eq. 1) then
+        if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -404,7 +403,7 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
            ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
-        if (g_nsdiscr .eq. 1) then
+        if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
         end if
 
@@ -418,7 +417,6 @@ real*8  :: xf, p1l, p1r, t1l, t1r, &
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
 
-  uprimn(:,:,:) = uprim(:,:,:)
   uconsn(:,:,:) = ucons(:,:,:)
 
   call gnuplot_flow_mm6eq(ucons, 0)
@@ -478,7 +476,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ielem
 real*8  :: xcc, pmix, tmix, rhomix, e_mix, &
-           arho1, arho2, arhoe1, arhoe2, alp2
+           arho1, arho2, arhoe1, arhoe2, alp2, trcell
 real*8  :: uconsi(g_neqns), uprimi(g_neqns)
 
 character(len=100) :: filename2,filename3
@@ -487,7 +485,7 @@ character(len=100) :: filename2,filename3
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
   open(23,file=trim(adjustl(filename3)),status='unknown')
 
-  write(23,'(11A8)') "# xcc,", &   !1
+  write(23,'(12A8)') "# xcc,", &   !1
                      "alp1,", &    !2
                      "rhomix,", &  !3
                      "umix," , &   !4
@@ -497,7 +495,8 @@ character(len=100) :: filename2,filename3
                      "p2,", &      !8
                      "t1,", &      !9
                      "t2,", &      !10
-                     "e_m"         !11
+                     "e_m", &      !11
+                     "int_cell"    !12
 
   do ielem = 1,imax
 
@@ -516,7 +515,14 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     write(23,'(11E16.6)') xcc, &             !1
+     if ( (uprimi(1) .gt. 10.0*alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+       trcell = 1.0
+     else
+       trcell = 0.0
+     end if
+
+     write(23,'(12E16.6)') xcc, &             !1
                            uprimi(1), &       !2
                            rhomix*rho_nd, &   !3
                            uprimi(4)*a_nd , & !4
@@ -526,7 +532,8 @@ character(len=100) :: filename2,filename3
                            uprimi(3)*p_nd, &  !8
                            uprimi(5)*t_nd, &  !9
                            uprimi(6)*t_nd, &  !10
-                           e_mix              !11
+                           e_mix, &           !11
+                           trcell             !12
 
   end do !ielem
 

@@ -69,11 +69,20 @@ write(*,*) "PREPROCESSING FINISHED."
 write(*,*) " nelem = ", imax
 write(*,*) " dt =    ", dt_u
 write(*,*) " "
+write(*,*) " Spatial discretization: "
+if (g_nsdiscr .eq. 0) then
+  write(*,*) "   P0"
+else if (g_nsdiscr .eq. 1) then
+  write(*,*) "   P0P1"
+else if (g_nsdiscr .eq. 11) then
+  write(*,*) "   P1"
+end if
+write(*,*) " "
 write(*,*) " Using appr. Riemann solver: "
 if (i_flux .eq. 1) then
-  write(*,*) " Lax-Friedrichs flux."
+  write(*,*) "   Lax-Friedrichs flux."
 else if (i_flux .eq. 2) then
-  write(*,*) " AUSM+ flux."
+  write(*,*) "   AUSM+ flux."
 else
   write(*,*) "Invalid flux scheme."
   stop
@@ -84,7 +93,7 @@ write(*,*) " "
 if (i_system .eq. 0) then
    call init_soln_4eq(uprim, uprimn, ucons, uconsn)
 else if (i_system .eq. 1) then
-   call init_soln_mm6eq(uprim, uprimn, ucons, uconsn)
+   call init_soln_mm6eq(ucons, uconsn)
 end if
 
 !----- Time-stepping:
@@ -110,13 +119,13 @@ else if (i_system .eq. 1) then
   select case(g_nsdiscr)
 
   case(0)
-    call ExplicitRK3_mm6eq(flux_p0_mm6eq, ucons, uconsn, uprim, uprimn)
+    call ExplicitRK3_mm6eq(flux_p0_mm6eq, ucons, uconsn)
 
   case(1)
-    call ExplicitRK3_mm6eq(flux_p0p1_mm6eq, ucons, uconsn, uprim, uprimn)
+    call ExplicitRK3_mm6eq(flux_p0p1_mm6eq, ucons, uconsn)
 
   case(11)
-    call ExplicitRK3_mm6eq(flux_p1_mm6eq, ucons, uconsn, uprim, uprimn)
+    call ExplicitRK3_mm6eq(flux_p1_mm6eq, ucons, uconsn)
 
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &

@@ -2,6 +2,7 @@
 all:
 	gfortran\
 		glob_var.f95\
+		gquadrature.f95\
 		eos.f95\
 		rhs_flux.f95\
 		reconstruction_mm6eq.f95\

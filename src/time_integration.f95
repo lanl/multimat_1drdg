@@ -122,13 +122,12 @@ end subroutine ExplicitRK3_4eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn, uprim, uprimn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn)
 
 external :: rhs_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-real*8   :: vol,time
-real*8   :: uprim(g_tdof,g_neqns,0:imax+1),uprimn(g_tdof,g_neqns,0:imax+1), &
-            ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
+real*8   :: mm(g_tdof),time
+real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uconsi(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
@@ -159,14 +158,17 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
         do ielem = 1,imax
 
-        vol = coord(ielem+1)-coord(ielem)
+        mm(1) = coord(ielem+1)-coord(ielem)
+        mm(2) = mm(1) / 3.0
 
-        do ieqn  = 1,g_neqns
-        do idof  = 1,g_gdof
+        do ieqn = 1,g_neqns
+        do idof = 1,g_gdof
 
-           ucons(1, ieqn,ielem) =   k1(istage) *   uconsn(1,ieqn,ielem) &
-                                  + k2(istage) * ( uconsi(1,ieqn,ielem) &
-                                                 + dt * rhsel(idof,ieqn,ielem)/ vol)
+          ucons(idof, ieqn,ielem) = &
+              k1(istage) *   uconsn(idof,ieqn,ielem) &
+            + k2(istage) * ( uconsi(idof,ieqn,ielem) &
+                           + dt * rhsel(idof,ieqn,ielem) &
+                             / mm(idof) )
 
         end do !idof
         end do !ieqn
@@ -177,7 +179,6 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
         call ignore_tinyphase_mm6eq(ucons)
 
         uconsi = ucons
-        uprimn = uprim
 
      end do !istage
      !---------------------------------------------------------

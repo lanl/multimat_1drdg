@@ -7,6 +7,7 @@
 MODULE rhs_flux_mm6eq
 
 USE reconstruction_mm6eq
+USE gquadrature
 
 implicit none
 
@@ -135,16 +136,152 @@ end subroutine flux_p0p1_mm6eq
 !----- P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1_mm6eq
+subroutine flux_p1_mm6eq(ucons, rhsel)
 
 real*8  :: rhsel(g_gdof,g_neqns,imax)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   !--- limiting
+  call limiting_p1(ucons)
+
   !--- surface integration
+  call surfaceint_p1(ucons, rhsel)
   !--- volume integration
+  call volumeint_p1(ucons, rhsel)
 
 end subroutine flux_p1_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P1 surface contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine surfaceint_p1(ucons, rhsel)
+
+integer :: ifc, iel, ier, ieqn
+real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+           ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
+           lplus, lminu, lmag
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  do ifc = 1,imax+1
+
+  intflux = 0.0
+  ncnflux = 0.0
+
+  iel = ifc - 1
+  ier = ifc
+
+  do ieqn = 1,g_neqns
+    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
+    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
+
+    uavgl(ieqn) = ucons(1,ieqn,iel)
+    uavgr(ieqn) = ucons(1,ieqn,ier)
+  end do !ieqn
+
+  !--- fluxes
+
+  if (i_flux .eq. 1) then
+     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call llf_nonconserv(ul, ur, uavgl, uavgr, &
+                         lplus, lminu, lmag, ncnflux)
+  else if (i_flux .eq. 2) then
+     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
+                              lplus, lminu, lmag, ncnflux)
+  else
+     print*, "Invalid flux scheme."
+     stop
+  endif
+
+  if (iel .gt. 0) then
+    do ieqn = 1,g_neqns
+          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
+          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - ncnflux(ieqn,1)
+          rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
+          rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - ncnflux(ieqn,1)
+    end do !ieqn
+  end if
+
+  if (ier .lt. (imax+1)) then
+    do ieqn = 1,g_neqns
+          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
+          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + ncnflux(ieqn,2)
+          rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
+          rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - ncnflux(ieqn,2)
+    end do !ieqn
+  end if
+
+  end do !ifc
+
+end subroutine surfaceint_p1
+
+!-------------------------------------------------------------------------------
+!----- P1 volume contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine volumeint_p1(ucons, rhsel)
+
+integer :: ig, ie, ieqn, ngauss
+data       ngauss/2/
+
+real*8  :: dx2, p, pavg, &
+           u(g_neqns), up(g_neqns), &
+           uavg(g_neqns), upavg(g_neqns), &
+           carea(2), weight(2), &
+           cflux(g_neqns), ncflux(g_neqns), &
+           rhsel(g_gdof,g_neqns,imax)
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  ngauss = 2
+
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+  do ig = 1,ngauss
+
+    dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
+
+    ! basis function
+
+    do ieqn = 1,g_neqns
+      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
+      uavg(ieqn) = ucons(1,ieqn,ie)
+    end do !ieqn
+
+    call get_uprim_mm6eq(u, up)
+    call get_uprim_mm6eq(uavg, upavg)
+
+    p = up(1)*up(2) + (1.0-up(1))*up(3)
+    pavg = upavg(1)*upavg(2) + (1.0-upavg(1))*upavg(3)
+
+    ! conservative fluxes
+    cflux(1) = up(4) * up(1)
+    cflux(2) = up(4) * u(2)
+    cflux(3) = up(4) * u(3)
+    cflux(4) = up(4) * u(4) + p
+    cflux(5) = up(4) * (u(5) + up(1)*up(2))
+    cflux(6) = up(4) * (u(6) + (1.0-up(1))*up(3))
+
+    ! nonconservative fluxes
+    ncflux(1) = - upavg(1) * up(4)
+    ncflux(2) = 0.0
+    ncflux(3) = 0.0
+    ncflux(4) = 0.0
+    ncflux(5) = - upavg(4) * pavg * up(1)
+    ncflux(6) = - upavg(4) * pavg * (1.0-up(1))
+
+    do ieqn = 1,g_neqns
+      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * ncflux(ieqn)
+    end do !ieqn
+
+  end do !ig
+  end do !ie
+
+end subroutine volumeint_p1
 
 !-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:
@@ -607,7 +744,7 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
   end if
 
-  if (g_nsdiscr .eq. 1) then
+  if (g_nsdiscr .ge. 1) then
     ucons(2,:,0) = 0.0
     ucons(2,:,imax+1) = 0.0
   end if
