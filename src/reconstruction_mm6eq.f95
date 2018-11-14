@@ -28,20 +28,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end do !ie
 
   !--- limit reconstructed solution
-  if (g_nlim .eq. 1) then
-    call min_superbee(ucons)
-
-  elseif (g_nlim .eq. 2) then
-    call sconsistent_superbee(ucons)
-
-  elseif (g_nlim .eq. 3) then
-    call sconsistent_oversuperbee(ucons)
-
-  elseif (g_nlim .ne. 0) then
-    write(*,*) "Error: incorrect limiter index in control file: ", g_nlim
-    stop
-
-  end if
+  call limiting_p1(ucons)
 
 end subroutine reconstruction_p0p1
 
