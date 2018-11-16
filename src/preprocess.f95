@@ -332,8 +332,8 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      alpha1_fs = alphamin
      u_fs = 0.0
-     t1_fs = 300.0
-     t2_fs = 300.0
+     t1_fs = 3.484321d-3
+     t2_fs = 3.484321d-3
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
      rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
 

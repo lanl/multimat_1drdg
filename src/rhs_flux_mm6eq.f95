@@ -182,14 +182,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   !--- fluxes
 
-  if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call llf_nonconserv(ul, ur, uavgl, uavgr, &
-                         lplus, lminu, lmag, ncnflux)
-  else if (i_flux .eq. 2) then
+  if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
-                              lplus, lminu, lmag, ncnflux)
+     call ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, &
+                                 lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
      stop
@@ -230,7 +226,7 @@ real*8  :: dx2, p, pavg, &
            u(g_neqns), up(g_neqns), &
            uavg(g_neqns), upavg(g_neqns), &
            carea(2), weight(2), &
-           cflux(g_neqns), ncflux(g_neqns), &
+           cflux(g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
@@ -258,24 +254,15 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     pavg = upavg(1)*upavg(2) + (1.0-upavg(1))*upavg(3)
 
     ! conservative fluxes
-    cflux(1) = up(4) * up(1)
+    cflux(1) = 0.0!up(4) * up(1)
     cflux(2) = up(4) * u(2)
     cflux(3) = up(4) * u(3)
     cflux(4) = up(4) * u(4) + p
     cflux(5) = up(4) * (u(5) + up(1)*up(2))
     cflux(6) = up(4) * (u(6) + (1.0-up(1))*up(3))
 
-    ! nonconservative fluxes
-    ncflux(1) = - upavg(1) * up(4)
-    ncflux(2) = 0.0
-    ncflux(3) = 0.0
-    ncflux(4) = 0.0
-    ncflux(5) = - upavg(4) * pavg * up(1)
-    ncflux(6) = - upavg(4) * pavg * (1.0-up(1))
-
     do ieqn = 1,g_neqns
       rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
-      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * ncflux(ieqn)
     end do !ieqn
 
   end do !ig
@@ -609,6 +596,47 @@ real*8  :: ncnflux(g_neqns,2), &
   ncnflux(6,2) = - alp2f * ncnfr
 
 end subroutine ausmplus_nonconserv
+
+!-------------------------------------------------------------------------------
+
+subroutine ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, lplus, lminu, lmag, &
+                                  ncnflux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      uavgl(g_neqns), uavgr(g_neqns), &
+                      lplus, lminu, lmag
+
+real*8  :: ncnflux(g_neqns,2), &
+           uprim(g_neqns), &
+           u_conv_l, u_conv_r, uf, p, &
+           alp1f, alp2f, ncnfl, ncnfr
+
+  alp1f = lplus*ul(1) + lminu*ur(1)
+  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
+
+  ! left element
+  call get_uprim_mm6eq(ul, uprim)
+  u_conv_l = uprim(4)
+  p = ul(1)*uprim(2) + (1.0-ul(1))*uprim(3)
+  ncnfl = p * u_conv_l
+
+  ! right element
+  call get_uprim_mm6eq(ur, uprim)
+  u_conv_r = uprim(4)
+  p = ur(1)*uprim(2) + (1.0-ur(1))*uprim(3)
+  ncnfr = p * u_conv_r
+
+  uf = lmag*(lplus+lminu)
+
+  ncnflux(1,1) = - uavgl(1) * uf
+  ncnflux(5,1) = - (alp1f-uavgl(1)) * ncnfl
+  ncnflux(6,1) = - (alp2f-(1.0-uavgl(1))) * ncnfl
+
+  ncnflux(1,2) = - uavgr(1) * uf
+  ncnflux(5,2) = - (alp1f-uavgr(1)) * ncnfr
+  ncnflux(6,2) = - (alp2f-(1.0-uavgr(1))) * ncnfr
+
+end subroutine ausmplus_nonconserv_p1
 
 !-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:

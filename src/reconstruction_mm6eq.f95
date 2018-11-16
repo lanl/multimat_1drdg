@@ -96,8 +96,7 @@ end subroutine min_superbee
 subroutine sconsistent_superbee(ucons)
 
 integer :: ie, ieqn, ifc
-real*8  :: theta(g_neqns)
-real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
+real*8  :: al1, theta(g_neqns)
 real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
@@ -115,23 +114,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     !    Interface detection
     if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
 
-      !        get primitive variables
-      rho1 = ucons(1,2,ie)/al1
-      rho2 = ucons(1,3,ie)/(1.0-al1)
-      vel  = ucons(1,4,ie)/( ucons(1,2,ie) + ucons(1,3,ie) )
-      rhoe1 = ucons(1,5,ie)/al1
-      rhoe2 = ucons(1,6,ie)/(1.0-al1)
-
-      !   i.   Volume fraction: Keep limiter function the same
-      ucons(2,1,ie) = theta(1) * ucons(2,1,ie)
-      !   ii.  Continuity:
-      ucons(2,2,ie) = rho1 * ucons(2,1,ie)
-      ucons(2,3,ie) = - rho2 * ucons(2,1,ie)
-      !   iii. Momentum:
-      ucons(2,4,ie) = vel * (ucons(2,2,ie) + ucons(2,3,ie))
-      !   iv.  Energy:
-      ucons(2,5,ie) = rhoe1 * ucons(2,1,ie)
-      ucons(2,6,ie) = - rhoe2 * ucons(2,1,ie)
+      call intfac_limiting(ucons(:,:,ie), theta)
 
     else
 
@@ -172,26 +155,10 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
 !    if ( al1*(1.0-al1) .gt. 0.1 ) then
 
-      !   0.   compressive limiting for volume fraction
+      !   compressive limiting for volume fraction
       call overbee_fn(uneigh, theta_al)
-
-      !        Get primitive variables
-      rho1 = ucons(1,2,ie)/al1
-      rho2 = ucons(1,3,ie)/(1.0-al1)
-      vel  = ucons(1,4,ie)/( ucons(1,2,ie) + ucons(1,3,ie) )
-      rhoe1 = ucons(1,5,ie)/al1
-      rhoe2 = ucons(1,6,ie)/(1.0-al1)
-
-      !   i.   Volume fraction: Keep limiter function the same
-      ucons(2,1,ie) = theta_al * ucons(2,1,ie)
-      !   ii.  Continuity:
-      ucons(2,2,ie) = rho1 * ucons(2,1,ie)
-      ucons(2,3,ie) = - rho2 * ucons(2,1,ie)
-      !   iii. Momentum:
-      ucons(2,4,ie) = vel * (ucons(2,2,ie) + ucons(2,3,ie))
-      !   iv.  Energy:
-      ucons(2,5,ie) = rhoe1 * ucons(2,1,ie)
-      ucons(2,6,ie) = - rhoe2 * ucons(2,1,ie)
+      theta(1) = theta_al
+      call intfac_limiting(ucons(:,:,ie), theta)
 
     else
 
@@ -225,7 +192,7 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal, beta_lim
     !--- limiter
     ! beta = 2 : Superbee
     !      = 1 : Minmod
-    beta_lim = 1.0
+    beta_lim = 2.0
 
     ui = ucons(1,ieqn,0)
 
@@ -259,6 +226,43 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal, beta_lim
   end do !ieqn
 
 end subroutine superbee_fn
+
+!-------------------------------------------------------------------------------
+!----- Function that consistently applies limiter for near-interface cell
+!-------------------------------------------------------------------------------
+
+subroutine intfac_limiting(ucons, theta)
+
+real*8,  intent(in) :: theta(g_neqns)
+real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2!, drho1dx, drho2dx
+real*8  :: ucons(g_tdof,g_neqns,1)
+
+  !        get primitive variables
+  al1 = ucons(1,1,1)
+  rho1 = ucons(1,2,1)/al1
+  rho2 = ucons(1,3,1)/(1.0-al1)
+  vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
+  rhoe1 = ucons(1,5,1)/al1
+  rhoe2 = ucons(1,6,1)/(1.0-al1)
+  !drho1dx = ( theta(2)*ucons(2,2,1) - rho1*theta(1)*ucons(2,1,1) ) / al1
+  !drho2dx = ( theta(3)*ucons(2,3,1) + rho2*theta(1)*ucons(2,1,1) ) / (1.0-al1)
+
+  !   i.   Volume fraction: Keep limiter function the same
+  ucons(2,1,1) = theta(1) * ucons(2,1,1)
+  !   ii.  Continuity:
+  ucons(2,2,1) = rho1 * ucons(2,1,1) !&
+                !+ al1  * drho1dx
+  ucons(2,3,1) = - rho2 * ucons(2,1,1) !&
+                !+ (1.0-al1) * drho2dx
+  !   iii. Momentum:
+  ucons(2,4,1) = vel * (ucons(2,2,1) + ucons(2,3,1))
+  !   iv.  Energy:
+  ucons(2,5,1) = rhoe1 * ucons(2,1,1) !&
+                !+ al1 * 0.5*vel*vel * drho1dx
+  ucons(2,6,1) = - rhoe2 * ucons(2,1,1) !&
+                !+ (1.0-al1) * 0.5*vel*vel * drho2dx
+
+end subroutine intfac_limiting
 
 !-------------------------------------------------------------------------------
 !----- Overbee limiter for n equations individually
