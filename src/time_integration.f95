@@ -129,6 +129,7 @@ integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof),time
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uconsi(g_tdof,g_neqns,0:imax+1), &
+            ulim(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
@@ -154,7 +155,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_mm6eq(uconsi, rhsel)
+        call rhs_mm6eq(uconsi, ulim, rhsel)
 
         do ielem = 1,imax
 
@@ -205,7 +206,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
-     call gnuplot_flow_mm6eq(ucons, itstep)
+     call gnuplot_flow_mm6eq(ulim, itstep)
+     call gnuplot_flow_p1_mm6eq(ulim, itstep)
      end if
 
      if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
@@ -216,7 +218,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
   itstep = itstep - 1
 
-  call gnuplot_flow_mm6eq(ucons, itstep)
+  call gnuplot_flow_mm6eq(ulim, itstep)
+  call gnuplot_flow_p1_mm6eq(ulim, itstep)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
   !----- Screen-output:

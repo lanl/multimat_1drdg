@@ -17,14 +17,17 @@ CONTAINS
 !----- P0 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p0_mm6eq(ucons, rhsel)
+subroutine flux_p0_mm6eq(ucons, ulim, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
-           ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag
+           ncnflux(g_neqns,2), intflux(g_neqns), lplus, lminu, lmag, &
+           rhsel(g_gdof,g_neqns,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  ulim = ucons
 
   do ifc = 1,imax+1
 
@@ -72,16 +75,17 @@ end subroutine flux_p0_mm6eq
 !----- P0P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p0p1_mm6eq(ucons, rhsel)
+subroutine flux_p0p1_mm6eq(ucons, ulim, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ulim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
 
   call reconstruction_p0p1(ucons)
+  ulim = ucons
 
   do ifc = 1,imax+1
 
@@ -136,7 +140,7 @@ end subroutine flux_p0p1_mm6eq
 !----- P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1_mm6eq(ucons, rhsel)
+subroutine flux_p1_mm6eq(ucons, ulim, rhsel)
 
 real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
 

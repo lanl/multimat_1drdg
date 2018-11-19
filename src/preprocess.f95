@@ -451,6 +451,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   uconsn(:,:,:) = ucons(:,:,:)
 
   call gnuplot_flow_mm6eq(ucons, 0)
+  call gnuplot_flow_p1_mm6eq(ucons, 0)
 
 end subroutine init_soln_mm6eq
 
@@ -634,6 +635,119 @@ character(len=100) :: filename2,filename3
   close(23)
 
 end subroutine gnuplot_flow_mm6eq
+
+!----------------------------------------------------------------------------------------------
+
+subroutine gnuplot_flow_p1_mm6eq(ucons, itstep)
+
+integer, intent(in) :: itstep
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+integer :: ielem
+real*8  :: xp, pmix, tmix, rhomix, e_mix, &
+           arho1, arho2, arhoe1, arhoe2, alp2, trcell
+real*8  :: uconsi(g_neqns), uprimi(g_neqns)
+
+character(len=100) :: filename2,filename3
+
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
+  open(24,file=trim(adjustl(filename3)),status='unknown')
+
+  write(24,'(12A8)') "# xcc,", &   !1
+                     "alp1,", &    !2
+                     "rhomix,", &  !3
+                     "umix," , &   !4
+                     "pmix,", &    !5
+                     "tmix,", &    !6
+                     "p1,", &      !7
+                     "p2,", &      !8
+                     "t1,", &      !9
+                     "t2,", &      !10
+                     "e_m", &      !11
+                     "int_cell"    !12
+
+  do ielem = 1,imax
+
+     ! left face
+     uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
+     call get_uprim_mm6eq(uconsi, uprimi)
+
+     xp = coord(ielem)
+     alp2 = 1.0 - uprimi(1)
+     arho1 = uconsi(2)
+     arho2 = uconsi(3)
+     rhomix = uconsi(2) + uconsi(3)
+     arhoe1 = uconsi(5)
+     arhoe2 = uconsi(6)
+     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
+     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
+     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
+              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     if ( (uprimi(1) .gt. 10.0*alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+       trcell = 1.0
+     else
+       trcell = 0.0
+     end if
+
+     write(24,'(12E16.6)') xp, &              !1
+                           uprimi(1), &       !2
+                           rhomix*rho_nd, &   !3
+                           uprimi(4)*a_nd , & !4
+                           pmix*p_nd, &       !5
+                           tmix*t_nd, &       !6
+                           uprimi(2)*p_nd, &  !7
+                           uprimi(3)*p_nd, &  !8
+                           uprimi(5)*t_nd, &  !9
+                           uprimi(6)*t_nd, &  !10
+                           e_mix, &           !11
+                           trcell             !12
+
+     ! right face
+     uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
+     call get_uprim_mm6eq(uconsi, uprimi)
+
+     xp = coord(ielem+1)
+     alp2 = 1.0 - uprimi(1)
+     arho1 = uconsi(2)
+     arho2 = uconsi(3)
+     rhomix = uconsi(2) + uconsi(3)
+     arhoe1 = uconsi(5)
+     arhoe2 = uconsi(6)
+     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
+     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
+     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
+              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     if ( (uprimi(1) .gt. 10.0*alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+       trcell = 1.0
+     else
+       trcell = 0.0
+     end if
+
+     write(24,'(12E16.6)') xp, &              !1
+                           uprimi(1), &       !2
+                           rhomix*rho_nd, &   !3
+                           uprimi(4)*a_nd , & !4
+                           pmix*p_nd, &       !5
+                           tmix*t_nd, &       !6
+                           uprimi(2)*p_nd, &  !7
+                           uprimi(3)*p_nd, &  !8
+                           uprimi(5)*t_nd, &  !9
+                           uprimi(6)*t_nd, &  !10
+                           e_mix, &           !11
+                           trcell             !12
+
+     write(24,*) " "
+
+  end do !ielem
+
+  close(24)
+
+end subroutine gnuplot_flow_p1_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
