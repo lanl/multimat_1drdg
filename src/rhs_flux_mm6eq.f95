@@ -138,16 +138,19 @@ end subroutine flux_p0p1_mm6eq
 
 subroutine flux_p1_mm6eq(ucons, rhsel)
 
-real*8  :: rhsel(g_gdof,g_neqns,imax)
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+real*8  :: ulim(g_tdof,g_neqns,0:imax+1), &
+           rhsel(g_gdof,g_neqns,imax)
 
   !--- limiting
-  call limiting_p1(ucons)
+  ulim = ucons
+  call limiting_p1(ulim)
 
   !--- surface integration
-  call surfaceint_p1(ucons, rhsel)
+  call surfaceint_p1(ulim, rhsel)
   !--- volume integration
-  call volumeint_p1(ucons, rhsel)
+  call volumeint_p1(ulim, rhsel)
 
 end subroutine flux_p1_mm6eq
 
@@ -222,9 +225,8 @@ subroutine volumeint_p1(ucons, rhsel)
 integer :: ig, ie, ieqn, ngauss
 data       ngauss/2/
 
-real*8  :: dx2, p, pavg, &
+real*8  :: dx2, p, &
            u(g_neqns), up(g_neqns), &
-           uavg(g_neqns), upavg(g_neqns), &
            carea(2), weight(2), &
            cflux(g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
@@ -244,14 +246,11 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
     do ieqn = 1,g_neqns
       u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
-      uavg(ieqn) = ucons(1,ieqn,ie)
     end do !ieqn
 
     call get_uprim_mm6eq(u, up)
-    call get_uprim_mm6eq(uavg, upavg)
 
     p = up(1)*up(2) + (1.0-up(1))*up(3)
-    pavg = upavg(1)*upavg(2) + (1.0-upavg(1))*upavg(3)
 
     ! conservative fluxes
     cflux(1) = 0.0!up(4) * up(1)

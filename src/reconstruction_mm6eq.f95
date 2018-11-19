@@ -74,7 +74,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     uneigh(:,:,1)  = ucons(:,:,ie+1)
 
     ! 1. compute limiter function
-    call superbee_fn(g_neqns, uneigh, theta)
+    call superbee_fn(g_neqns, 2.0, uneigh, theta)
 
      do ieqn = 1,g_neqns
        theta(ieqn) = minval(theta)
@@ -106,7 +106,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     uneigh(:,:,1)  = ucons(:,:,ie+1)
 
     ! 1. compute limiter function
-    call superbee_fn(g_neqns, uneigh, theta)
+    call superbee_fn(g_neqns, 2.0, uneigh, theta)
 
     al1 = ucons(1,1,ie)
 
@@ -114,7 +114,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     !    Interface detection
     if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
 
-      call intfac_limiting(ucons(:,:,ie), theta)
+      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(1))
 
     else
 
@@ -135,9 +135,10 @@ end subroutine sconsistent_superbee
 subroutine sconsistent_oversuperbee(ucons)
 
 integer :: ie, ieqn, ifc
-real*8  :: theta(g_neqns), theta_al
+real*8  :: theta(g_neqns), theta_al, thrho(2)
 real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhoneigh(g_tdof,2,-1:1), &
+           uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
 
@@ -146,19 +147,38 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     uneigh(:,:,1)  = ucons(:,:,ie+1)
 
     ! 1. compute limiter function
-    call superbee_fn(g_neqns, uneigh, theta)
+    call superbee_fn(g_neqns, 2.0, uneigh, theta)
 
     al1 = ucons(1,1,ie)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
-!    if ( al1*(1.0-al1) .gt. 0.1 ) then
+
+!      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
+!      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
+!      rhoneigh(1,1,1)  = ucons(1,2,ie+1)/ucons(1,1,ie+1)
+!
+!      rhoneigh(1,2,-1) = ucons(1,3,ie-1)/(1.0-ucons(1,1,ie-1))
+!      rhoneigh(1,2,0)  = ucons(1,3,ie)/(1.0-ucons(1,1,ie))
+!      rhoneigh(1,2,1)  = ucons(1,3,ie+1)/(1.0-ucons(1,1,ie+1))
+!
+!      rhoneigh(2,1,0) = ( theta(2)*ucons(2,2,ie) &
+!                        - rhoneigh(1,1,0)*theta(1)*ucons(2,1,ie) ) / al1
+!      rhoneigh(2,2,0) = ( theta(3)*ucons(2,3,ie) &
+!                        + rhoneigh(1,2,0)*theta(1)*ucons(2,1,ie) ) / (1.0-al1)
+!
+!      call superbee_fn(2, 1.0, rhoneigh, thrho)
+!
+!      rhoneigh(2,1,0) = thrho(1) * rhoneigh(2,1,0)
+!      rhoneigh(2,2,0) = thrho(2) * rhoneigh(2,2,0)
+!
+      rhoneigh(2,1,0) = 0.0
+      rhoneigh(2,2,0) = 0.0
 
       !   compressive limiting for volume fraction
       call overbee_fn(uneigh, theta_al)
-      theta(1) = theta_al
-      call intfac_limiting(ucons(:,:,ie), theta)
+      call intfac_limiting(ucons(:,:,ie), rhoneigh(2,1,0), rhoneigh(2,2,0), theta, theta_al)
 
     else
 
@@ -177,13 +197,13 @@ end subroutine sconsistent_oversuperbee
 !----- this sub actually calculates the limiter function according to superbee
 !-------------------------------------------------------------------------------
 
-subroutine superbee_fn(neq,ucons,theta)
+subroutine superbee_fn(neq,beta_lim,ucons,theta)
 
 integer, intent(in) :: neq
-real*8,  intent(in) :: ucons(g_tdof,g_neqns,-1:1)
+real*8,  intent(in) :: beta_lim, ucons(g_tdof,neq,-1:1)
 
 integer :: ieqn, ifc
-real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal, beta_lim
+real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
 
   theta(:) = 1.0
 
@@ -192,7 +212,6 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal, beta_lim
     !--- limiter
     ! beta = 2 : Superbee
     !      = 1 : Minmod
-    beta_lim = 2.0
 
     ui = ucons(1,ieqn,0)
 
@@ -231,10 +250,10 @@ end subroutine superbee_fn
 !----- Function that consistently applies limiter for near-interface cell
 !-------------------------------------------------------------------------------
 
-subroutine intfac_limiting(ucons, theta)
+subroutine intfac_limiting(ucons, drho1dx, drho2dx, theta, theta_al)
 
-real*8,  intent(in) :: theta(g_neqns)
-real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2!, drho1dx, drho2dx
+real*8,  intent(in) :: theta(g_neqns), theta_al, drho1dx, drho2dx
+real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: ucons(g_tdof,g_neqns,1)
 
   !        get primitive variables
@@ -244,23 +263,21 @@ real*8  :: ucons(g_tdof,g_neqns,1)
   vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
   rhoe1 = ucons(1,5,1)/al1
   rhoe2 = ucons(1,6,1)/(1.0-al1)
-  !drho1dx = ( theta(2)*ucons(2,2,1) - rho1*theta(1)*ucons(2,1,1) ) / al1
-  !drho2dx = ( theta(3)*ucons(2,3,1) + rho2*theta(1)*ucons(2,1,1) ) / (1.0-al1)
 
   !   i.   Volume fraction: Keep limiter function the same
-  ucons(2,1,1) = theta(1) * ucons(2,1,1)
+  ucons(2,1,1) = theta_al * ucons(2,1,1)
   !   ii.  Continuity:
-  ucons(2,2,1) = rho1 * ucons(2,1,1) !&
-                !+ al1  * drho1dx
-  ucons(2,3,1) = - rho2 * ucons(2,1,1) !&
-                !+ (1.0-al1) * drho2dx
+  ucons(2,2,1) = rho1 * ucons(2,1,1) &
+                + al1  * drho1dx
+  ucons(2,3,1) = - rho2 * ucons(2,1,1) &
+                + (1.0-al1) * drho2dx
   !   iii. Momentum:
   ucons(2,4,1) = vel * (ucons(2,2,1) + ucons(2,3,1))
   !   iv.  Energy:
-  ucons(2,5,1) = rhoe1 * ucons(2,1,1) !&
-                !+ al1 * 0.5*vel*vel * drho1dx
-  ucons(2,6,1) = - rhoe2 * ucons(2,1,1) !&
-                !+ (1.0-al1) * 0.5*vel*vel * drho2dx
+  ucons(2,5,1) = rhoe1 * ucons(2,1,1) &
+                + al1 * 0.5*vel*vel * drho1dx
+  ucons(2,6,1) = - rhoe2 * ucons(2,1,1) &
+                + (1.0-al1) * 0.5*vel*vel * drho2dx
 
 end subroutine intfac_limiting
 
