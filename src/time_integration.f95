@@ -160,7 +160,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
         do ielem = 1,imax
 
         mm(1) = coord(ielem+1)-coord(ielem)
-        mm(2) = mm(1) / 3.0
+        if (g_nsdiscr .gt. 0) mm(2) = mm(1) / 3.0
 
         do ieqn = 1,g_neqns
         do idof = 1,g_gdof

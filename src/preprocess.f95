@@ -414,7 +414,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
         xf = coord(ielem)
 
-        if (xf .le. 0.5) then
+        if (xf .le. 0.75) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
            ucons(1,1,ielem) = 1.0-alphamin
@@ -670,7 +670,11 @@ character(len=100) :: filename2,filename3
   do ielem = 1,imax
 
      ! left face
+     if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
+     else
+     uconsi = ucons(1,:,ielem)
+     end if
      call get_uprim_mm6eq(uconsi, uprimi)
 
      xp = coord(ielem)
@@ -706,7 +710,11 @@ character(len=100) :: filename2,filename3
                            trcell             !12
 
      ! right face
+     if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
+     else
+     uconsi = ucons(1,:,ielem)
+     end if
      call get_uprim_mm6eq(uconsi, uprimi)
 
      xp = coord(ielem+1)

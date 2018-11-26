@@ -47,7 +47,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
      call llf_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
+     call ausmplus_nonconserv_p1(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
      stop
@@ -111,8 +111,8 @@ real*8  :: ulim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
                          lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
-                              lplus, lminu, lmag, ncnflux)
+     call ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, &
+                                 lplus, lminu, lmag, ncnflux)
   else
      print*, "Invalid flux scheme."
      stop
