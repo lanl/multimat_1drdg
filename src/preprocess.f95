@@ -31,6 +31,7 @@ integer :: i
         read(12,*) i_restart
         read(12,*) i_flux
         read(12,*) ! blank line
+        read(12,*) g_nprelx
         read(12,*) g_gam1, g_pc1, g_cp1
         read(12,*) g_gam2, g_pc2, g_cp2
         read(12,*) ! blank line
@@ -332,6 +333,8 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      alpha1_fs = alphamin
      u_fs = 0.0
+     pr1_fs = 1.0
+     pr2_fs = 1.0
      t1_fs = 3.484321d-3
      t2_fs = 3.484321d-3
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
@@ -390,8 +393,10 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      alpha1_fs = alphamin
      u_fs = 0.0
-     t1_fs = 247.323
-     t2_fs = 247.323
+     pr1_fs = 1.0d9 !2.0d8
+     pr2_fs = 1.0d9 !2.0d8
+     t1_fs = 494.646 !247.323
+     t2_fs = 494.646 !247.323
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
      rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
 
@@ -404,10 +409,10 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
      t2l = t2_fs
      ul  = u_fs
      ! right state
-     p1r = pr1_fs/2.0d3
-     p2r = pr2_fs/2.0d3
-     t1r = 0.028176*t1_fs
-     t2r = 0.028176*t2_fs
+     p1r = pr1_fs/1.0d4 !pr1_fs/2.0d3
+     p2r = pr2_fs/1.0d4 !pr2_fs/2.0d3
+     t1r = 0.070441*t1_fs !0.028176*t1_fs
+     t2r = 0.070441*t2_fs !0.028176*t2_fs
      ur  = u_fs
 
      do ielem = 0,imax+1

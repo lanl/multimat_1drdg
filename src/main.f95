@@ -119,13 +119,13 @@ else if (i_system .eq. 1) then
   select case(g_nsdiscr)
 
   case(0)
-    call ExplicitRK3_mm6eq(flux_p0_mm6eq, ucons, uconsn)
+    call ExplicitRK3_mm6eq(rhs_p0_mm6eq, ucons, uconsn)
 
   case(1)
-    call ExplicitRK3_mm6eq(flux_p0p1_mm6eq, ucons, uconsn)
+    call ExplicitRK3_mm6eq(rhs_p0p1_mm6eq, ucons, uconsn)
 
   case(11)
-    call ExplicitRK3_mm6eq(flux_p1_mm6eq, ucons, uconsn)
+    call ExplicitRK3_mm6eq(rhs_p1_mm6eq, ucons, uconsn)
 
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &

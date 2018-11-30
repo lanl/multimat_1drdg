@@ -14,6 +14,51 @@ implicit none
 CONTAINS
 
 !-------------------------------------------------------------------------------
+!----- P0 RHS:
+!-------------------------------------------------------------------------------
+
+subroutine rhs_p0_mm6eq(ucons, ulim, rhsel)
+
+real*8  :: rhsel(g_gdof,g_neqns,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call flux_p0_mm6eq(ucons, ulim, rhsel)
+
+end subroutine rhs_p0_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P0P1 RHS:
+!-------------------------------------------------------------------------------
+
+subroutine rhs_p0p1_mm6eq(ucons, ulim, rhsel)
+
+real*8  :: rhsel(g_gdof,g_neqns,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call flux_p0p1_mm6eq(ucons, ulim, rhsel)
+
+end subroutine rhs_p0p1_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P1 RHS:
+!-------------------------------------------------------------------------------
+
+subroutine rhs_p1_mm6eq(ucons, ulim, rhsel)
+
+real*8  :: rhsel(g_gdof,g_neqns,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call flux_p1_mm6eq(ucons, ulim, rhsel)
+
+end subroutine rhs_p1_mm6eq
+
+!-------------------------------------------------------------------------------
 !----- P0 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
