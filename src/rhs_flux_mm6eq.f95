@@ -26,6 +26,10 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call flux_p0_mm6eq(ucons, ulim, rhsel)
 
+  if (g_nprelx .eq. 1) then
+    call relaxpressure_p0(ulim, rhsel)
+  end if
+
 end subroutine rhs_p0_mm6eq
 
 !-------------------------------------------------------------------------------
@@ -41,6 +45,10 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call flux_p0p1_mm6eq(ucons, ulim, rhsel)
 
+  if (g_nprelx .eq. 1) then
+    call relaxpressure_p0(ulim, rhsel)
+  end if
+
 end subroutine rhs_p0p1_mm6eq
 
 !-------------------------------------------------------------------------------
@@ -55,6 +63,10 @@ real*8  :: rhsel(g_gdof,g_neqns,imax), &
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call flux_p1_mm6eq(ucons, ulim, rhsel)
+
+  if (g_nprelx .eq. 1) then
+    call relaxpressure_p1(ulim, rhsel)
+  end if
 
 end subroutine rhs_p1_mm6eq
 
@@ -94,7 +106,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
      call ausmplus_nonconserv_p1(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
-     print*, "Invalid flux scheme."
+     write(*,*) "Invalid flux scheme."
      stop
   endif
 
@@ -159,7 +171,7 @@ real*8  :: ulim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
      call ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, &
                                  lplus, lminu, lmag, ncnflux)
   else
-     print*, "Invalid flux scheme."
+     write(*,*) "Invalid flux scheme."
      stop
   endif
 
@@ -239,7 +251,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
      call ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, &
                                  lplus, lminu, lmag, ncnflux)
   else
-     print*, "Invalid flux scheme."
+     write(*,*) "Invalid flux scheme."
      stop
   endif
 
@@ -826,6 +838,112 @@ real*8  :: p1, p2, rho1, rho2, u_conv
   end if
 
 end subroutine get_bc_mm6eq
+
+!-------------------------------------------------------------------------------
+
+subroutine relaxpressure_p0(ulim, rhsel)
+
+real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+
+integer :: ie
+real*8  :: dx, p_star, rel_time, &
+           al2, rho, p, rho1, rho2, p1, p2, a1, a2, k1, k2, &
+           s_alp1, s_alp2
+real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
+
+  do ie = 1,imax
+
+    dx = coord(ie+1)-coord(ie)
+    u(:) = ulim(1,:,ie)
+
+    call get_uprim_mm6eq(u, up)
+    al2 = 1.0-u(1)
+
+    rho  = u(2) + u(3)
+    rho1 = u(2) / u(1)
+    rho2 = u(3) / al2
+    p1   = up(2)
+    p2   = up(3)
+    p    = u(1)*p1 + al2*p2
+
+    ! relaxed pressure calculations
+    a1 = eos3_ss(g_gam1, g_pc1, rho1, p1)
+    a2 = eos3_ss(g_gam2, g_pc2, rho2, p2)
+    k1 = rho1 * a1*a1
+    k2 = rho2 * a2*a2
+    p_star = ( p1*u(1)/k1 + p2*al2/k2 ) / ( u(1)/k1 + al2/k2 )
+    rel_time = g_prelct * max(dx/a1, dx/a2)
+    s_alp1 = 1.0/rel_time * (p1-p_star)*(u(1)/k1)
+    s_alp2 = 1.0/rel_time * (p2-p_star)*(al2/k2)
+
+    rhsel(1,1,ie) = rhsel(1,1,ie) + dx * s_alp1
+    rhsel(1,5,ie) = rhsel(1,5,ie) + dx * p*s_alp1
+    rhsel(1,6,ie) = rhsel(1,6,ie) + dx * p*s_alp2
+
+  end do !ie
+
+end subroutine relaxpressure_p0
+
+!-------------------------------------------------------------------------------
+
+subroutine relaxpressure_p1(ulim, rhsel)
+
+real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+
+integer :: ig, ie, ieqn, ngauss
+data       ngauss/2/
+real*8  :: dx, dx2, p_star, rel_time, &
+           al2, rho, p, rho1, rho2, p1, p2, a1, a2, k1, k2, &
+           carea(2), weight(2), &
+           s_alp1, s_alp2
+real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
+
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+  do ig = 1,ngauss
+
+    dx = coord(ie+1)-coord(ie)
+    dx2 = weight(ig)/2.0 * dx
+
+    ! basis function
+
+    do ieqn = 1,g_neqns
+      u(ieqn) = ulim(1,ieqn,ie) + carea(ig) * ulim(2,ieqn,ie)
+    end do !ieqn
+
+    call get_uprim_mm6eq(u, up)
+    al2 = 1.0-u(1)
+
+    rho  = u(2) + u(3)
+    rho1 = u(2) / u(1)
+    rho2 = u(3) / al2
+    p1   = up(2)
+    p2   = up(3)
+    p    = u(1)*p1 + al2*p2
+
+    ! relaxed pressure calculations
+    a1 = eos3_ss(g_gam1, g_pc1, rho1, p1)
+    a2 = eos3_ss(g_gam2, g_pc2, rho2, p2)
+    k1 = rho1 * a1*a1
+    k2 = rho2 * a2*a2
+    p_star = ( p1*u(1)/k1 + p2*al2/k2 ) / ( u(1)/k1 + al2/k2 )
+    rel_time = g_prelct * max(dx/a1, dx/a2)
+    s_alp1 = 1.0/rel_time * (p1-p_star)*(u(1)/k1)
+    s_alp2 = 1.0/rel_time * (p2-p_star)*(al2/k2)
+
+    rhsel(1,1,ie) = rhsel(1,1,ie) + dx2 * s_alp1
+    rhsel(1,5,ie) = rhsel(1,5,ie) + dx2 * p*s_alp1
+    rhsel(1,6,ie) = rhsel(1,6,ie) + dx2 * p*s_alp2
+
+    rhsel(2,1,ie) = rhsel(2,1,ie) + dx2 * carea(ig) * s_alp1
+    rhsel(2,5,ie) = rhsel(2,5,ie) + dx2 * carea(ig) * p*s_alp1
+    rhsel(2,6,ie) = rhsel(2,6,ie) + dx2 * carea(ig) * p*s_alp2
+
+  end do !ig
+  end do !ie
+
+end subroutine relaxpressure_p1
 
 !-------------------------------------------------------------------------------
 

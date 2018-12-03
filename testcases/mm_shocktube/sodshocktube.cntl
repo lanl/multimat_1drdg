@@ -6,7 +6,7 @@
 0               / initialize from restart file './output/frozen_flow/frozenflow.dat'
 2               / Numerical Flux (1:LLF; 2:AUSM+)
 ----------------------------------------------------------------------------------------------
-0                          / pressure relaxation (0: no p-relx)
+0       0.0                / pressure relaxation (0: no p-relx) and scaling
 1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
 1.4     0.0     1004.5     / material-2 properties: gamma, P_c, C_p
 ----------------------------------------------------------------------------------------------

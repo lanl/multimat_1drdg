@@ -31,7 +31,7 @@ integer :: i
         read(12,*) i_restart
         read(12,*) i_flux
         read(12,*) ! blank line
-        read(12,*) g_nprelx
+        read(12,*) g_nprelx, g_prelct
         read(12,*) g_gam1, g_pc1, g_cp1
         read(12,*) g_gam2, g_pc2, g_cp2
         read(12,*) ! blank line
