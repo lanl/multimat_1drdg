@@ -877,8 +877,8 @@ real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
     s_alp2 = 1.0/rel_time * (p2-p_star)*(al2/k2)
 
     rhsel(1,1,ie) = rhsel(1,1,ie) + dx * s_alp1
-    rhsel(1,5,ie) = rhsel(1,5,ie) + dx * p*s_alp1
-    rhsel(1,6,ie) = rhsel(1,6,ie) + dx * p*s_alp2
+    rhsel(1,5,ie) = rhsel(1,5,ie) - dx * p*s_alp1
+    rhsel(1,6,ie) = rhsel(1,6,ie) - dx * p*s_alp2
 
   end do !ie
 
@@ -933,12 +933,12 @@ real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
     s_alp2 = 1.0/rel_time * (p2-p_star)*(al2/k2)
 
     rhsel(1,1,ie) = rhsel(1,1,ie) + dx2 * s_alp1
-    rhsel(1,5,ie) = rhsel(1,5,ie) + dx2 * p*s_alp1
-    rhsel(1,6,ie) = rhsel(1,6,ie) + dx2 * p*s_alp2
+    rhsel(1,5,ie) = rhsel(1,5,ie) - dx2 * p*s_alp1
+    rhsel(1,6,ie) = rhsel(1,6,ie) - dx2 * p*s_alp2
 
     rhsel(2,1,ie) = rhsel(2,1,ie) + dx2 * carea(ig) * s_alp1
-    rhsel(2,5,ie) = rhsel(2,5,ie) + dx2 * carea(ig) * p*s_alp1
-    rhsel(2,6,ie) = rhsel(2,6,ie) + dx2 * carea(ig) * p*s_alp2
+    rhsel(2,5,ie) = rhsel(2,5,ie) - dx2 * carea(ig) * p*s_alp1
+    rhsel(2,6,ie) = rhsel(2,6,ie) - dx2 * carea(ig) * p*s_alp2
 
   end do !ig
   end do !ie
