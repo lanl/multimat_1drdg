@@ -253,6 +253,19 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      if (g_nsdiscr .ge. 1) then
        call weakinit_p1(ucons)
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = gaussian(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+
+         if (g_nsdiscr .ge. 1) then
+           ucons(2,:,ielem) = 0.0
+         end if
+       end do !ielem
+
      end if
 
   !--- SCD
@@ -472,7 +485,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
       wi = 0.5 * weight(ig) * vol
       x = carea(ig) * 0.5 * vol + xc
-      s = gaussian(x)
+      s = gaussian(x,0.0)
 
       do ieqn = 1,g_neqns
         rhs(1,ieqn) = rhs(1,ieqn) + wi * s(ieqn)
@@ -492,12 +505,13 @@ end subroutine weakinit_p1
 
 !-------------------------------------------------------------------------------
 
-function gaussian(x)
+function gaussian(x,t)
 
-real*8, intent(in)  :: x
-real*8  :: al1, rho1, rho2, gaussian(g_neqns)
+real*8, intent(in)  :: x, t
+real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
 
-  al1 = (1.0-alpha1_fs) * dexp( -(x-0.25)*(x-0.25)/(2.0 * 0.002) ) + alpha1_fs
+  xc  = 0.25 + u_fs*t
+  al1 = (1.0-alpha1_fs) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) ) + alpha1_fs
 
   rho1 = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
   rho2 = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
@@ -771,6 +785,63 @@ integer :: ielem
   end do !ielem
 
 end subroutine gnuplot_diagnostics_mm6eq
+
+!----------------------------------------------------------------------------------------------
+
+subroutine errorcalc_p1(ucons, t, err_log)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
+
+integer :: ig, ie, ieqn, ngauss
+data       ngauss/3/
+
+real*8  :: dx, xg, wi, &
+           u(g_neqns), up(g_neqns), &
+           carea(3), weight(3), &
+           s(g_neqns), err, err_log
+
+  call rutope(1, ngauss, carea, weight)
+
+  err_log = 0.0
+
+  if (iprob .eq. -1) then
+
+    do ie = 1,imax
+    do ig = 1,ngauss
+
+      dx = coord(ie+1)-coord(ie)
+      wi = 0.5 * weight(ig) * dx
+      xg = carea(ig) * 0.5*dx + 0.5 * ( coord(ie+1)+coord(ie) )
+
+      ! basis function
+
+      if (g_nsdiscr .ge. 1) then
+        do ieqn = 1,g_neqns
+          u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
+        end do !ieqn
+      else
+        u(:) = ucons(1,:,ie)
+      end if
+
+      s = gaussian(xg,t)
+
+      err = u(1) - s(1)
+
+      err_log = err_log + wi*err*err
+
+    end do !ig
+    end do !ie
+
+    err_log = dsqrt(err_log)
+    err_log = dlog10(err_log)
+
+  else
+
+    write(*,*) "  WARNING: Error computation not configured for iprob = ", iprob
+
+  end if
+
+end subroutine errorcalc_p1
 
 !----------------------------------------------------------------------------------------------
 

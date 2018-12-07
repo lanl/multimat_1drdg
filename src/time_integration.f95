@@ -126,7 +126,7 @@ subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn)
 
 external :: rhs_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-real*8   :: mm(g_tdof),time
+real*8   :: mm(g_tdof),time, err_log
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uconsi(g_tdof,g_neqns,0:imax+1), &
             ulim(g_tdof,g_neqns,0:imax+1), &
@@ -221,6 +221,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
   call gnuplot_flow_mm6eq(ulim, itstep)
   call gnuplot_flow_p1_mm6eq(ulim, itstep)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
+  call errorcalc_p1(ucons, time*a_nd, err_log)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"
@@ -230,6 +231,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
   write(*,*) "  Conservation: "
   write(*,*) "  Mass:         ", cons_err(3)
   write(*,*) "  Total-energy: ", cons_err(6)
+  write(*,*) "  log(||e||): ", err_log, 10.0**err_log
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
@@ -471,6 +473,12 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       ucons(1,2,ie) = al1*rho1
       ucons(1,5,ie) = al1*rhoe1
 
+      if (g_nsdiscr .ge. 11) then
+        ucons(2,1,ie) = 0.0
+        ucons(2,2,ie) = 0.0
+        ucons(2,5,ie) = 0.0
+      end if
+
     !--- phase-2 disappearing
     elseif (al2 .le. 1.0e-14) then
 
@@ -486,6 +494,11 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       ucons(1,1,ie) = 1.0-1.0e-14
       ucons(1,3,ie) = al2*rho2
       ucons(1,6,ie) = al2*rhoe2
+
+      if (g_nsdiscr .ge. 11) then
+        ucons(2,3,ie) = 0.0
+        ucons(2,6,ie) = 0.0
+      end if
 
     end if
 
