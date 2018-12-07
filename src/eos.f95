@@ -215,7 +215,7 @@ real*8  :: uprim(g_neqns)
   t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
 
   !--- phase-1 disappearing
-  if (dabs(al1-alphamin) .le. 1.0d-6) then
+  if (dabs(al1-alphamin) .le. 0.1*alphamin) then
 
     ! copy pressure and temperature
     p1 = p2
@@ -225,8 +225,10 @@ real*8  :: uprim(g_neqns)
     rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
     rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
 
+    al1 = alphamin
+
   !--- phase-2 disappearing
-  elseif (dabs(al2-alphamin) .le. 1.0d-6) then
+  elseif (dabs(al2-alphamin) .le. 0.1*alphamin) then
 
     ! copy pressure and temperature
     p2 = p1
@@ -235,6 +237,8 @@ real*8  :: uprim(g_neqns)
     ! consistently update derived quantities
     rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
     rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
+
+    al1 = 1.0-alphamin
 
   end if
 

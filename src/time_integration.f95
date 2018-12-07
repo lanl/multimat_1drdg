@@ -467,6 +467,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
 
       ! update conserved variables
+      ucons(1,1,ie) = 1.0e-14
       ucons(1,2,ie) = al1*rho1
       ucons(1,5,ie) = al1*rhoe1
 
@@ -482,6 +483,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
 
       ! update conserved variables
+      ucons(1,1,ie) = 1.0-1.0e-14
       ucons(1,3,ie) = al2*rho2
       ucons(1,6,ie) = al2*rhoe2
 

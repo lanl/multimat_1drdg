@@ -251,21 +251,8 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      call nondimen_mm6eq()
 
-     if (g_nsdiscr .eq. 11) then
+     if (g_nsdiscr .ge. 1) then
        call weakinit_p1(ucons)
-
-     else
-       do ielem = 1,imax
-         xf = 0.5*(coord(ielem) + coord(ielem+1))
-
-         s = gaussian(xf)
-         ucons(1,:,ielem) = s(:)
-
-         if (g_nsdiscr .ge. 1) then
-           ucons(2,:,ielem) = 0.0
-         end if
-       end do !ielem
-
      end if
 
   !--- SCD
@@ -469,7 +456,7 @@ subroutine weakinit_p1(ucons)
 integer :: ig, ie, ieqn, ngauss
 data       ngauss/2/
 
-real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_gdof,g_neqns), carea(2), weight(2)
+real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(2), weight(2)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
@@ -510,7 +497,7 @@ function gaussian(x)
 real*8, intent(in)  :: x
 real*8  :: al1, rho1, rho2, gaussian(g_neqns)
 
-  al1 = 1.0 * dexp( -(x-0.25)*(x-0.25)/(2.0 * 0.002) )
+  al1 = (1.0-alpha1_fs) * dexp( -(x-0.25)*(x-0.25)/(2.0 * 0.002) ) + alpha1_fs
 
   rho1 = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
   rho2 = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
