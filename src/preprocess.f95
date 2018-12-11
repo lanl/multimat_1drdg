@@ -125,9 +125,9 @@ real*8  :: xf, pl, pr
         !--- SCD
         if (iprob .eq. 0) then
 
-           alphamin = 1.d-6
+           g_alphamin = 1.d-6
 
-           alpha1_fs = alphamin
+           alpha1_fs = g_alphamin
            u1_fs = 10.0
            u2_fs = 10.0
            pr_fs = 1.1d5
@@ -141,15 +141,15 @@ real*8  :: xf, pl, pr
               pr = 1.1d5
 
               if (xf .le. 0.5) then
-                 ucons(1,1,ielem) = alphamin * eos1_density(pl)
+                 ucons(1,1,ielem) = g_alphamin * eos1_density(pl)
                  ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
-                 ucons(1,3,ielem) = (1.0-alphamin) * eos2_density(pl)
+                 ucons(1,3,ielem) = (1.0-g_alphamin) * eos2_density(pl)
                  ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
                  uprim(1,2,ielem) = pl
               else
-                 ucons(1,1,ielem) = (1.0-alphamin) * eos1_density(pr)
+                 ucons(1,1,ielem) = (1.0-g_alphamin) * eos1_density(pr)
                  ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
-                 ucons(1,3,ielem) = alphamin * eos2_density(pr)
+                 ucons(1,3,ielem) = g_alphamin * eos2_density(pr)
                  ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
                  uprim(1,2,ielem) = pr
               end if
@@ -159,7 +159,7 @@ real*8  :: xf, pl, pr
         !--- Saurel 2001 water-air shocktube
         elseif (iprob .eq. 1) then
 
-           alphamin = 1.d-6
+           g_alphamin = 1.d-6
 
            do ielem = 0,imax+1
 
@@ -168,15 +168,15 @@ real*8  :: xf, pl, pr
               pr = 101325.0
 
               if (xf .le. 0.7) then
-                 ucons(1,1,ielem) = alphamin * eos1_density(pl)
+                 ucons(1,1,ielem) = g_alphamin * eos1_density(pl)
                  ucons(1,2,ielem) = 0.0
-                 ucons(1,3,ielem) = (1.0-alphamin) * eos2_density(pl)
+                 ucons(1,3,ielem) = (1.0-g_alphamin) * eos2_density(pl)
                  ucons(1,4,ielem) = 0.0
                  uprim(1,2,ielem) = pl
               else
-                 ucons(1,1,ielem) = (1.0-alphamin) * eos1_density(pr)
+                 ucons(1,1,ielem) = (1.0-g_alphamin) * eos1_density(pr)
                  ucons(1,2,ielem) = 0.0
-                 ucons(1,3,ielem) = alphamin * eos2_density(pr)
+                 ucons(1,3,ielem) = g_alphamin * eos2_density(pr)
                  ucons(1,4,ielem) = 0.0
                  uprim(1,2,ielem) = pr
               end if
@@ -186,7 +186,7 @@ real*8  :: xf, pl, pr
         !--- Ransom's faucet   
         else if (iprob .eq. 2) then
 
-           alphamin = 1.d-6
+           g_alphamin = 1.d-6
 
            alpha1_fs = 0.2
            u1_fs = 0.0
@@ -241,9 +241,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   if (iprob .eq. -1) then
 
-     alphamin = 1.d-10
+     g_alphamin = 1.d-10
 
-     alpha1_fs = alphamin
+     alpha1_fs = g_alphamin
      t1_fs = 300.0
      t2_fs = 300.0
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
@@ -272,9 +272,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 0) then
 
-     alphamin = 1.d-10
+     g_alphamin = 1.d-10
 
-     alpha1_fs = alphamin
+     alpha1_fs = g_alphamin
      t1_fs = 300.0
      t2_fs = 300.0
      rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
@@ -302,21 +302,21 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = alphamin
-           ucons(1,2,ielem) = alphamin * rho1
-           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = g_alphamin * rho1
+           ucons(1,3,ielem) = (1.0-g_alphamin) * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,5,ielem) = g_alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = 1.0-alphamin
-           ucons(1,2,ielem) = (1.0-alphamin) * rho1
-           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,1,ielem) = 1.0-g_alphamin
+           ucons(1,2,ielem) = (1.0-g_alphamin) * rho1
+           ucons(1,3,ielem) = g_alphamin * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,5,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = g_alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -329,9 +329,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 1) then
 
-     alphamin = 1.d-10
+     g_alphamin = 1.d-10
 
-     alpha1_fs = alphamin
+     alpha1_fs = g_alphamin
      u_fs = 0.0
      pr1_fs = 1.0
      pr2_fs = 1.0
@@ -389,9 +389,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 2) then
 
-     alphamin = 1.d-10
+     g_alphamin = 1.d-10
 
-     alpha1_fs = alphamin
+     alpha1_fs = g_alphamin
      u_fs = 0.0
      pr1_fs = 1.0d9 !2.0d8
      pr2_fs = 1.0d9 !2.0d8
@@ -422,21 +422,21 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.75) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = 1.0-alphamin
-           ucons(1,2,ielem) = (1.0-alphamin) * rho1
-           ucons(1,3,ielem) = alphamin * rho2
+           ucons(1,1,ielem) = 1.0-g_alphamin
+           ucons(1,2,ielem) = (1.0-g_alphamin) * rho1
+           ucons(1,3,ielem) = g_alphamin * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,5,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = g_alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = alphamin
-           ucons(1,2,ielem) = alphamin * rho1
-           ucons(1,3,ielem) = (1.0-alphamin) * rho2
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = g_alphamin * rho1
+           ucons(1,3,ielem) = (1.0-g_alphamin) * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = (1.0-alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,5,ielem) = g_alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -616,8 +616,8 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     if ( (uprimi(1) .gt. 10.0*alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -695,8 +695,8 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     if ( (uprimi(1) .gt. 10.0*alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -735,8 +735,8 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     if ( (uprimi(1) .gt. 10.0*alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*alphamin) ) then
+     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
+         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
        trcell = 1.0
      else
        trcell = 0.0

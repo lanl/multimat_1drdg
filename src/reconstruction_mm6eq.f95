@@ -112,7 +112,7 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
+    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
       call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(1))
 
@@ -153,7 +153,7 @@ real*8  :: rhoneigh(g_tdof,2,-1:1), &
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 10.0*alphamin) .and. (al1 .lt. 1.0-10.0*alphamin) ) then
+    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
 !      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
 !      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)

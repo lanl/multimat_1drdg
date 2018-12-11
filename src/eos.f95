@@ -121,7 +121,7 @@ real*8, intent(in) :: gam, p_c, rho, pr
 real*8  :: pre, eos3_ss
 
     pre = max(pr+p_c, 1.0d-14);
-    eos3_ss = dsqrt(gam *(pre+p_c)/rho);
+    eos3_ss = dsqrt(gam *pre/rho);
 
 end function
 
@@ -215,7 +215,8 @@ real*8  :: uprim(g_neqns)
   t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
 
   !--- phase-1 disappearing
-  if (dabs(al1-alphamin) .le. 0.1*alphamin) then
+  if ( (dabs(al1-g_alphamin) .le. 0.1*g_alphamin) .or. &
+       (al1 .lt. g_alphamin) ) then
 
     ! copy pressure and temperature
     p1 = p2
@@ -225,10 +226,11 @@ real*8  :: uprim(g_neqns)
     rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
     rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
 
-    al1 = alphamin
+    al1 = g_alphamin
 
   !--- phase-2 disappearing
-  elseif (dabs(al2-alphamin) .le. 0.1*alphamin) then
+  elseif ( (dabs(al2-g_alphamin) .le. 0.1*g_alphamin) .or. &
+           (al2 .lt. g_alphamin) ) then
 
     ! copy pressure and temperature
     p2 = p1
@@ -238,7 +240,7 @@ real*8  :: uprim(g_neqns)
     rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
     rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
 
-    al1 = 1.0-alphamin
+    al1 = 1.0-g_alphamin
 
   end if
 

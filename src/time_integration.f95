@@ -257,12 +257,12 @@ real*8  :: alpha1, u1, u2, &
            u2     = uprim(1,4,ie)
         
            !--- phase-1 disappearing
-           if (alpha1 .le. 10.0 * alphamin) then
+           if (alpha1 .le. 10.0 * g_alphamin) then
               uprim(1,3,ie) = uprimn(1,3,ie)
               ucons(1,2,ie)   = ucons(1,1,ie) * uprim(1,3,ie)
 
            !--- phase-2 disappearing
-           elseif (alpha1 .ge. 1.0-(10.0*alphamin)) then
+           elseif (alpha1 .ge. 1.0-(10.0*g_alphamin)) then
               uprim(1,4,ie) = uprimn(1,4,ie)
               ucons(1,4,ie)   = ucons(1,3,ie) * uprim(1,4,ie)
 
@@ -283,8 +283,8 @@ integer :: ie
 real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_neqns,0:imax+1)
 
-        epsmin = 1.0  * alphamin
-        epsmax = 10.0 * alphamin
+        epsmin = 1.0  * g_alphamin
+        epsmax = 10.0 * g_alphamin
 
         do ie = 1,imax
            alpha1 = uprim(1,1,ie)
@@ -350,8 +350,8 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            uconsi(g_neqns), uprimi(g_neqns), &
            ucons(g_tdof,g_neqns,0:imax+1)
 
-  epsmin = 1.0  * alphamin
-  epsmax = 10.0 * alphamin
+  epsmin = 1.0  * g_alphamin
+  epsmax = 10.0 * g_alphamin
 
   do ie = 1,imax
 
@@ -434,8 +434,11 @@ subroutine ignore_tinyphase_mm6eq(ucons)
 integer :: ie
 real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            al2, p2, t2, rho2, rhoe2, &
+           al_eps, &
            uconsi(g_neqns), uprimi(g_neqns), &
            ucons(g_tdof,g_neqns,0:imax+1)
+
+  al_eps = 1.0e-14
 
   do ie = 1,imax
 
@@ -458,7 +461,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
     t2 = uprimi(6)
   
     !--- phase-1 disappearing
-    if (al1 .le. 1.0e-14) then
+    if (al1 .le. al_eps) then
 
       ! copy pressure and temperature
       p1 = p2
@@ -469,7 +472,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
 
       ! update conserved variables
-      ucons(1,1,ie) = 1.0e-14
+      ucons(1,1,ie) = al_eps
       ucons(1,2,ie) = al1*rho1
       ucons(1,5,ie) = al1*rhoe1
 
@@ -480,7 +483,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       end if
 
     !--- phase-2 disappearing
-    elseif (al2 .le. 1.0e-14) then
+    elseif (al2 .le. al_eps) then
 
       ! copy pressure and temperature
       p2 = p1
@@ -491,7 +494,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
 
       ! update conserved variables
-      ucons(1,1,ie) = 1.0-1.0e-14
+      ucons(1,1,ie) = 1.0-al_eps
       ucons(1,3,ie) = al2*rho2
       ucons(1,6,ie) = al2*rhoe2
 

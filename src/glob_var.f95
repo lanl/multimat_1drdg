@@ -11,7 +11,7 @@ integer :: i_system, &
 real*8  :: dt_u, dt, dt_s
 
 !--- flow properties
-real*8  :: u1_fs, rho1_fs, pr1_fs, t1_fs, alpha1_fs, alphamin
+real*8  :: u1_fs, rho1_fs, pr1_fs, t1_fs, alpha1_fs, g_alphamin
 real*8  :: u2_fs, rho2_fs, pr2_fs, t2_fs
 real*8  :: u_fs, pr_fs
 
