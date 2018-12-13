@@ -104,7 +104,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
      call llf_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv_p1(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
+     call ausmplus_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -168,8 +168,8 @@ real*8  :: ulim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
                          lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-     call ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, &
-                                 lplus, lminu, lmag, ncnflux)
+     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
+                              lplus, lminu, lmag, ncnflux)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -258,7 +258,7 @@ real*8  :: rgrad(2,imax), ucons(g_tdof,g_neqns,0:imax+1)
 
   !--- compute gradients of volume fraction and velocity for the
   !--- non-conservative terms from Riemann reconstructed values 
-  alpha_star = lplus * ul(1) + lminu * ur(1)
+  alpha_star = dabs(lplus) * ul(1) + dabs(lminu) * ur(1)
   u_star = lmag*(lplus+lminu)
 
   if (iel .gt. 0) then
@@ -661,8 +661,8 @@ real*8  :: ncnflux(g_neqns,2), &
            u_conv_l, u_conv_r, uf, p, &
            alp1f, alp2f, ncnfl, ncnfr
 
-  alp1f = lplus*ul(1) + lminu*ur(1)
-  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
+  alp1f = dabs(lplus)*ul(1) + dabs(lminu)*ur(1)
+  alp2f = dabs(lplus)*(1.0-ul(1)) + dabs(lminu)*(1.0-ur(1))
 
   ! left element
   call get_uprim_mm6eq(uavgl, uprim_avg)
@@ -702,8 +702,8 @@ real*8  :: ncnflux(g_neqns,2), &
            u_conv_l, u_conv_r, uf, p, &
            alp1f, alp2f, ncnfl, ncnfr
 
-  alp1f = lplus*ul(1) + lminu*ur(1)
-  alp2f = lplus*(1.0-ul(1)) + lminu*(1.0-ur(1))
+  alp1f = dabs(lplus)*ul(1) + dabs(lminu)*ur(1)
+  alp2f = dabs(lplus)*(1.0-ul(1)) + dabs(lminu)*(1.0-ur(1))
 
   ! left element
   call get_uprim_mm6eq(ul, uprim)

@@ -128,8 +128,8 @@ real*8  :: xf, pl, pr
            g_alphamin = 1.d-6
 
            alpha1_fs = g_alphamin
-           u1_fs = 10.0
-           u2_fs = 10.0
+           u1_fs = u_fs
+           u2_fs = u_fs
            pr_fs = 1.1d5
            rho1_fs = eos1_density(pr_fs)
            rho2_fs = eos2_density(pr_fs)
