@@ -14,6 +14,51 @@ implicit none
 CONTAINS
 
 !----------------------------------------------------------------------------------------------
+!----- Screen output:
+!----------------------------------------------------------------------------------------------
+
+subroutine screen_output()
+
+write(*,*) " "
+if (i_system .eq. 0) then
+  write(*,*) " Isothermal single-pressure two-fluid system: "
+  write(*,*) " Pressure equilibrium " 
+  write(*,*) " Velocity non-equilibrium "
+else if (i_system .eq. 1) then
+  write(*,*) " Multi-material system: "
+  write(*,*) " Pressure non-equilibrium " 
+  write(*,*) " Velocity equilibrium "
+end if
+write(*,*) " "
+write(*,*) "PREPROCESSING FINISHED."
+write(*,*) " nelem = ", imax
+write(*,*) " dt =    ", dt_u
+write(*,*) " "
+write(*,*) " Spatial discretization: "
+if (g_nsdiscr .eq. 0) then
+  write(*,*) "   DG(P0)"
+else if (g_nsdiscr .eq. 1) then
+  write(*,*) "   rDG(P0P1)"
+else if (g_nsdiscr .eq. 11) then
+  write(*,*) "   DG(P1)"
+else if (g_nsdiscr .eq. 12) then
+  write(*,*) "   rDG(P1P2)"
+end if
+write(*,*) " "
+write(*,*) " Using appr. Riemann solver: "
+if (i_flux .eq. 1) then
+  write(*,*) "   Lax-Friedrichs flux."
+else if (i_flux .eq. 2) then
+  write(*,*) "   AUSM+ flux."
+else
+  write(*,*) "Invalid flux scheme."
+  stop
+end if
+write(*,*) " "
+
+end subroutine screen_output
+
+!----------------------------------------------------------------------------------------------
 !----- Read the control file:
 !----------------------------------------------------------------------------------------------
 
@@ -321,6 +366,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
         if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
         end if
 
      end do !ielem
@@ -381,6 +429,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
         if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
         end if
 
      end do !ielem
@@ -441,6 +492,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
         if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
         end if
 
      end do !ielem
@@ -660,6 +714,10 @@ character(len=100) :: filename2,filename3
   filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
   open(24,file=trim(adjustl(filename3)),status='unknown')
 
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
+  open(25,file=trim(adjustl(filename3)),status='unknown')
+
   write(24,'(12A8)') "# xcc,", &   !1
                      "alp1,", &    !2
                      "rhomix,", &  !3
@@ -673,10 +731,21 @@ character(len=100) :: filename2,filename3
                      "e_m", &      !11
                      "int_cell"    !12
 
+  write(25,'(8A8)') "# xcc,", &   !1
+                    "arho1,", &   !2
+                    "arho2," , &  !3
+                    "rhou,", &    !4
+                    "arhoE1,", &  !5
+                    "arhoE2,", &  !6
+                    "arhoe1,", &  !7
+                    "arhoe2"      !8
+
   do ielem = 1,imax
 
      ! left face
-     if (g_nsdiscr .gt. 0) then
+     if (g_nsdiscr .gt. 12) then
+     uconsi = ucons(1,:,ielem) - ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
+     else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
      else
      uconsi = ucons(1,:,ielem)
@@ -715,8 +784,19 @@ character(len=100) :: filename2,filename3
                            e_mix, &           !11
                            trcell             !12
 
+     write(25,'(8E16.6)') xp, &                                 !1
+                          uconsi(2), &                          !2
+                          uconsi(3), &                          !3
+                          uconsi(4), &                          !4
+                          uconsi(5), &                          !5
+                          uconsi(6), &                          !6
+                          uconsi(5)-0.5*uconsi(2)*uprimi(4), &  !7
+                          uconsi(6)-0.5*uconsi(3)*uprimi(4)     !8
+
      ! right face
-     if (g_nsdiscr .gt. 0) then
+     if (g_nsdiscr .gt. 12) then
+     uconsi = ucons(1,:,ielem) + ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
+     else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
      else
      uconsi = ucons(1,:,ielem)
@@ -755,11 +835,23 @@ character(len=100) :: filename2,filename3
                            e_mix, &           !11
                            trcell             !12
 
+     write(25,'(8E16.6)') xp, &                                 !1
+                          uconsi(2), &                          !2
+                          uconsi(3), &                          !3
+                          uconsi(4), &                          !4
+                          uconsi(5), &                          !5
+                          uconsi(6), &                          !6
+                          uconsi(5)-0.5*uconsi(2)*uprimi(4), &  !7
+                          uconsi(6)-0.5*uconsi(3)*uprimi(4)     !8
+
      write(24,*) " "
+
+     write(25,*) " "
 
   end do !ielem
 
   close(24)
+  close(25)
 
 end subroutine gnuplot_flow_p1_mm6eq
 
@@ -795,7 +887,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
 integer :: ig, ie, ieqn, ngauss
 data       ngauss/3/
 
-real*8  :: dx, xg, wi, &
+real*8  :: dx, xg, wi, xc, b3i, &
            u(g_neqns), up(g_neqns), &
            carea(3), weight(3), &
            s(g_neqns), err, err_log
@@ -810,12 +902,18 @@ real*8  :: dx, xg, wi, &
     do ig = 1,ngauss
 
       dx = coord(ie+1)-coord(ie)
+      xc = 0.5*(coord(ie+1)+coord(ie))
       wi = 0.5 * weight(ig) * dx
       xg = carea(ig) * 0.5*dx + 0.5 * ( coord(ie+1)+coord(ie) )
 
       ! basis function
 
-      if (g_nsdiscr .ge. 1) then
+      if (g_nsdiscr .ge. 12) then
+        b3i = p2basis(xg,xc,dx)
+        do ieqn = 1,g_neqns
+          u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3i*ucons(3,ieqn,ie)
+        end do !ieqn
+      else if (g_nsdiscr .ge. 1) then
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn

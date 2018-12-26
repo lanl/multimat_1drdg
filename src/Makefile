@@ -1,15 +1,15 @@
 # Build:
 all:
 	gfortran\
-		glob_var.f95\
-		gquadrature.f95\
-		eos.f95\
-		rhs_flux.f95\
-		reconstruction_mm6eq.f95\
-		rhs_flux_mm6eq.f95\
-		preprocess.f95\
-		time_integration.f95\
-		main.f95\
+		glob_var.f03\
+		gquadrature.f03\
+		eos.f03\
+		rhs_flux.f03\
+		reconstruction_mm6eq.f03\
+		rhs_flux_mm6eq.f03\
+		preprocess.f03\
+		time_integration.f03\
+		main.f03\
 		-o multimat1d.exe\
 		-ffpe-trap=zero,invalid,overflow\
 		-freal-4-real-8\

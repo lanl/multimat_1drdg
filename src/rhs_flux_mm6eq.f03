@@ -7,7 +7,6 @@
 MODULE rhs_flux_mm6eq
 
 USE reconstruction_mm6eq
-USE gquadrature
 
 implicit none
 
@@ -69,6 +68,25 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
   end if
 
 end subroutine rhs_p1_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P1P2 RHS:
+!-------------------------------------------------------------------------------
+
+subroutine rhs_p1p2_mm6eq(ucons, ulim, rhsel)
+
+real*8  :: rhsel(g_gdof,g_neqns,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call flux_p1p2_mm6eq(ucons, ulim, rhsel)
+
+  if (g_nprelx .eq. 1) then
+    call relaxpressure_p1(ulim, rhsel)
+  end if
+
+end subroutine rhs_p1p2_mm6eq
 
 !-------------------------------------------------------------------------------
 !----- P0 Advective-flux contribution to RHS:
@@ -217,6 +235,31 @@ real*8  :: riemanngrad(2,imax), &
   call volumeint_p1(ulim, riemanngrad, rhsel)
 
 end subroutine flux_p1_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- P1P2 Advective-flux contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine flux_p1p2_mm6eq(ucons, ulim, rhsel)
+
+real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+real*8  :: riemanngrad(2,imax), &
+           ulim(g_tdof,g_neqns,0:imax+1), &
+           rhsel(g_gdof,g_neqns,imax)
+
+  !--- limiting
+  ulim = ucons
+  call limiting_p1(ulim)
+
+  riemanngrad = 0.0
+
+  !--- surface integration
+  call surfaceint_p1(ulim, riemanngrad, rhsel)
+  !--- volume integration
+  call volumeint_p1(ulim, riemanngrad, rhsel)
+
+end subroutine flux_p1p2_mm6eq
 
 !-------------------------------------------------------------------------------
 !----- P1 surface contribution to RHS:

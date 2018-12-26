@@ -21,6 +21,8 @@ implicit none
 real*8, allocatable :: uprim(:,:,:), uprimn(:,:,:), &
                        ucons(:,:,:), uconsn(:,:,:)
 
+procedure(rhs_p0p1_mm6eq), pointer :: rhs_mm6eq => NULL()
+
 !----- Read control file:
 call read_cntl()
 
@@ -29,15 +31,9 @@ call read_cntl()
 write(*,*) " "
 if (i_system .eq. 0) then
    ! isothermal single-pressure two-fluid system
-   write(*,*) " Isothermal single-pressure two-fluid system: "
-   write(*,*) " Pressure equilibrium " 
-   write(*,*) " Velocity non-equilibrium "
    g_neqns = 4
 else if (i_system .eq. 1) then
    ! pressure non-equilibrium velocity equilibrium two-fluid system
-   write(*,*) " Multi-material system: "
-   write(*,*) " Pressure non-equilibrium " 
-   write(*,*) " Velocity equilibrium "
    g_neqns = 6
 end if
 
@@ -49,6 +45,9 @@ else if (g_nsdiscr .eq. 1) then
    g_gdof = 1
 else if (g_nsdiscr .eq. 11) then
    g_tdof = 2
+   g_gdof = 2
+else if (g_nsdiscr .eq. 12) then
+   g_tdof = 3
    g_gdof = 2
 else
    write(*,*) "Error: Incorrect discretization scheme selected:", g_nsdiscr
@@ -64,30 +63,7 @@ allocate(coord(0:imax+2))
 call gen_mesh()
 
 !----- Screen output:
-write(*,*) " "
-write(*,*) "PREPROCESSING FINISHED."
-write(*,*) " nelem = ", imax
-write(*,*) " dt =    ", dt_u
-write(*,*) " "
-write(*,*) " Spatial discretization: "
-if (g_nsdiscr .eq. 0) then
-  write(*,*) "   P0"
-else if (g_nsdiscr .eq. 1) then
-  write(*,*) "   P0P1"
-else if (g_nsdiscr .eq. 11) then
-  write(*,*) "   P1"
-end if
-write(*,*) " "
-write(*,*) " Using appr. Riemann solver: "
-if (i_flux .eq. 1) then
-  write(*,*) "   Lax-Friedrichs flux."
-else if (i_flux .eq. 2) then
-  write(*,*) "   AUSM+ flux."
-else
-  write(*,*) "Invalid flux scheme."
-  stop
-end if
-write(*,*) " "
+call screen_output()
 
 !----- Initialization:
 if (i_system .eq. 0) then
@@ -119,20 +95,21 @@ else if (i_system .eq. 1) then
   select case(g_nsdiscr)
 
   case(0)
-    call ExplicitRK3_mm6eq(rhs_p0_mm6eq, ucons, uconsn)
-
+    rhs_mm6eq => rhs_p0_mm6eq
   case(1)
-    call ExplicitRK3_mm6eq(rhs_p0p1_mm6eq, ucons, uconsn)
-
+    rhs_mm6eq => rhs_p0p1_mm6eq
   case(11)
-    call ExplicitRK3_mm6eq(rhs_p1_mm6eq, ucons, uconsn)
-
+    rhs_mm6eq => rhs_p1_mm6eq
+  case(12)
+    rhs_mm6eq => rhs_p1p2_mm6eq
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
                g_nsdiscr
     call exit
 
   end select
+
+  call ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn)
 
 end if
 

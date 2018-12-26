@@ -7,6 +7,7 @@
 MODULE reconstruction_mm6eq
 
 USE glob_var
+USE gquadrature
 USE eos
 
 implicit none
@@ -31,6 +32,77 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   call limiting_p1(ucons)
 
 end subroutine reconstruction_p0p1
+
+!-------------------------------------------------------------------------------
+!----- P1P2 reconstruction:
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction_p1p2(ucons)
+
+integer :: ig, j, ie, je, ieqn, ngauss
+data       ngauss/2/
+
+real*8  :: dxi, dxj, xci, xcj, xg, wi, &
+           carea(2), weight(2), &
+           b2, b3, b2t, b3t, &
+           r1, r2, rhs, lhs
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call rutope(1, ngauss, carea, weight)
+
+  do ieqn = 1,g_neqns
+
+  !--- 2-exact least-squares reconstruction
+  do ie = 1,imax
+
+    dxi = coord(ie+1)-coord(ie)
+    xci = 0.5*(coord(ie+1)+coord(ie))
+    lhs = 0.0
+    rhs = 0.0
+
+    ! neighbours
+    do j = 1,2
+      je = ie + ((-1)**1)
+
+      ! internal cells only
+      if ( (je.ge.1) .and. (je.le.imax) ) then
+
+        dxj = coord(je+1)-coord(je)
+        xcj = 0.5*(coord(je+1)+coord(je))
+        b2t = 0.0
+        b3t = 0.0
+
+        ! quadrature
+        do ig = 1,ngauss
+          xg = carea(ig) * 0.5*dxj + 0.5 * ( coord(je+1)+coord(je) )
+          wi = 0.5 * weight(ig) * dxj
+          b2 = carea(ig)
+          b3 = p2basis(xg, xci, dxi)
+          b2t = b2t + wi * b2
+          b3t = b3t + wi * b3
+        end do !ig
+
+        ! assemble lhs and rhs
+        b2 = 0.5 * (xcj - xci)/dxi
+        lhs = lhs + b3t*b3t + b2*b2
+        r1  = ucons(1,ieqn,je)*dxj - ( ucons(1,ieqn,ie)*dxi + ucons(2,ieqn,ie)*b2t )
+        r2  = ucons(2,ieqn,je)*dxi/dxj - ucons(2,ieqn,ie)
+        rhs = rhs + b3t*(r1) + b2*(r2)
+
+      end if
+    end do !j
+
+    ! get p2 dof
+    ucons(3,ieqn,ie) = rhs/lhs
+
+  end do !ie
+
+  end do !ieqn
+
+  !--- limit reconstructed solution
+  call limiting_p1(ucons)
+
+end subroutine reconstruction_p1p2
 
 !-------------------------------------------------------------------------------
 !----- P1 limiting:

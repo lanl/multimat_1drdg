@@ -67,4 +67,24 @@ end function
 
 !-----------------------------------------------------------------------
 
+real*8 function p1basis(x,xc,dx)
+real*8, intent(in) :: x, xc, dx
+
+  p1basis = (x-xc)/(0.5*dx)
+
+end function p1basis
+
+!-----------------------------------------------------------------------
+
+real*8 function p2basis(x,xc,dx)
+real*8, intent(in) :: x, xc, dx
+real*8 :: hdx
+
+  hdx = 0.5*dx
+  p2basis = (x-xc)*(x-xc)/(2.0*hdx*hdx) - 1.0/6.0
+
+end function p2basis
+
+!-----------------------------------------------------------------------
+
 END MODULE glob_var
