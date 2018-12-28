@@ -122,9 +122,9 @@ end subroutine ExplicitRK3_4eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, ucons, uconsn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
 
-procedure(), pointer :: rhs_mm6eq
+procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof),time, err_log
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
@@ -221,6 +221,9 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
   call gnuplot_flow_mm6eq(ulim, itstep)
   call gnuplot_flow_p1_mm6eq(ulim, itstep)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
+
+  !----- Update ucons with reconstructed solutions, if any:
+  call reconst_mm6eq(ucons)
   call errorcalc_p1(ucons, time*a_nd, err_log)
 
   !----- Screen-output:
@@ -480,6 +483,11 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
         ucons(2,1,ie) = 0.0
         ucons(2,2,ie) = 0.0
         ucons(2,5,ie) = 0.0
+        if (g_nsdiscr .ge. 12) then
+          ucons(3,1,ie) = 0.0
+          ucons(3,2,ie) = 0.0
+          ucons(3,5,ie) = 0.0
+        end if
       end if
 
     !--- phase-2 disappearing
@@ -501,6 +509,10 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
       if (g_nsdiscr .ge. 11) then
         ucons(2,3,ie) = 0.0
         ucons(2,6,ie) = 0.0
+        if (g_nsdiscr .ge. 12) then
+          ucons(3,3,ie) = 0.0
+          ucons(3,6,ie) = 0.0
+        end if
       end if
 
     end if

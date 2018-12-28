@@ -248,9 +248,8 @@ real*8  :: riemanngrad(2,imax), &
            ulim(g_tdof,g_neqns,0:imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
-  !--- limiting
   ulim = ucons
-  call limiting_p1(ulim)
+  call reconstruction_p1p2(ulim)
 
   riemanngrad = 0.0
 
@@ -909,6 +908,10 @@ real*8  :: p1, p2, rho1, rho2, u_conv
   if (g_nsdiscr .ge. 1) then
     ucons(2,:,0) = 0.0
     ucons(2,:,imax+1) = 0.0
+      if (g_nsdiscr .ge. 12) then
+        ucons(3,:,0) = 0.0
+        ucons(3,:,imax+1) = 0.0
+      end if
   end if
 
 end subroutine get_bc_mm6eq

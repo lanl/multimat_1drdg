@@ -15,6 +15,19 @@ implicit none
 CONTAINS
 
 !-------------------------------------------------------------------------------
+!----- P0 reconstruction (does nothing):
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction_p0(ucons)
+
+integer :: ie
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  ie = 0
+
+end subroutine reconstruction_p0
+
+!-------------------------------------------------------------------------------
 !----- P0P1 reconstruction:
 !-------------------------------------------------------------------------------
 
@@ -32,6 +45,20 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   call limiting_p1(ucons)
 
 end subroutine reconstruction_p0p1
+
+!-------------------------------------------------------------------------------
+!----- P1 reconstruction (only limiting):
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction_p1(ucons)
+
+integer :: ie
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  !--- limit reconstructed solution
+  call limiting_p1(ucons)
+
+end subroutine reconstruction_p1
 
 !-------------------------------------------------------------------------------
 !----- P1P2 reconstruction:
@@ -100,6 +127,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end do !ieqn
 
   !--- limit reconstructed solution
+  call limiting_p2(ucons)
   call limiting_p1(ucons)
 
 end subroutine reconstruction_p1p2
@@ -112,22 +140,52 @@ subroutine limiting_p1(ucons)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  if (g_nlim .eq. 1) then
+  select case (g_nlim)
+
+  case(0)
+
+  case(1)
     call min_superbee(ucons)
 
-  elseif (g_nlim .eq. 2) then
+  case(2)
     call sconsistent_superbee(ucons)
 
-  elseif (g_nlim .eq. 3) then
+  case(3)
     call sconsistent_oversuperbee(ucons)
 
-  elseif (g_nlim .ne. 0) then
-    write(*,*) "Error: incorrect limiter index in control file: ", g_nlim
-    stop
+  case default
+    write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
+    call exit
 
-  end if
+  end select
 
 end subroutine limiting_p1
+
+!-------------------------------------------------------------------------------
+!----- P2 limiting:
+!-------------------------------------------------------------------------------
+
+subroutine limiting_p2(ucons)
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  select case (g_nlim)
+
+  case(0)
+
+  case(2)
+    call sconsistent_superbee(ucons)
+
+  case(3)
+    call sconsistent_oversuperbee(ucons)
+
+  case default
+    write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
+    call exit
+
+  end select
+
+end subroutine limiting_p2
 
 !-------------------------------------------------------------------------------
 !----- superbee limiter:
