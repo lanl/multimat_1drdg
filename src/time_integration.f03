@@ -126,7 +126,7 @@ subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
 
 procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-real*8   :: mm(g_tdof),time, err_log
+real*8   :: mm(g_tdof),time, err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uconsi(g_tdof,g_neqns,0:imax+1), &
             ulim(g_tdof,g_neqns,0:imax+1), &
@@ -234,7 +234,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
   write(*,*) "  Conservation: "
   write(*,*) "  Mass:         ", cons_err(3)
   write(*,*) "  Total-energy: ", cons_err(6)
-  write(*,*) "  log(||e||): ", err_log, 10.0**err_log
+  write(*,*) "  log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
@@ -441,7 +441,7 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
            uconsi(g_neqns), uprimi(g_neqns), &
            ucons(g_tdof,g_neqns,0:imax+1)
 
-  al_eps = g_alphamin!1.0e-14
+  al_eps = 1.0e-14
 
   do ie = 1,imax
 

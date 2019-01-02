@@ -20,7 +20,9 @@ CONTAINS
 subroutine screen_output()
 
 write(*,*) " "
-if (i_system .eq. 0) then
+if (i_system .eq. -1) then
+  write(*,*) " k-exactness check for least-squares reconstruction "
+else if (i_system .eq. 0) then
   write(*,*) " Isothermal single-pressure two-fluid system: "
   write(*,*) " Pressure equilibrium " 
   write(*,*) " Velocity non-equilibrium "
@@ -29,6 +31,7 @@ else if (i_system .eq. 1) then
   write(*,*) " Pressure non-equilibrium " 
   write(*,*) " Velocity equilibrium "
 end if
+
 write(*,*) " "
 write(*,*) "PREPROCESSING FINISHED."
 write(*,*) " nelem = ", imax
@@ -44,16 +47,20 @@ else if (g_nsdiscr .eq. 11) then
 else if (g_nsdiscr .eq. 12) then
   write(*,*) "   rDG(P1P2)"
 end if
-write(*,*) " "
-write(*,*) " Using appr. Riemann solver: "
-if (i_flux .eq. 1) then
-  write(*,*) "   Lax-Friedrichs flux."
-else if (i_flux .eq. 2) then
-  write(*,*) "   AUSM+ flux."
-else
-  write(*,*) "Invalid flux scheme."
-  stop
+
+if (i_system > -1) then
+  write(*,*) " "
+  write(*,*) " Using appr. Riemann solver: "
+  if (i_flux .eq. 1) then
+    write(*,*) "   Lax-Friedrichs flux."
+  else if (i_flux .eq. 2) then
+    write(*,*) "   AUSM+ flux."
+  else
+    write(*,*) "Invalid flux scheme."
+    stop
+  end if
 end if
+
 write(*,*) " "
 
 end subroutine screen_output
@@ -155,6 +162,60 @@ subroutine nondimen_mm6eq()
   g_cp2 = g_cp2/ (a_nd*a_nd/t_nd)
 
 end subroutine nondimen_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Solution initialization for k-exactness check:
+!----------------------------------------------------------------------------------------------
+
+subroutine init_soln_kex(ucons)
+
+integer :: ig, ie, ngauss, ieqn
+data       ngauss/3/
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), rhs(g_gdof,g_neqns), s(g_neqns)
+real*8  :: dx, xg, wi, xc, &
+           carea(3), weight(3)
+
+  call rutope(1, ngauss, carea, weight)
+
+  !--- 2-exactness
+  !----------
+  if (iprob .eq. -1) then
+
+    do ie = 0,imax+1
+
+      xc = 0.5*(coord(ie+1)+coord(ie))
+      dx = coord(ie+1)-coord(ie)
+
+      rhs = 0.0
+
+      do ig = 1,ngauss
+
+        wi = 0.5 * weight(ig) * dx
+        xg = carea(ig) * 0.5*dx + 0.5 * ( coord(ie+1)+coord(ie) )
+
+        s = quadraticfn(xg, 0.0)
+
+        do ieqn = 1,g_neqns
+          rhs(1,ieqn) = rhs(1,ieqn) + wi * s(ieqn)
+          rhs(2,ieqn) = rhs(2,ieqn) + wi * s(ieqn) * carea(ig)
+        end do !ieqn
+
+      end do !ig
+
+      do ieqn = 1,g_neqns
+        ucons(1,ieqn,ie) = rhs(1,ieqn) / dx
+        ucons(2,ieqn,ie) = rhs(2,ieqn) / (dx/3.0)
+        ucons(3,ieqn,ie) = 0.0
+      end do !ieqn
+
+    end do !ie
+
+  else
+    write(*,*) "Incorrect problem setup code!"
+
+  end if
+
+end subroutine init_soln_kex
 
 !----------------------------------------------------------------------------------------------
 !----- Solution initialization for 4-eq isothermal 2fluid model:
@@ -575,6 +636,20 @@ real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
 
 end function
 
+!-------------------------------------------------------------------------------
+
+function quadraticfn(x,t)
+
+real*8, intent(in)  :: x, t
+real*8  :: xc, quadraticfn(g_neqns)
+
+  xc  = 0.25
+  quadraticfn(1) = 10.0 - 20.0*x*x + 10.0*x
+  quadraticfn(2) = 100.0*x*x*x - 5.0*x - 100.0*x*x+ 10.0
+  quadraticfn(3) = dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) )
+
+end function
+
 !----------------------------------------------------------------------------------------------
 !----- GNUPLOT outputs:
 !----------------------------------------------------------------------------------------------
@@ -879,13 +954,16 @@ integer :: ig, ie, ieqn, ngauss
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
-           u(g_neqns), up(g_neqns), &
+           u(g_neqns), ulow(g_neqns), &
            carea(3), weight(3), &
-           s(g_neqns), err, err_log
+           s(g_neqns), &
+           err, err_log(g_neqns), &
+           errlow_log(g_neqns)
 
   call rutope(1, ngauss, carea, weight)
 
   err_log = 0.0
+  errlow_log = 0.0
 
   if (iprob .eq. -1) then
 
@@ -903,6 +981,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
         b3i = p2basis(xg,xc,dx)
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3i*ucons(3,ieqn,ie)
+          ulow(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn
       else if (g_nsdiscr .ge. 1) then
         do ieqn = 1,g_neqns
@@ -912,17 +991,28 @@ real*8  :: dx, xg, wi, xc, b3i, &
         u(:) = ucons(1,:,ie)
       end if
 
-      s = gaussian(xg,t)
+      if (i_system .eq. 1) then
+        s = gaussian(xg,t)
+      else if (i_system .eq. -1) then
+        s = quadraticfn(xg,t)
+      end if
 
-      err = u(1) - s(1)
-
-      err_log = err_log + wi*err*err
+      do ieqn = 1,g_neqns
+        err = u(ieqn) - s(ieqn)
+        err_log(ieqn) = err_log(ieqn) + wi*err*err
+        err = ulow(ieqn) - s(ieqn)
+        errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
+      end do !ieqn
 
     end do !ig
     end do !ie
 
-    err_log = dsqrt(err_log)
-    err_log = dlog10(err_log)
+    do ieqn = 1,g_neqns
+      err_log(ieqn) = dsqrt(err_log(ieqn))
+      err_log(ieqn) = dlog10(err_log(ieqn))
+      errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
+      errlow_log(ieqn) = dlog10(errlow_log(ieqn))
+    end do !ieqn
 
   else
 
