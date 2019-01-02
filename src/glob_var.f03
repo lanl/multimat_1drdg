@@ -53,17 +53,16 @@ CONTAINS
 !----- MC limiter
 !-----------------------------------------------------------------------
 
-function mclim(a,b,c)
+real*8 function mclim(a,b,c)
 real*8,intent(in) :: a,b,c
-real*8 :: mclim
 
-        if ((a*b>0.0) .and. (a*c>0.0)) then
-           mclim = min(2.0*dabs(a), dabs(b), 2.0*dabs(c)) * dsign(1.0,b)
-        else
-           mclim = 0.0
-        end if
+  if ((a*b>0.0) .and. (a*c>0.0)) then
+    mclim = min(2.0*dabs(a), dabs(b), 2.0*dabs(c)) * dsign(1.0,b)
+  else
+    mclim = 0.0
+  end if
 
-end function
+end function mclim
 
 !-----------------------------------------------------------------------
 

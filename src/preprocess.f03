@@ -298,6 +298,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      if (g_nsdiscr .ge. 1) then
        call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
 
      else
        do ielem = 1,imax
@@ -305,10 +306,6 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
          s = gaussian(xf,0.0)
          ucons(1,:,ielem) = s(:)
-
-         if (g_nsdiscr .ge. 1) then
-           ucons(2,:,ielem) = 0.0
-         end if
        end do !ielem
 
      end if
@@ -347,21 +344,21 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         if (xf .le. 0.5) then
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = g_alphamin
-           ucons(1,2,ielem) = g_alphamin * rho1
-           ucons(1,3,ielem) = (1.0-g_alphamin) * rho2
+           ucons(1,1,ielem) = alpha1_fs
+           ucons(1,2,ielem) = alpha1_fs * rho1
+           ucons(1,3,ielem) = (1.0-alpha1_fs) * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = g_alphamin * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,5,ielem) = alpha1_fs * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
+           ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
            rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = 1.0-g_alphamin
-           ucons(1,2,ielem) = (1.0-g_alphamin) * rho1
-           ucons(1,3,ielem) = g_alphamin * rho2
+           ucons(1,1,ielem) = 1.0-alpha1_fs
+           ucons(1,2,ielem) = (1.0-alpha1_fs) * rho1
+           ucons(1,3,ielem) = alpha1_fs * rho2
            ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = g_alphamin * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,5,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
+           ucons(1,6,ielem) = alpha1_fs * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -862,19 +859,13 @@ subroutine gnuplot_diagnostics_mm6eq(cons_err, itstep)
 integer, intent(in) :: itstep
 real*8,  intent(in) :: cons_err(6)
 
-integer :: ielem
-
-  do ielem = 1,imax
-
-    write(33,*) itstep, &       !1
-                cons_err(1), &  !2
-                cons_err(2), &  !3
-                cons_err(3), &  !4
-                cons_err(4), &  !5
-                cons_err(5), &  !6
-                cons_err(6)     !7
-
-  end do !ielem
+  write(33,*) itstep, &       !1
+              cons_err(1), &  !2
+              cons_err(2), &  !3
+              cons_err(3), &  !4
+              cons_err(4), &  !5
+              cons_err(5), &  !6
+              cons_err(6)     !7
 
 end subroutine gnuplot_diagnostics_mm6eq
 

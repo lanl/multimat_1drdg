@@ -248,15 +248,16 @@ real*8  :: riemanngrad(2,imax), &
            ulim(g_tdof,g_neqns,0:imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
+  !--- limiting
   ulim = ucons
   call reconstruction_p1p2(ulim)
 
   riemanngrad = 0.0
 
   !--- surface integration
-  call surfaceint_p1(ulim, riemanngrad, rhsel)
+  call surfaceint_p1p2(ulim, riemanngrad, rhsel)
   !--- volume integration
-  call volumeint_p1(ulim, riemanngrad, rhsel)
+  call volumeint_p1p2(ulim, riemanngrad, rhsel)
 
 end subroutine flux_p1p2_mm6eq
 
@@ -299,7 +300,7 @@ real*8  :: rgrad(2,imax), ucons(g_tdof,g_neqns,0:imax+1)
   endif
 
   !--- compute gradients of volume fraction and velocity for the
-  !--- non-conservative terms from Riemann reconstructed values 
+  !--- non-conservative terms from Riemann reconstructed values
   alpha_star = dabs(lplus) * ul(1) + dabs(lminu) * ur(1)
   u_star = lmag*(lplus+lminu)
 
@@ -402,6 +403,148 @@ real*8, intent(in) :: rgrad(2,imax), ucons(g_tdof,g_neqns,0:imax+1)
   end do !ie
 
 end subroutine volumeint_p1
+
+!-------------------------------------------------------------------------------
+!----- P1P2 surface contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine surfaceint_p1p2(ucons, rgrad, rhsel)
+
+integer :: ifc, iel, ier, ieqn
+real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+           intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
+           lplus, lminu, lmag, &
+           alpha_star, u_star
+
+real*8  :: rgrad(2,imax), ucons(g_tdof,g_neqns,0:imax+1)
+
+  do ifc = 1,imax+1
+
+  intflux = 0.0
+
+  iel = ifc - 1
+  ier = ifc
+
+  do ieqn = 1,g_neqns
+    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel) + 1.0/3.0*ucons(3,ieqn,iel)
+    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
+
+    uavgl(ieqn) = ucons(1,ieqn,iel)
+    uavgr(ieqn) = ucons(1,ieqn,ier)
+  end do !ieqn
+
+  !--- fluxes
+
+  if (i_flux .eq. 2) then
+     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+  else
+     write(*,*) "Invalid flux scheme."
+     stop
+  endif
+
+  !--- compute gradients of volume fraction and velocity for the
+  !--- non-conservative terms from Riemann reconstructed values
+  alpha_star = dabs(lplus) * ul(1) + dabs(lminu) * ur(1)
+  u_star = lmag*(lplus+lminu)
+
+  if (iel .gt. 0) then
+    do ieqn = 1,g_neqns
+          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
+          rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
+    end do !ieqn
+
+    rgrad(1,iel) = rgrad(1,iel) + alpha_star
+    rgrad(2,iel) = rgrad(2,iel) + u_star
+
+  end if
+
+  if (ier .lt. (imax+1)) then
+    do ieqn = 1,g_neqns
+          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
+          rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
+    end do !ieqn
+
+    rgrad(1,ier) = rgrad(1,ier) - alpha_star
+    rgrad(2,ier) = rgrad(2,ier) - u_star
+
+  end if
+
+  end do !ifc
+
+end subroutine surfaceint_p1p2
+
+!-------------------------------------------------------------------------------
+!----- P1P2 volume contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine volumeint_p1p2(ucons, rgrad, rhsel)
+
+integer :: ig, ie, ieqn, ngauss
+data       ngauss/2/
+
+real*8  :: dx2, b3, p, &
+           u(g_neqns), up(g_neqns), &
+           carea(2), weight(2), &
+           cflux(g_neqns), &
+           nflux(g_gdof,g_neqns), &
+           rhsel(g_gdof,g_neqns,imax)
+
+real*8, intent(in) :: rgrad(2,imax), ucons(g_tdof,g_neqns,0:imax+1)
+
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+  do ig = 1,ngauss
+
+    dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
+
+    ! basis function
+
+    b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
+    do ieqn = 1,g_neqns
+      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
+    end do !ieqn
+
+    call get_uprim_mm6eq(u, up)
+
+    p = up(1)*up(2) + (1.0-up(1))*up(3)
+
+    ! conservative fluxes
+    cflux(1) = 0.0
+    cflux(2) = up(4) * u(2)
+    cflux(3) = up(4) * u(3)
+    cflux(4) = up(4) * u(4) + p
+    cflux(5) = up(4) * (u(5) )
+    cflux(6) = up(4) * (u(6) )
+
+    ! non-conservative fluxes
+    nflux(1,1) = up(1) * rgrad(2,ie)
+    nflux(1,2) = 0.0
+    nflux(1,3) = 0.0
+    nflux(1,4) = 0.0
+    nflux(1,5) = p * up(4) * rgrad(1,ie)
+    nflux(1,6) = p * up(4) * (-rgrad(1,ie))
+
+    nflux(2,1) = nflux(1,1) * carea(ig) + up(1) * up(4) * 2.0
+    nflux(2,2) = 0.0
+    nflux(2,3) = 0.0
+    nflux(2,4) = 0.0
+    nflux(2,5) = nflux(1,5) * carea(ig) + p * up(4) * up(1) * 2.0
+    nflux(2,6) = nflux(1,6) * carea(ig) + p * up(4) * (1.0-up(1)) * 2.0
+
+    do ieqn = 1,g_neqns
+      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+    end do !ieqn
+
+    do ieqn = 1,g_neqns
+      rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
+      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
+    end do !ieqn
+
+  end do !ig
+  end do !ie
+
+end subroutine volumeint_p1p2
 
 !-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:

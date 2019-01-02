@@ -89,7 +89,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
     ! neighbours
     do j = 1,2
-      je = ie + ((-1)**1)
+      je = ie + ((-1)**j)
 
       ! internal cells only
       if ( (je.ge.1) .and. (je.le.imax) ) then
@@ -101,18 +101,18 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
         ! quadrature
         do ig = 1,ngauss
-          xg = carea(ig) * 0.5*dxj + 0.5 * ( coord(je+1)+coord(je) )
-          wi = 0.5 * weight(ig) * dxj
-          b2 = carea(ig)
+          xg = carea(ig) * 0.5*dxj + xcj
+          wi = 0.5 * weight(ig)
+          b2 = p1basis(xg, xci, dxi)
           b3 = p2basis(xg, xci, dxi)
           b2t = b2t + wi * b2
           b3t = b3t + wi * b3
         end do !ig
 
         ! assemble lhs and rhs
-        b2 = 0.5 * (xcj - xci)/dxi
+        b2 = p1basis(xcj, xci, dxi)
         lhs = lhs + b3t*b3t + b2*b2
-        r1  = ucons(1,ieqn,je)*dxj - ( ucons(1,ieqn,ie)*dxi + ucons(2,ieqn,ie)*b2t )
+        r1  = ucons(1,ieqn,je) - ( ucons(1,ieqn,ie) + ucons(2,ieqn,ie)*b2t )
         r2  = ucons(2,ieqn,je)*dxi/dxj - ucons(2,ieqn,ie)
         rhs = rhs + b3t*(r1) + b2*(r2)
 
@@ -123,6 +123,16 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     ucons(3,ieqn,ie) = rhs/lhs
 
   end do !ie
+
+  !ie = 1
+  !dxi = 0.5 * (coord(ie+1)-coord(ie))
+  !dxj = 0.5 * (coord(ie+2)-coord(ie+1))
+  !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie+1)/dxj - ucons(2,ieqn,ie)/dxi) / (dxj+dxi)
+
+  !ie = imax
+  !dxi = 0.5 * (coord(ie+1)-coord(ie))
+  !dxj = 0.5 * (coord(ie)-coord(ie-1))
+  !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie)/dxi - ucons(2,ieqn,ie-1)/dxj) / (dxi+dxj)
 
   end do !ieqn
 
@@ -148,7 +158,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     call min_superbee(ucons)
 
   case(2)
-    call sconsistent_superbee(ucons)
+    call sconsistent_superbee_p1(ucons)
 
   case(3)
     call sconsistent_oversuperbee(ucons)
@@ -174,10 +184,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(0)
 
   case(2)
-    call sconsistent_superbee(ucons)
-
-  case(3)
-    call sconsistent_oversuperbee(ucons)
+    call sconsistent_superbee_p2(ucons)
 
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
@@ -195,13 +202,13 @@ subroutine min_superbee(ucons)
 
 integer :: ie, ieqn, ifc
 real*8  :: theta(g_neqns)
-real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
 
-    uneigh(:,:,-1) = ucons(:,:,ie-1)
-    uneigh(:,:,0)  = ucons(:,:,ie)
-    uneigh(:,:,1)  = ucons(:,:,ie+1)
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, uneigh, theta)
@@ -220,20 +227,20 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 end subroutine min_superbee
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee limiter:
+!----- system-consistent superbee limiter for P1 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_superbee(ucons)
+subroutine sconsistent_superbee_p1(ucons)
 
 integer :: ie, ieqn, ifc
 real*8  :: al1, theta(g_neqns)
-real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
 
-    uneigh(:,:,-1) = ucons(:,:,ie-1)
-    uneigh(:,:,0)  = ucons(:,:,ie)
-    uneigh(:,:,1)  = ucons(:,:,ie+1)
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, uneigh, theta)
@@ -256,7 +263,51 @@ real*8  :: uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   end do !ie
 
-end subroutine sconsistent_superbee
+end subroutine sconsistent_superbee_p1
+
+!-------------------------------------------------------------------------------
+!----- system-consistent superbee limiter for P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine sconsistent_superbee_p2(ucons)
+
+integer :: ie, ieqn, ifc
+real*8  :: dx2, al1, theta(g_neqns)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    ! 1. compute limiter function
+    call superbee_fn(g_neqns, 2.0, uneigh, theta)
+
+    al1 = ucons(1,1,ie)
+
+    ! 2. Obtain consistent limiter functions for the equation system
+    !    Interface detection
+    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+
+      call intfac_limiting_p2(ucons(:,:,ie), theta(1))
+
+    else
+
+      do ieqn = 1,g_neqns
+        ucons(3,ieqn,ie) = theta(ieqn) * ucons(3,ieqn,ie)
+      end do !ieqn
+
+    end if
+
+  end do !ie
+
+end subroutine sconsistent_superbee_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent overbee+superbee limiter:
@@ -267,14 +318,14 @@ subroutine sconsistent_oversuperbee(ucons)
 integer :: ie, ieqn, ifc
 real*8  :: theta(g_neqns), theta_al, thrho(2)
 real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: rhoneigh(g_tdof,2,-1:1), &
-           uneigh(g_tdof,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhoneigh(2,2,-1:1), &
+           uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
   do ie = 1,imax
 
-    uneigh(:,:,-1) = ucons(:,:,ie-1)
-    uneigh(:,:,0)  = ucons(:,:,ie)
-    uneigh(:,:,1)  = ucons(:,:,ie+1)
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, uneigh, theta)
@@ -324,13 +375,15 @@ end subroutine sconsistent_oversuperbee
 
 !-------------------------------------------------------------------------------
 !----- Superbee limiter for n equations individually
-!----- this sub actually calculates the limiter function according to superbee
+!----- this sub actually calculates the limiter function according to superbee.
+!----- the input to this function can be modified to limit P1 or P2 dofs, refer
+!----- to sconsistent_superbee_p1 and sconsistent_superbee_p2 respectively
 !-------------------------------------------------------------------------------
 
 subroutine superbee_fn(neq,beta_lim,ucons,theta)
 
 integer, intent(in) :: neq
-real*8,  intent(in) :: beta_lim, ucons(g_tdof,neq,-1:1)
+real*8,  intent(in) :: beta_lim, ucons(2,neq,-1:1)
 
 integer :: ieqn, ifc
 real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
@@ -410,6 +463,38 @@ real*8  :: ucons(g_tdof,g_neqns,1)
                 + (1.0-al1) * 0.5*vel*vel * drho2dx
 
 end subroutine intfac_limiting
+
+!-------------------------------------------------------------------------------
+!----- Function that consistently applies limiter to P2 dofs for
+!----- near-interface cell
+!-------------------------------------------------------------------------------
+
+subroutine intfac_limiting_p2(ucons, theta_al)
+
+real*8,  intent(in) :: theta_al
+real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
+real*8  :: ucons(g_tdof,g_neqns,1)
+
+  !        get primitive variables
+  al1 = ucons(1,1,1)
+  rho1 = ucons(1,2,1)/al1
+  rho2 = ucons(1,3,1)/(1.0-al1)
+  vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
+  rhoe1 = ucons(1,5,1)/al1
+  rhoe2 = ucons(1,6,1)/(1.0-al1)
+
+  !   i.   Volume fraction: Keep limiter function the same
+  ucons(3,1,1) = theta_al * ucons(3,1,1)
+  !   ii.  Continuity:
+  ucons(3,2,1) = rho1 * ucons(3,1,1)
+  ucons(3,3,1) = - rho2 * ucons(3,1,1)
+  !   iii. Momentum:
+  ucons(3,4,1) = vel * (ucons(3,2,1) + ucons(3,3,1))
+  !   iv.  Energy:
+  ucons(3,5,1) = rhoe1 * ucons(3,1,1)
+  ucons(3,6,1) = - rhoe2 * ucons(3,1,1)
+
+end subroutine intfac_limiting_p2
 
 !-------------------------------------------------------------------------------
 !----- Overbee limiter for n equations individually

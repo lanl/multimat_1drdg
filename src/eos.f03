@@ -121,6 +121,8 @@ real*8, intent(in) :: gam, p_c, rho, pr
 real*8  :: pre, eos3_ss
 
     pre = max(pr+p_c, 1.0d-14);
+    if (rho .lt. 1.0d-16) &
+      write(*,*) "Warning: negative density encountered in speed of sound calculation: ", rho
     eos3_ss = dsqrt(gam *pre/rho);
 
 end function
