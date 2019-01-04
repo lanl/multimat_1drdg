@@ -163,6 +163,9 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(3)
     call sconsistent_oversuperbee(ucons)
 
+  case(4)
+    call weno_p1(ucons)
+
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
     call exit
@@ -540,6 +543,115 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
   end do !ifc
 
 end subroutine overbee_fn
+
+!-------------------------------------------------------------------------------
+!----- WENO limiter for P1
+!-------------------------------------------------------------------------------
+
+subroutine weno_p1(ucons)
+
+integer :: ie,iel,ier,nsten,is,ieqn
+real*8  :: theta(g_neqns), theta_al, al1, dxalp
+real*8  :: wi,epsweno,wenocp1,wt, &
+           dx,dxl,dxr,weight(3), &
+           gradv(3),osc(3),gradu(g_neqns,imax), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+  epsweno = 1.d-8
+  wenocp1 = 10.0
+
+  do ieqn = 1,g_neqns
+
+    !--- determine WENO-limited first derivatives
+    do ie = 1,imax
+
+      iel = ie - 1
+      ier = ie + 1
+
+      dxl = 0.5 * (coord(ie)-coord(ie-1))
+      dx  = 0.5 * (coord(ie+1)-coord(ie))
+      dxr = 0.5 * (coord(ie+2)-coord(ie+1))
+
+      !--- the nsten stencils
+      gradv(1) = ucons(2,ieqn,ie)/dx
+
+      if (ie == imax) then
+        nsten = 2
+        gradv(2) = ucons(2,ieqn,iel)/dxl
+
+      elseif (ie == 1) then
+        nsten = 2
+        gradv(2) = ucons(2,ieqn,ier)/dxr
+
+      else
+        nsten = 3
+        gradv(2) = ucons(2,ieqn,iel)/dxl
+        gradv(3) = ucons(2,ieqn,ier)/dxr
+
+      end if
+
+      !--- oscillation indicators
+
+      do is = 1,nsten
+        osc(is) = dsqrt(gradv(is)*gradv(is))
+      end do !is
+
+      wt = 0.d0
+
+      do is = 1,nsten
+        if (is.eq.1) then
+          wi = wenocp1
+        else
+          wi = 1.d0
+        end if !is
+        weight(is) = wi* (epsweno + osc(is))**(-2.d0)
+        wt = wt + weight(is)
+      end do !is
+
+      !--- normalize the weight function
+      do is = 1,nsten
+        weight(is) = weight(is)/wt
+      end do !is
+
+      !--- reconstruct the limited gradient
+
+      gradu(ieqn,ie) = 0.d0
+
+      do is = 1,nsten
+        gradu(ieqn,ie) = gradu(ieqn,ie) + weight(is)*gradv(is)
+      end do !is
+
+    end do !ie
+
+  end do !ieqn
+
+  !--- modify the first derivatives
+  do ie = 1,imax
+
+    dx = 0.5 * (coord(ie+1)-coord(ie))
+    gradu(:,ie) = dx * gradu(:,ie)
+    al1 = ucons(1,1,ie)
+
+    ! Obtain consistent limiter functions for the equation system
+    ! Interface detection
+    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+
+      dxalp = ucons(2,1,ie)
+      theta_al = gradu(1,ie)/( dxalp + dsign(1.0d-12,dxalp) )
+      theta = 0.0
+      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta_al)
+
+    else
+
+      do ieqn = 1,g_neqns
+        ucons(2,ieqn,ie) = gradu(ieqn,ie)
+      end do !ieqn
+
+    end if
+
+  end do !ie
+
+end subroutine weno_p1
 
 !-------------------------------------------------------------------------------
 
