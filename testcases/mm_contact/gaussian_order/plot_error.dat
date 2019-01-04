@@ -13,7 +13,7 @@ set key samplen 3
 #set key width +2
 set key spacing 1.25
 f(x) = -x + 1.25
-s(x) = -2*x + 2.15
+s(x) = -2*x + 1.75
 set terminal eps enhanced
 set output "error.eps"
 plot 'p0.dat'   u 2:3 w lp lw 3.5 pt 6 lt 6 t 'DG(P0)',\
