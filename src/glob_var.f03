@@ -4,7 +4,7 @@ implicit none
 
 integer :: i_system, &
            imax, g_neqns, ntstep, &
-           g_nsdiscr, g_gdof, g_tdof, g_nlim, &
+           g_nsdiscr, g_gdof, g_tdof, g_nlim, g_nmatint, &
            g_nprelx, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen

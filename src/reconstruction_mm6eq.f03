@@ -252,7 +252,8 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+    if ( (g_nmatint .eq. 1) .and. &
+         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
       call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(1))
 
@@ -296,7 +297,8 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+    if ( (g_nmatint .eq. 1) .and. &
+         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
       call intfac_limiting_p2(ucons(:,:,ie), theta(1))
 
@@ -337,7 +339,8 @@ real*8  :: rhoneigh(2,2,-1:1), &
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
-    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+    if ( (g_nmatint .eq. 1) .and. &
+         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
 !      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
 !      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
@@ -634,7 +637,8 @@ real*8  :: wi,epsweno,wenocp1,wt, &
 
     ! Obtain consistent limiter functions for the equation system
     ! Interface detection
-    if ( (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+    if ( (g_nmatint .eq. 1) .and. &
+         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
 
       dxalp = ucons(2,1,ie)
       theta_al = gradu(1,ie)/( dxalp + dsign(1.0d-12,dxalp) )

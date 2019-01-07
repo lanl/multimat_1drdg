@@ -59,6 +59,14 @@ if (i_system > -1) then
     write(*,*) "Invalid flux scheme."
     stop
   end if
+
+  write(*,*) " "
+  write(*,*) " Material interface detection: "
+  if (g_nmatint .eq. 1) then
+    write(*,*) "   ON"
+  else
+    write(*,*) "   OFF"
+  end if
 end if
 
 write(*,*) " "
@@ -90,7 +98,7 @@ integer :: i
         read(12,*) u_fs
         read(12,*) pr1_fs, pr2_fs
         read(12,*) ! blank line
-        read(12,*) g_nsdiscr, g_nlim
+        read(12,*) g_nsdiscr, g_nlim, g_nmatint
         read(12,*) dt_u
         read(12,*) ntstep
         read(12,*) ! blank line
