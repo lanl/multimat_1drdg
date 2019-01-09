@@ -476,8 +476,8 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
 
       ! update conserved variables
       ucons(1,1,ie) = al_eps
-      ucons(1,2,ie) = al1*rho1
-      ucons(1,5,ie) = al1*rhoe1
+      ucons(1,2,ie) = al_eps*rho1
+      ucons(1,5,ie) = al_eps*rhoe1
 
       if (g_nsdiscr .ge. 11) then
         ucons(2,1,ie) = 0.0
@@ -503,8 +503,8 @@ real*8  :: al1, p1, t1, rho1, rhoe1, u, &
 
       ! update conserved variables
       ucons(1,1,ie) = 1.0-al_eps
-      ucons(1,3,ie) = al2*rho2
-      ucons(1,6,ie) = al2*rhoe2
+      ucons(1,3,ie) = al_eps*rho2
+      ucons(1,6,ie) = al_eps*rhoe2
 
       if (g_nsdiscr .ge. 11) then
         ucons(2,3,ie) = 0.0

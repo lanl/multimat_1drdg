@@ -587,9 +587,9 @@ end subroutine init_soln_mm6eq
 subroutine weakinit_p1(ucons)
 
 integer :: ig, ie, ieqn, ngauss
-data       ngauss/2/
+data       ngauss/3/
 
-real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(2), weight(2)
+real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(3), weight(3)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
@@ -844,15 +844,15 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
+     if ( (uconsi(1) .gt. 10.0*g_alphamin) &
+         .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
        trcell = 1.0
      else
        trcell = 0.0
      end if
 
      write(24,'(12E16.6)') xp, &              !1
-                           uprimi(1), &       !2
+                           uconsi(1), &       !2
                            rhomix*rho_nd, &   !3
                            uprimi(4)*a_nd , & !4
                            pmix*p_nd, &       !5
@@ -895,15 +895,15 @@ character(len=100) :: filename2,filename3
      e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
               (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
 
-     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
+     if ( (uconsi(1) .gt. 10.0*g_alphamin) &
+         .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
        trcell = 1.0
      else
        trcell = 0.0
      end if
 
      write(24,'(12E16.6)') xp, &              !1
-                           uprimi(1), &       !2
+                           uconsi(1), &       !2
                            rhomix*rho_nd, &   !3
                            uprimi(4)*a_nd , & !4
                            pmix*p_nd, &       !5
