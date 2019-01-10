@@ -8,7 +8,7 @@ integer :: i_system, &
            g_nprelx, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen
-real*8  :: dt_u, dt, dt_s
+real*8  :: dt_u, dt, dt_s, g_time
 
 !--- flow properties
 real*8  :: u1_fs, rho1_fs, pr1_fs, t1_fs, alpha1_fs, g_alphamin

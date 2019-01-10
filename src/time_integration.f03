@@ -126,14 +126,14 @@ subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
 
 procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-real*8   :: mm(g_tdof),time, err_log(g_neqns)
+real*8   :: mm(g_tdof), err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uconsi(g_tdof,g_neqns,0:imax+1), &
             ulim(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
-  time = 0.d0
+  g_time = 0.d0
 
   k1(1) = 0.0     !0.0
   k1(2) = 3.0/4.0 !0.5
@@ -184,7 +184,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
      end do !istage
      !---------------------------------------------------------
 
-     time = time + (dt/a_nd)
+     g_time = g_time + (dt/a_nd)
 
      !----- Diagnostics:
      call meconservation_mm6eq(itstep,ucons,cons_err)
@@ -192,7 +192,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
      !----- Screen-output:
      if ((itstep.eq.1) .or. (mod(itstep,n_screen).eq.0)) then
      write(*,*) "--------------------------------------------"
-     write(*,*) "  itstep: ", itstep, "   Time: ", time
+     write(*,*) "  itstep: ", itstep, "   Time: ", g_time
      write(*,*) "  Time step: ", dt/a_nd
      write(*,*) "  Conservation: "
      write(*,*) "  Mass:         ", cons_err(3)
@@ -224,12 +224,12 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
   !----- Update ucons with reconstructed solutions, if any:
   call reconst_mm6eq(ucons)
-  call errorcalc_p1(ucons, time*a_nd, err_log)
+  call errorcalc_p1(ucons, g_time*a_nd, err_log)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"
   write(*,*) "-------- FINAL OUTPUT: ----- TVD-RK3: ---------"
-  write(*,*) "  itstep: ", itstep, "   Time: ", time
+  write(*,*) "  itstep: ", itstep, "   Time: ", g_time
   write(*,*) "  Time step: ", dt/a_nd
   write(*,*) "  Conservation: "
   write(*,*) "  Mass:         ", cons_err(3)

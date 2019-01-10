@@ -625,27 +625,6 @@ end subroutine weakinit_p1
 
 !-------------------------------------------------------------------------------
 
-function gaussian(x,t)
-
-real*8, intent(in)  :: x, t
-real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
-
-  xc  = 0.25 + u_fs*t
-  al1 = (1.0-alpha1_fs) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) ) + alpha1_fs
-
-  rho1 = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
-  rho2 = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
-  gaussian(1) = al1
-  gaussian(2) = al1 * rho1
-  gaussian(3) = (1.0-al1) * rho2
-  gaussian(4) = (gaussian(2)+gaussian(3)) * u_fs
-  gaussian(5) = al1 * eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_fs)
-  gaussian(6) = (1.0-al1) * eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_fs)
-
-end function
-
-!-------------------------------------------------------------------------------
-
 function quadraticfn(x,t)
 
 real*8, intent(in)  :: x, t

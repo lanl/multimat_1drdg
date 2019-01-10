@@ -962,7 +962,11 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
   !----- left boundary
 
-  if (g_lbflag .eq. 0) then
+  if (g_lbflag .eq. -1) then
+     !--- exact inlet
+     ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
+
+  else if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
      ucons(1,:,0) = ucons(1,:,1)
 
@@ -991,6 +995,16 @@ real*8  :: p1, p2, rho1, rho2, u_conv
      ucons(1,5,0) = alpha1_fs       * eos3_rhoe(g_gam1, g_pc1, p1, rho1_fs, u_fs)
      ucons(1,6,0) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2, rho2_fs, u_fs)
 
+  else if (g_lbflag .eq. 3) then
+     !--- periodic
+     if (g_nsdiscr .eq. 0) then
+       ucons(1,:,0) = ucons(1,:,imax)
+     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax)
+     else if (g_nsdiscr .eq. 12) then
+       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
+     end if
+
   else
      write(*,*) "BC-type not set for flag ", g_lbflag
 
@@ -998,7 +1012,11 @@ real*8  :: p1, p2, rho1, rho2, u_conv
 
   !----- right boundary
 
-  if (g_rbflag .eq. 0) then
+  if (g_rbflag .eq. -1) then
+     !--- exact inlet
+     ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
+
+  else if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
      ucons(1,:,imax+1) = ucons(1,:,imax)
 
@@ -1042,6 +1060,16 @@ real*8  :: p1, p2, rho1, rho2, u_conv
                        eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_conv)
      ucons(1,6,imax+1) = (1.0-ucons(1,1,imax)) * &
                        eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_conv)
+
+  else if (g_rbflag .eq. 3) then
+     !--- periodic
+     if (g_nsdiscr .eq. 0) then
+       ucons(1,:,imax+1) = ucons(1,:,1)
+     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1)
+     else if (g_nsdiscr .eq. 12) then
+       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
+     end if
 
   else
      write(*,*) "BC-type not set for flag ", g_rbflag
@@ -1164,6 +1192,27 @@ real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
   end do !ie
 
 end subroutine relaxpressure_p1
+
+!-------------------------------------------------------------------------------
+
+function gaussian(x,t)
+
+real*8, intent(in)  :: x, t
+real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
+
+  xc  = 0.25 + u_fs*t
+  al1 = (1.0-alpha1_fs) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) ) + alpha1_fs
+
+  rho1 = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
+  rho2 = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+  gaussian(1) = al1
+  gaussian(2) = al1 * rho1
+  gaussian(3) = (1.0-al1) * rho2
+  gaussian(4) = (gaussian(2)+gaussian(3)) * u_fs
+  gaussian(5) = al1 * eos3_rhoe(g_gam1, g_pc1, pr1_fs, rho1, u_fs)
+  gaussian(6) = (1.0-al1) * eos3_rhoe(g_gam2, g_pc2, pr2_fs, rho2, u_fs)
+
+end function
 
 !!----- Old DGP1 surface and volume subroutines.
 !!-------------------------------------------------------------------------------
