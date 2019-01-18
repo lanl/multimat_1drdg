@@ -621,6 +621,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   end do !ie
 
+  call limiting_p1(ucons)
+
 end subroutine weakinit_p1
 
 !-------------------------------------------------------------------------------

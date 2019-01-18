@@ -138,6 +138,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   !--- limit reconstructed solution
   call limiting_p2(ucons)
+  call boundpreserve_alpha_p2(ucons)
 
 end subroutine reconstruction_p1p2
 
@@ -195,6 +196,68 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end select
 
 end subroutine limiting_p2
+
+!-------------------------------------------------------------------------------
+!----- Positivity preserving limiter
+!-------------------------------------------------------------------------------
+
+subroutine boundpreserve_alpha_p2(ucons)
+
+integer :: ie, ig, ngauss
+real*8  :: b3, &
+           carea(2), weight(2), &
+           careap(4), &
+           al1, thal, thal1, thal2, &
+           al1_min, al1_max, eps, diff, &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+  eps = 1.0d-13
+
+  ngauss = 2
+  call rutope(1, ngauss, carea, weight)
+
+  ngauss = 4
+  careap(1) = -1.0
+  careap(2:3) = carea(1:2)
+  careap(4) = 1.0
+
+  do ie = 1,imax
+
+    al1_min   = 1.0
+    al1_max   = eps
+
+    do ig = 1,ngauss
+
+      b3 = 0.5*careap(ig)*careap(ig) - 1.0/6.0
+
+      ! reconstructed volume fraction
+      al1   = ucons(1,1,ie) + careap(ig) * ucons(2,1,ie) + b3 * ucons(3,1,ie)
+
+      al1_min   = min(al1, al1_min)
+      al1_max   = max(al1, al1_max)
+
+    end do !ig
+
+    diff = al1_min-ucons(1,1,ie)
+    if (dabs(diff) .le. eps) then
+      thal1 = 1.0
+    else
+      thal1 = dabs((ucons(1,1,ie)-g_alphamin)/(diff))
+    end if
+
+    diff = al1_max-ucons(1,1,ie)
+    if (dabs(diff) .le. eps) then
+      thal2 = 1.0
+    else
+      thal2 = dabs((ucons(1,1,ie)-(1.0-g_alphamin))/(diff))
+    end if
+    thal = min(1.0, thal1, thal2)
+
+    call intfac_limiting_p2(ucons(:,:,ie), thal, thal)
+
+  end do !ie
+
+end subroutine boundpreserve_alpha_p2
 
 !-------------------------------------------------------------------------------
 !----- superbee limiter:

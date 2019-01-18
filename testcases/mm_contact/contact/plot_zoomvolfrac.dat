@@ -1,0 +1,16 @@
+#set title "Material pressures between first-order and second-order (Overbee+minmod)"
+set grid
+set xlabel 'x'
+set ylabel 'Volume-fraction'
+set yrange[0:1]
+set xrange[0.55:.85]
+set key box
+set key width 1
+set key top left
+set terminal eps enhanced
+set output 'zoomvolfrac.eps'
+plot 'p0.dat'   u 1:2 w p  lw 2 pt 6 lt 6  ps 0.5 t 'P0',\
+     'p0p1.dat' u 1:2 w p  lw 2 pt 7 lt 7  ps 0.5 t 'P0P1',\
+     'p1.dat'   u 1:2 w lp lw 2 pt 8 lt 9  ps 0.5 t 'P1',\
+     'p1p2.dat' u 1:2 w lp lw 2 pt 9 lt 10 ps 0.5 t 'P1P2'
+reset
