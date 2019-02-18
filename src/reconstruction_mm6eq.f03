@@ -198,20 +198,21 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 end subroutine limiting_p2
 
 !-------------------------------------------------------------------------------
-!----- Positivity preserving limiter
+!----- Positivity preserving limiter for p2:
 !-------------------------------------------------------------------------------
 
 subroutine boundpreserve_alpha_p2(ucons)
 
 integer :: ie, ig, ngauss
 real*8  :: b3, &
-           carea(2), weight(2), &
-           careap(4), &
+           carea(2), weight(2), careap(4), &
            al1, thal, thal1, thal2, &
-           al1_min, al1_max, eps, diff, &
+           al1_min, al1_max, eps, al_eps, diff, &
+           arho1, arho2, arho1_min, arho2_min, &
            ucons(g_tdof,g_neqns,0:imax+1)
 
   eps = 1.0d-13
+  al_eps = g_alphamin
 
   ngauss = 2
   call rutope(1, ngauss, carea, weight)
@@ -225,16 +226,22 @@ real*8  :: b3, &
 
     al1_min   = 1.0
     al1_max   = eps
+    arho1_min = 1.0d20
+    arho2_min = 1.0d20
 
     do ig = 1,ngauss
 
       b3 = 0.5*careap(ig)*careap(ig) - 1.0/6.0
 
       ! reconstructed volume fraction
-      al1   = ucons(1,1,ie) + careap(ig) * ucons(2,1,ie) + b3 * ucons(3,1,ie)
+      al1 = ucons(1,1,ie) + careap(ig) * ucons(2,1,ie) + b3 * ucons(3,1,ie)
+      arho1 = ucons(1,2,ie) + careap(ig) * ucons(2,2,ie) + b3 * ucons(3,2,ie)
+      arho2 = ucons(1,3,ie) + careap(ig) * ucons(2,3,ie) + b3 * ucons(3,3,ie)
 
-      al1_min   = min(al1, al1_min)
-      al1_max   = max(al1, al1_max)
+      al1_min = min(al1, al1_min)
+      al1_max = max(al1, al1_max)
+      arho1_min = min(arho1, arho1_min)
+      arho2_min = min(arho2, arho2_min)
 
     end do !ig
 
@@ -242,18 +249,38 @@ real*8  :: b3, &
     if (dabs(diff) .le. eps) then
       thal1 = 1.0
     else
-      thal1 = dabs((ucons(1,1,ie)-g_alphamin)/(diff))
+      thal1 = dabs((ucons(1,1,ie)-al_eps)/(diff))
     end if
 
     diff = al1_max-ucons(1,1,ie)
     if (dabs(diff) .le. eps) then
       thal2 = 1.0
     else
-      thal2 = dabs((ucons(1,1,ie)-(1.0-g_alphamin))/(diff))
+      thal2 = dabs((ucons(1,1,ie)-(1.0-al_eps))/(diff))
     end if
     thal = min(1.0, thal1, thal2)
 
-    call intfac_limiting_p2(ucons(:,:,ie), thal, thal)
+    ucons(2:3,1,ie) = thal * ucons(2:3,1,ie)
+
+    diff = arho1_min-ucons(1,2,ie)
+    if (dabs(diff) .le. eps) then
+      thal1 = 1.0
+    else
+      thal1 = dabs((ucons(1,2,ie))/(diff))
+    end if
+    thal1 = min(1.0, thal1)
+
+    ucons(2:3,2,ie) = thal1 * ucons(2:3,2,ie)
+
+    diff = arho2_min-ucons(1,3,ie)
+    if (dabs(diff) .le. eps) then
+      thal2 = 1.0
+    else
+      thal2 = dabs((ucons(1,3,ie))/(diff))
+    end if
+    thal2 = min(1.0, thal2)
+
+    ucons(2:3,3,ie) = thal2 * ucons(2:3,3,ie)
 
   end do !ie
 
@@ -337,11 +364,56 @@ end subroutine sconsistent_superbee_p1
 
 subroutine sconsistent_superbee_p2(ucons)
 
-integer :: ie, ieqn, ifc
+integer :: ie, ieqn, ifc, ig, ngauss
 real*8  :: dx2, al1, theta2(g_neqns), theta1(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: b3, &
+           carea(2), weight(2), careap(4), &
+           thal, thal1, thal2, &
+           al1_min, al1_max, eps, al_eps, diff
+
+  eps = 1.0d-13
+  al_eps = 0.01*g_alphamin
+
+  ngauss = 2
+  call rutope(1, ngauss, carea, weight)
+
+  ngauss = 4
+  careap(1) = -1.0
+  careap(2:3) = carea(1:2)
+  careap(4) = 1.0
 
   do ie = 1,imax
+
+    al1_min   = 1.0
+    al1_max   = eps
+
+    do ig = 1,ngauss
+
+      b3 = 0.5*careap(ig)*careap(ig) - 1.0/6.0
+
+      ! reconstructed volume fraction
+      al1   = ucons(1,1,ie) + careap(ig) * ucons(2,1,ie) + b3 * ucons(3,1,ie)
+
+      al1_min   = min(al1, al1_min)
+      al1_max   = max(al1, al1_max)
+
+    end do !ig
+
+    diff = al1_min-ucons(1,1,ie)
+    if (dabs(diff) .le. eps) then
+      thal1 = 1.0
+    else
+      thal1 = dabs((ucons(1,1,ie)-al_eps)/(diff))
+    end if
+
+    diff = al1_max-ucons(1,1,ie)
+    if (dabs(diff) .le. eps) then
+      thal2 = 1.0
+    else
+      thal2 = dabs((ucons(1,1,ie)-(1.0-al_eps))/(diff))
+    end if
+    thal = min(1.0, thal1, thal2)
 
     !--- 1. P2 derivative limiting
 
@@ -366,6 +438,12 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
     al1 = ucons(1,1,ie)
+
+!    if ((al1_min.le.al_eps) .or. (al1_max.ge.1.0-al_eps)) then
+!      thal = min(thal, theta1(1), theta2(1))
+!      theta1(1) = min(theta1(1),thal)
+!      theta2(1) = min(theta2(1),thal)
+!    end if
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
@@ -581,6 +659,38 @@ real*8  :: ucons(g_tdof,g_neqns,1)
   ucons(3,6,1) = - rhoe2 * ucons(3,1,1)
 
 end subroutine intfac_limiting_p2
+
+!-------------------------------------------------------------------------------
+!----- Function that consistently applies limiter to only P2 dofs for
+!----- near-interface cell
+!-------------------------------------------------------------------------------
+
+subroutine intfac_limiting_onlyp2(ucons, theta2_al)
+
+real*8,  intent(in) :: theta2_al
+real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
+real*8  :: ucons(g_tdof,g_neqns,1)
+
+  !        get primitive variables
+  al1 = ucons(1,1,1)
+  rho1 = ucons(1,2,1)/al1
+  rho2 = ucons(1,3,1)/(1.0-al1)
+  vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
+  rhoe1 = ucons(1,5,1)/al1
+  rhoe2 = ucons(1,6,1)/(1.0-al1)
+
+  !   i.   Volume fraction: Keep limiter function the same
+  ucons(3,1,1) = theta2_al * ucons(3,1,1)
+  !   ii.  Continuity:
+  ucons(3,2,1) = rho1 * ucons(3,1,1)
+  ucons(3,3,1) = - rho2 * ucons(3,1,1)
+  !   iii. Momentum:
+  ucons(3,4,1) = vel * (ucons(3,2,1) + ucons(3,3,1))
+  !   iv.  Energy:
+  ucons(3,5,1) = rhoe1 * ucons(3,1,1)
+  ucons(3,6,1) = - rhoe2 * ucons(3,1,1)
+
+end subroutine intfac_limiting_onlyp2
 
 !-------------------------------------------------------------------------------
 !----- Overbee limiter for n equations individually
