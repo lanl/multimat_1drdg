@@ -203,32 +203,85 @@ real*8  :: uprim(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
 
-  ! conserved variables
-  rho = 0.0
+  ! bulk state
+  rho = sum( ucons(g_mmi%irmin:g_mmi%irmax) )
+  u = ucons(g_mmi%imome) / rho
+  uprim(g_mmi%imome) = u
+
+  ! material states
   do i = 1,nummat
+    ! conserved variables
     almat(i) = ucons(i)
     rhomat(i) = ucons(g_mmi%irmin+i-1) / almat(i)
     rhoemat(i) = ucons(g_mmi%iemin+i-1) / almat(i)
-    rho = rho+ucons(g_mmi%irmin+i-1)
-  end do !i
-
-  ! primitive variables
-  u = ucons(g_mmi%imome) / rho
-  do i = 1,nummat
+    ! primitive variables
     pmat(i) = eos3_pr(g_gam(i), g_pc(i), rhomat(i), rhoemat(i), u)
     tmat(i) = eos3_t(g_gam(i), g_cp(i), g_pc(i), rhomat(i), rhoemat(i), u)
-  end do !i
 
-  do i = 1,nummat
     uprim(i) = almat(i)
     uprim(g_mmi%irmin+i-1) = pmat(i)
     uprim(g_mmi%iemin+i-1) = tmat(i)
   end do !i
-  uprim(g_mmi%imome) = u
 
 end associate
 
 end subroutine get_uprim_mm6eq
+
+!!----- uprimitive calculations with disappearing phase treatment
+!subroutine get_uprim_mm6eq(ucons, uprim)
+!
+!real*8, intent(in) :: ucons(g_neqns)
+!
+!integer :: i, iamax
+!real*8  :: al_eps, rhomax, rhoemax, pmax, tmax, u, rho
+!real*8  :: uprim(g_neqns)
+!real*8,dimension(g_mmi%nummat) :: almat, pmat, tmat, rhomat, rhoemat
+!
+!associate (nummat=>g_mmi%nummat)
+!
+!  al_eps = g_alphamin
+!
+!  ! bulk state
+!  rho = sum( ucons(g_mmi%irmin:g_mmi%irmax) )
+!  u = ucons(g_mmi%imome) / rho
+!  uprim(g_mmi%imome) = u
+!
+!  ! majority material
+!  almat = ucons(g_mmi%iamin:g_mmi%iamax)
+!  iamax = maxloc(almat, 1)
+!
+!  rhomax  = ucons(g_mmi%irmin+iamax-1)/almat(iamax)
+!  rhoemax = ucons(g_mmi%iemin+iamax-1)/almat(iamax)
+!  pmax = eos3_pr(g_gam(iamax), g_pc(iamax), rhomax, rhoemax, u)
+!  tmax = eos3_t(g_gam(iamax), g_cp(iamax), g_pc(iamax), rhomax, rhoemax, u)
+!
+!  ! material states
+!  do i = 1,nummat
+!    if ( (dabs(almat(i)-al_eps) .le. 0.1*al_eps) &
+!         .or. (almat(i) .le. al_eps) ) then
+!    ! disappearing phase
+!      !almat(i) = al_eps
+!      pmat(i) = pmax
+!      tmat(i) = tmax
+!
+!    else
+!    ! substantial phase
+!      rhomat(i) = ucons(g_mmi%irmin+i-1) / almat(i)
+!      rhoemat(i) = ucons(g_mmi%iemin+i-1) / almat(i)
+!      pmat(i) = eos3_pr(g_gam(i), g_pc(i), rhomat(i), rhoemat(i), u)
+!      tmat(i) = eos3_t(g_gam(i), g_cp(i), g_pc(i), rhomat(i), rhoemat(i), u)
+!
+!    end if
+!
+!    ! primitive variables
+!    uprim(i) = almat(i)
+!    uprim(g_mmi%irmin+i-1) = pmat(i)
+!    uprim(g_mmi%iemin+i-1) = tmat(i)
+!  end do !i
+!
+!end associate
+!
+!end subroutine get_uprim_mm6eq
 
 !----------------------------------------------------------------------------------------------
 

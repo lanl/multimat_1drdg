@@ -352,7 +352,7 @@ real*8  :: almat(g_mmi%nummat), pmax, tmax, &
            al_eps, rho, u, alsum, &
            ucons(g_tdof,g_neqns,0:imax+1)
 
-  al_eps = 1.0e-14
+  al_eps = g_alphamin
 
   do ie = 1,imax
 

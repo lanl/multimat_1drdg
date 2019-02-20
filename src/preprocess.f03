@@ -592,7 +592,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 3) then
 
-     g_alphamin = 1.d-10
+     g_alphamin = 1.d-12
 
      alpha_fs(1) = 1.0-2.0*g_alphamin
      alpha_fs(2) = g_alphamin
@@ -617,7 +617,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ucons(1,2,ielem) = alpha_fs(2)
            ucons(1,3,ielem) = alpha_fs(3)
 
-        elseif (xf .le. 0.6) then
+        elseif (xf .le. 0.5) then
            ucons(1,1,ielem) = g_alphamin
            ucons(1,2,ielem) = 1.0-2.0*g_alphamin
            ucons(1,3,ielem) = g_alphamin

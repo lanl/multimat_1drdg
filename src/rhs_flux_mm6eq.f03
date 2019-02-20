@@ -736,35 +736,28 @@ associate (nummat=>g_mmi%nummat)
 
   flux(:) = 0.0
 
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
+  ! material states and bulk pressure
+  p_l = 0.0
+  p_r = 0.0
   do imat = 1,nummat
   ! ul
     al_l(imat)    = ul(imat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
     em_l(imat)    = ul(g_mmi%iemin+imat-1)
-  ! ur
-    al_r(imat)    = ur(imat)
-    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
-    em_r(imat)    = ur(g_mmi%iemin+imat-1)
-  end do !imat
-  rhou_l  = ul(g_mmi%imome)
-  rhou_r  = ur(g_mmi%imome)
 
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
-
-  rho_l = sum(arhom_l)
-  rho_r = sum(arhom_r)
-  u_l    = rhou_l / rho_l
-  u_r    = rhou_r / rho_r
-
-  p_l = 0.0
-  p_r = 0.0
-  do imat = 1,nummat
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
     am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
+
+  ! ur
+    al_r(imat)    = ur(imat)
+    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
+    em_r(imat)    = ur(g_mmi%iemin+imat-1)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
@@ -772,6 +765,15 @@ associate (nummat=>g_mmi%nummat)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
   end do !imat
+
+  ! bulk state
+  rhou_l  = ul(g_mmi%imome)
+  rhou_r  = ur(g_mmi%imome)
+
+  rho_l = sum(arhom_l)
+  rho_r = sum(arhom_r)
+  u_l    = rhou_l / rho_l
+  u_r    = rhou_r / rho_r
 
   ! average states
   rho_12  = 0.5*(rho_l + rho_r)
