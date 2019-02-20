@@ -37,8 +37,16 @@ else if (i_system .eq. 0) then
    ! isothermal single-pressure two-fluid system
    g_neqns = 4
 else if (i_system .eq. 1) then
-   ! pressure non-equilibrium velocity equilibrium two-fluid system
-   g_neqns = 6
+   ! pressure non-equilibrium velocity equilibrium multi-material system
+   g_mmi%iamin = 1
+   g_mmi%iamax = g_mmi%nummat
+   g_mmi%irmin = g_mmi%iamax+1
+   g_mmi%irmax = g_mmi%irmin+g_mmi%nummat-1
+   g_mmi%imome = g_mmi%irmax+1
+   g_mmi%iemin = g_mmi%imome+1
+   g_mmi%iemax = g_mmi%iemin+g_mmi%nummat-1
+
+   g_neqns = g_mmi%iemax
 end if
 
 if (g_nsdiscr .eq. 0) then
@@ -151,6 +159,9 @@ close(33)
 deallocate(uprim, uprimn, &
            ucons, uconsn, &
            err_log)
+
+deallocate(g_gam, g_cp, g_pc, &
+           alpha_fs, rhomat_fs)
 
 deallocate(coord)
 

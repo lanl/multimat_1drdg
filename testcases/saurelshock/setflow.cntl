@@ -7,11 +7,12 @@
 1               / Numerical Flux (1: Edwards' LDFSS)
 ----------------------------------------------------------------------------------------------
 0       0.0                / pressure relaxation (0: no p-relx) and scaling
+2                          / number of materials: nummat
 1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
 2.8     0.0     4186.0     / material-2 properties: gamma, P_c, C_p
 ----------------------------------------------------------------------------------------------
 0.0             / Freestream velocity
-0.0      0.0    / Freestream pressures for 2 phases
+0.0             / Freestream pressure
 ----------------------------------------------------------------------------------------------
 1    0   0      / Space discretization, limiter and material interface detection
 5.0d-09         / Time-step size

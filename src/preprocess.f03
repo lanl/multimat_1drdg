@@ -30,6 +30,16 @@ else if (i_system .eq. 1) then
   write(*,*) " Multi-material system: "
   write(*,*) " Pressure non-equilibrium " 
   write(*,*) " Velocity equilibrium "
+
+  write(*,*) "  Indices used: "
+  write(*,*) "    nummat:", g_mmi%nummat
+  write(*,*) "    iamin:", g_mmi%iamin
+  write(*,*) "    iamax:", g_mmi%iamax
+  write(*,*) "    irmin:", g_mmi%irmin
+  write(*,*) "    irmax:", g_mmi%irmax
+  write(*,*) "    imome:", g_mmi%imome
+  write(*,*) "    iemin:", g_mmi%iemin
+  write(*,*) "    iemax:", g_mmi%iemax
 end if
 
 write(*,*) " "
@@ -79,7 +89,7 @@ end subroutine screen_output
 
 subroutine read_cntl()
 
-integer :: i
+integer :: imat
 
         open(12, file = 'setflow.cntl')
 
@@ -92,11 +102,18 @@ integer :: i
         read(12,*) i_flux
         read(12,*) ! blank line
         read(12,*) g_nprelx, g_prelct
-        read(12,*) g_gam1, g_pc1, g_cp1
-        read(12,*) g_gam2, g_pc2, g_cp2
+        read(12,*) g_mmi%nummat
+
+        ! allocate mat-property arrays
+        allocate(g_gam(g_mmi%nummat), g_cp(g_mmi%nummat), g_pc(g_mmi%nummat), &
+                 alpha_fs(g_mmi%nummat), rhomat_fs(g_mmi%nummat))
+
+        do imat = 1,g_mmi%nummat
+          read(12,*) g_gam(imat), g_pc(imat), g_cp(imat)
+        end do !imat
         read(12,*) ! blank line
         read(12,*) u_fs
-        read(12,*) pr1_fs, pr2_fs
+        read(12,*) pr_fs
         read(12,*) ! blank line
         read(12,*) g_nsdiscr, g_nlim, g_nmatint
         read(12,*) dt_u
@@ -143,10 +160,14 @@ end subroutine gen_mesh
 
 subroutine nondimen_mm6eq()
 
-  a_nd = dsqrt(pr1_fs/rho1_fs)
-  t_nd = t1_fs
-  p_nd = pr1_fs
-  rho_nd = rho1_fs
+integer :: imat
+
+associate (nummat=>g_mmi%nummat)
+
+  a_nd = dsqrt(pr_fs/rhomat_fs(1))
+  t_nd = t_fs
+  p_nd = pr_fs
+  rho_nd = rhomat_fs(1)
 
   write(*,*)" Reference quantities used in non-dimensionalization:"
   write(*,*)"  Speed of sound: ", a_nd
@@ -155,19 +176,17 @@ subroutine nondimen_mm6eq()
   write(*,*)"  Density:        ", rho_nd
 
   !--- nondimensionalization
-  rho1_fs = rho1_fs/rho_nd
-  rho2_fs = rho2_fs/rho_nd
-  pr1_fs = pr1_fs/p_nd
-  pr2_fs = pr2_fs/p_nd
-  t1_fs = t1_fs/t_nd
-  t2_fs = t2_fs/t_nd
+  do imat = 1,nummat
+    rhomat_fs(imat) = rhomat_fs(imat)/rho_nd
+    g_pc(imat) = g_pc(imat)/p_nd
+    g_cp(imat) = g_cp(imat)/ (a_nd*a_nd/t_nd)
+  end do !imat
+  pr_fs = pr_fs/p_nd
+  t_fs = t_fs/t_nd
   u_fs = u_fs/a_nd
   dt_u = dt_u*a_nd
 
-  g_pc1 = g_pc1/p_nd
-  g_pc2 = g_pc2/p_nd
-  g_cp1 = g_cp1/ (a_nd*a_nd/t_nd)
-  g_cp2 = g_cp2/ (a_nd*a_nd/t_nd)
+end associate
 
 end subroutine nondimen_mm6eq
 
@@ -346,7 +365,7 @@ end subroutine init_soln_4eq
 
 subroutine init_soln_mm6eq(ucons, uconsn)
 
-integer :: i, ielem
+integer :: imat, ielem
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
@@ -357,11 +376,11 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      g_alphamin = 1.d-10
 
-     alpha1_fs = g_alphamin
-     t1_fs = 300.0
-     t2_fs = 300.0
-     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
-     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
+     t_fs = 300.0
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 
      call nondimen_mm6eq()
 
@@ -385,25 +404,25 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      g_alphamin = 1.d-10
 
-     alpha1_fs = g_alphamin
-     t1_fs = 300.0
-     t2_fs = 300.0
-     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
-     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
+     t_fs = 300.0
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 
      call nondimen_mm6eq()
 
      ! left state
-     p1l = pr1_fs
-     p2l = pr2_fs
-     t1l = t1_fs
-     t2l = t2_fs
+     p1l = pr_fs
+     p2l = pr_fs
+     t1l = t_fs
+     t2l = t_fs
      ul  = u_fs
      ! right state
-     p1r = pr1_fs
-     p2r = pr2_fs
-     t1r = t1_fs
-     t2r = t2_fs
+     p1r = pr_fs
+     p2r = pr_fs
+     t1r = t_fs
+     t2r = t_fs
      ur  = u_fs
 
      do ielem = 0,imax+1
@@ -411,23 +430,25 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         xf = coord(ielem)
 
         if (xf .le. 0.5) then
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = alpha1_fs
-           ucons(1,2,ielem) = alpha1_fs * rho1
-           ucons(1,3,ielem) = (1.0-alpha1_fs) * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alpha1_fs * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2l, t2l)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = 1.0-alpha_fs(1)
+           ucons(1,3,ielem) = alpha_fs(1) * rho1
+           ucons(1,4,ielem) = (1.0-alpha_fs(1)) * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+           ucons(1,7,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(2), g_pc(2), p2l, rho2, ul)
         else
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = 1.0-alpha1_fs
-           ucons(1,2,ielem) = (1.0-alpha1_fs) * rho1
-           ucons(1,3,ielem) = alpha1_fs * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = alpha1_fs * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2r, t2r)
+           ucons(1,1,ielem) = 1.0-alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1)
+           ucons(1,3,ielem) = (1.0-alpha_fs(1)) * rho1
+           ucons(1,4,ielem) = alpha_fs(1) * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+           ucons(1,7,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(2), g_pc(2), p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -445,28 +466,27 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      g_alphamin = 1.d-10
 
-     alpha1_fs = g_alphamin
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
      u_fs = 0.0
-     pr1_fs = 1.0
-     pr2_fs = 1.0
-     t1_fs = 3.484321d-3
-     t2_fs = 3.484321d-3
-     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
-     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+     pr_fs = 1.0
+     t_fs = 3.484321d-3
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 
      call nondimen_mm6eq()
 
      ! left state
-     p1l = pr1_fs
-     p2l = pr2_fs
-     t1l = t1_fs
-     t2l = t2_fs
+     p1l = pr_fs
+     p2l = pr_fs
+     t1l = t_fs
+     t2l = t_fs
      ul  = u_fs
      ! right state
-     p1r = 0.1*pr1_fs
-     p2r = 0.1*pr2_fs
-     t1r = 0.8*t1_fs
-     t2r = 0.8*t2_fs
+     p1r = 0.1*pr_fs
+     p2r = 0.1*pr_fs
+     t1r = 0.8*t_fs
+     t2r = 0.8*t_fs
      ur  = u_fs
 
      do ielem = 0,imax+1
@@ -474,23 +494,25 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         xf = coord(ielem)
 
         if (xf .le. 0.5) then
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
-           ucons(1,1,ielem) = 1.0-alpha1_fs
-           ucons(1,2,ielem) = (1.0-alpha1_fs) * rho1
-           ucons(1,3,ielem) = alpha1_fs * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = alpha1_fs * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2l, t2l)
+           ucons(1,1,ielem) = 1.0-alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1)
+           ucons(1,3,ielem) = (1.0-alpha_fs(1)) * rho1
+           ucons(1,4,ielem) = alpha_fs(1) * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+           ucons(1,7,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(2), g_pc(2), p2l, rho2, ul)
         else
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
-           ucons(1,1,ielem) = alpha1_fs
-           ucons(1,2,ielem) = alpha1_fs * rho1
-           ucons(1,3,ielem) = (1.0-alpha1_fs) * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = alpha1_fs * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = (1.0-alpha1_fs) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2r, t2r)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = 1.0-alpha_fs(1)
+           ucons(1,3,ielem) = alpha_fs(1) * rho1
+           ucons(1,4,ielem) = (1.0-alpha_fs(1)) * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+           ucons(1,7,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(2), g_pc(2), p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -508,28 +530,27 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      g_alphamin = 1.d-10
 
-     alpha1_fs = g_alphamin
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
      u_fs = 0.0
-     pr1_fs = 1.0d9 !2.0d8
-     pr2_fs = 1.0d9 !2.0d8
-     t1_fs = 494.646 !247.323
-     t2_fs = 494.646 !247.323
-     rho1_fs = eos3_density(g_gam1, g_cp1, g_pc1, pr1_fs, t1_fs)
-     rho2_fs = eos3_density(g_gam2, g_cp2, g_pc2, pr2_fs, t2_fs)
+     pr_fs = 1.0d9 !2.0d8
+     t_fs = 494.646 !247.323
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 
      call nondimen_mm6eq()
 
      ! left state
-     p1l = pr1_fs
-     p2l = pr2_fs
-     t1l = t1_fs
-     t2l = t2_fs
+     p1l = pr_fs
+     p2l = pr_fs
+     t1l = t_fs
+     t2l = t_fs
      ul  = u_fs
      ! right state
-     p1r = pr1_fs/1.0d4 !pr1_fs/2.0d3
-     p2r = pr2_fs/1.0d4 !pr2_fs/2.0d3
-     t1r = 0.070441*t1_fs !0.028176*t1_fs
-     t2r = 0.070441*t2_fs !0.028176*t2_fs
+     p1r = pr_fs/1.0d4 !pr_fs/2.0d3
+     p2r = pr_fs/1.0d4 !pr_fs/2.0d3
+     t1r = 0.070441*t_fs !0.028176*t_fs
+     t2r = 0.070441*t_fs !0.028176*t_fs
      ur  = u_fs
 
      do ielem = 0,imax+1
@@ -537,24 +558,83 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         xf = coord(ielem)
 
         if (xf .le. 0.75) then
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1l, t1l)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2l, t2l)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2l, t2l)
            ucons(1,1,ielem) = 1.0-g_alphamin
-           ucons(1,2,ielem) = (1.0-g_alphamin) * rho1
-           ucons(1,3,ielem) = g_alphamin * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam1, g_pc1, p1l, rho1, ul)
-           ucons(1,6,ielem) = g_alphamin * eos3_rhoe(g_gam2, g_pc2, p2l, rho2, ul)
+           ucons(1,2,ielem) = g_alphamin
+           ucons(1,3,ielem) = (1.0-g_alphamin) * rho1
+           ucons(1,4,ielem) = g_alphamin * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+           ucons(1,7,ielem) = g_alphamin * eos3_rhoe(g_gam(2), g_pc(2), p2l, rho2, ul)
         else
-           rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1r, t1r)
-           rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2r, t2r)
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2r, t2r)
            ucons(1,1,ielem) = g_alphamin
-           ucons(1,2,ielem) = g_alphamin * rho1
-           ucons(1,3,ielem) = (1.0-g_alphamin) * rho2
-           ucons(1,4,ielem) = (ucons(1,2,ielem)+ucons(1,3,ielem)) * u_fs
-           ucons(1,5,ielem) = g_alphamin * eos3_rhoe(g_gam1, g_pc1, p1r, rho1, ur)
-           ucons(1,6,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam2, g_pc2, p2r, rho2, ur)
+           ucons(1,2,ielem) = 1.0-g_alphamin
+           ucons(1,3,ielem) = g_alphamin * rho1
+           ucons(1,4,ielem) = (1.0-g_alphamin) * rho2
+           ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
+           ucons(1,6,ielem) = g_alphamin * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+           ucons(1,7,ielem) = (1.0-g_alphamin) * eos3_rhoe(g_gam(2), g_pc(2), p2r, rho2, ur)
         end if
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
+  !--- 3-material SCD
+  !----------
+  else if (iprob .eq. 3) then
+
+     g_alphamin = 1.d-10
+
+     alpha_fs(1) = 1.0-2.0*g_alphamin
+     alpha_fs(2) = g_alphamin
+     alpha_fs(3) = g_alphamin
+     t_fs = 300.0
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.4) then
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(2)
+           ucons(1,3,ielem) = alpha_fs(3)
+
+        elseif (xf .le. 0.6) then
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = 1.0-2.0*g_alphamin
+           ucons(1,3,ielem) = g_alphamin
+
+        else
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = g_alphamin
+           ucons(1,3,ielem) = 1.0-2.0*g_alphamin
+
+        end if
+
+        do imat = 1,g_mmi%nummat
+           ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+           ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+             * eos3_rhoe(g_gam(imat), g_pc(imat), p1l, rhomat_fs(imat), ul)
+        end do !imat
+        ucons(1,g_mmi%imome,ielem) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * u_fs
 
         if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
@@ -690,12 +770,13 @@ subroutine gnuplot_flow_mm6eq(ucons, itstep)
 integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-integer :: ielem
-real*8  :: xcc, pmix, tmix, rhomix, e_mix, &
-           arho1, arho2, arhoe1, arhoe2, alp2, trcell
+integer :: ielem, imat
+real*8  :: xcc, pmix, tmix, rhomix, emix, trcell
 real*8  :: uconsi(g_neqns), uprimi(g_neqns)
 
 character(len=100) :: filename2,filename3
+
+associate (nummat=>g_mmi%nummat)
 
   write(filename2,'(1I50)')itstep
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
@@ -720,16 +801,20 @@ character(len=100) :: filename2,filename3
      call get_uprim_mm6eq(uconsi, uprimi)
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
-     alp2 = 1.0 - uprimi(1)
-     arho1 = ucons(1,2,ielem)
-     arho2 = ucons(1,3,ielem)
-     rhomix = ucons(1,2,ielem) + ucons(1,3,ielem)
-     arhoe1 = ucons(1,5,ielem)
-     arhoe2 = ucons(1,6,ielem)
-     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
-     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
-     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
-              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     rhomix = 0.0
+     pmix = 0.0
+     tmix = 0.0
+     emix = 0.0
+     do imat = 1,nummat
+        rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        emix = emix + (uconsi(g_mmi%iemin+imat-1) &
+                       - 0.5*uconsi(g_mmi%irmin+imat-1) &
+                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+     end do !imat
+     emix = emix/rhomix
 
      if ( (uprimi(1) .gt. 10.0*g_alphamin) &
          .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
@@ -738,22 +823,24 @@ character(len=100) :: filename2,filename3
        trcell = 0.0
      end if
 
-     write(23,'(12E16.6)') xcc, &             !1
-                           uprimi(1), &       !2
-                           rhomix*rho_nd, &   !3
-                           uprimi(4)*a_nd , & !4
-                           pmix*p_nd, &       !5
-                           tmix*t_nd, &       !6
-                           uprimi(2)*p_nd, &  !7
-                           uprimi(3)*p_nd, &  !8
-                           uprimi(5)*t_nd, &  !9
-                           uprimi(6)*t_nd, &  !10
-                           e_mix, &           !11
-                           trcell             !12
+     write(23,'(12E16.6)') xcc, &                         !1
+                           uprimi(1), &                   !2
+                           rhomix*rho_nd, &               !3
+                           uprimi(g_mmi%imome)*a_nd , &   !4
+                           pmix*p_nd, &                   !5
+                           tmix*t_nd, &                   !6
+                           uprimi(g_mmi%irmin)*p_nd, &    !7
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
+                           uprimi(g_mmi%iemin)*t_nd, &    !9
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
+                           emix, &                        !11
+                           trcell                         !12
 
   end do !ielem
 
   close(23)
+
+end associate
 
 end subroutine gnuplot_flow_mm6eq
 
@@ -764,12 +851,13 @@ subroutine gnuplot_flow_p1_mm6eq(ucons, itstep)
 integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-integer :: ielem
-real*8  :: xp, pmix, tmix, rhomix, e_mix, &
-           arho1, arho2, arhoe1, arhoe2, alp2, trcell
+integer :: ielem, imat
+real*8  :: xp, pmix, tmix, rhomix, emix, trcell
 real*8  :: uconsi(g_neqns), uprimi(g_neqns)
 
 character(len=100) :: filename2,filename3
+
+associate (nummat=>g_mmi%nummat)
 
   write(filename2,'(1I50)')itstep
   filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
@@ -814,16 +902,20 @@ character(len=100) :: filename2,filename3
      call get_uprim_mm6eq(uconsi, uprimi)
 
      xp = coord(ielem)
-     alp2 = 1.0 - uprimi(1)
-     arho1 = uconsi(2)
-     arho2 = uconsi(3)
-     rhomix = uconsi(2) + uconsi(3)
-     arhoe1 = uconsi(5)
-     arhoe2 = uconsi(6)
-     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
-     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
-     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
-              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     rhomix = 0.0
+     pmix = 0.0
+     tmix = 0.0
+     emix = 0.0
+     do imat = 1,nummat
+        rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        emix = emix + (uconsi(g_mmi%iemin+imat-1) &
+                       - 0.5*uconsi(g_mmi%irmin+imat-1) &
+                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+     end do !imat
+     emix = emix/rhomix
 
      if ( (uconsi(1) .gt. 10.0*g_alphamin) &
          .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
@@ -832,27 +924,27 @@ character(len=100) :: filename2,filename3
        trcell = 0.0
      end if
 
-     write(24,'(12E16.6)') xp, &              !1
-                           uconsi(1), &       !2
-                           rhomix*rho_nd, &   !3
-                           uprimi(4)*a_nd , & !4
-                           pmix*p_nd, &       !5
-                           tmix*t_nd, &       !6
-                           uprimi(2)*p_nd, &  !7
-                           uprimi(3)*p_nd, &  !8
-                           uprimi(5)*t_nd, &  !9
-                           uprimi(6)*t_nd, &  !10
-                           e_mix, &           !11
-                           trcell             !12
+     write(24,'(12E16.6)') xp, &                          !1
+                           uconsi(1), &                   !2
+                           rhomix*rho_nd, &               !3
+                           uprimi(g_mmi%imome)*a_nd , &   !4
+                           pmix*p_nd, &                   !5
+                           tmix*t_nd, &                   !6
+                           uprimi(g_mmi%irmin)*p_nd, &    !7
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
+                           uprimi(g_mmi%iemin)*t_nd, &    !9
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
+                           emix, &                        !11
+                           trcell                         !12
 
-     write(25,'(8E16.6)') xp, &                                 !1
-                          uconsi(2), &                          !2
-                          uconsi(3), &                          !3
-                          uconsi(4), &                          !4
-                          uconsi(5), &                          !5
-                          uconsi(6), &                          !6
-                          uconsi(5)-0.5*uconsi(2)*uprimi(4), &  !7
-                          uconsi(6)-0.5*uconsi(3)*uprimi(4)     !8
+     write(25,'(8E16.6)') xp, &                                                               !1
+                          uconsi(g_mmi%irmin), &                                              !2
+                          uconsi(g_mmi%irmin+1), &                                            !3
+                          uconsi(g_mmi%imome), &                                              !4
+                          uconsi(g_mmi%iemin), &                                              !5
+                          uconsi(g_mmi%iemin+1), &                                            !6
+                          uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
+                          uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
 
      ! right face
      if (g_nsdiscr .gt. 12) then
@@ -865,16 +957,20 @@ character(len=100) :: filename2,filename3
      call get_uprim_mm6eq(uconsi, uprimi)
 
      xp = coord(ielem+1)
-     alp2 = 1.0 - uprimi(1)
-     arho1 = uconsi(2)
-     arho2 = uconsi(3)
-     rhomix = uconsi(2) + uconsi(3)
-     arhoe1 = uconsi(5)
-     arhoe2 = uconsi(6)
-     pmix = uprimi(1)*uprimi(2) + alp2*uprimi(3)
-     tmix = uprimi(1)*uprimi(5) + alp2*uprimi(6)
-     e_mix = ((arhoe1 - 0.5*arho1*uprimi(4)*uprimi(4)) + &
-              (arhoe2 - 0.5*arho2*uprimi(4)*uprimi(4))) / rhomix
+
+     rhomix = 0.0
+     pmix = 0.0
+     tmix = 0.0
+     emix = 0.0
+     do imat = 1,nummat
+        rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        emix = emix + (uconsi(g_mmi%iemin+imat-1) &
+                       - 0.5*uconsi(g_mmi%irmin+imat-1) &
+                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+     end do !imat
+     emix = emix/rhomix
 
      if ( (uconsi(1) .gt. 10.0*g_alphamin) &
          .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
@@ -883,27 +979,27 @@ character(len=100) :: filename2,filename3
        trcell = 0.0
      end if
 
-     write(24,'(12E16.6)') xp, &              !1
-                           uconsi(1), &       !2
-                           rhomix*rho_nd, &   !3
-                           uprimi(4)*a_nd , & !4
-                           pmix*p_nd, &       !5
-                           tmix*t_nd, &       !6
-                           uprimi(2)*p_nd, &  !7
-                           uprimi(3)*p_nd, &  !8
-                           uprimi(5)*t_nd, &  !9
-                           uprimi(6)*t_nd, &  !10
-                           e_mix, &           !11
-                           trcell             !12
+     write(24,'(12E16.6)') xp, &                          !1
+                           uconsi(1), &                   !2
+                           rhomix*rho_nd, &               !3
+                           uprimi(g_mmi%imome)*a_nd , &   !4
+                           pmix*p_nd, &                   !5
+                           tmix*t_nd, &                   !6
+                           uprimi(g_mmi%irmin)*p_nd, &    !7
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
+                           uprimi(g_mmi%iemin)*t_nd, &    !9
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
+                           emix, &                        !11
+                           trcell                         !12
 
-     write(25,'(8E16.6)') xp, &                                 !1
-                          uconsi(2), &                          !2
-                          uconsi(3), &                          !3
-                          uconsi(4), &                          !4
-                          uconsi(5), &                          !5
-                          uconsi(6), &                          !6
-                          uconsi(5)-0.5*uconsi(2)*uprimi(4), &  !7
-                          uconsi(6)-0.5*uconsi(3)*uprimi(4)     !8
+     write(25,'(8E16.6)') xp, &                                                               !1
+                          uconsi(g_mmi%irmin), &                                              !2
+                          uconsi(g_mmi%irmin+1), &                                            !3
+                          uconsi(g_mmi%imome), &                                              !4
+                          uconsi(g_mmi%iemin), &                                              !5
+                          uconsi(g_mmi%iemin+1), &                                            !6
+                          uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
+                          uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
 
      write(24,*) " "
 
@@ -913,6 +1009,8 @@ character(len=100) :: filename2,filename3
 
   close(24)
   close(25)
+
+end associate
 
 end subroutine gnuplot_flow_p1_mm6eq
 

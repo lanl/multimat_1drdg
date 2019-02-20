@@ -7,11 +7,12 @@
 2               / Numerical Flux (1:LLF; 2:AUSM+)
 ----------------------------------------------------------------------------------------------
 0       0.0                / pressure relaxation (0: no p-relx) and scaling
+2                          / number of materials: nummat
 1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
 1.4     0.0     1004.5     / material-2 properties: gamma, P_c, C_p
 ----------------------------------------------------------------------------------------------
 0.0             / Freestream velocity
-1.0      1.0    / Freestream pressures for 2 phases
+1.0             / Freestream pressure
 ----------------------------------------------------------------------------------------------
 11   3   1      / Space discretization, limiter and material interface detection
 1.0d-04         / Time-step size

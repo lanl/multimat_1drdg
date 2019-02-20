@@ -196,62 +196,37 @@ subroutine get_uprim_mm6eq(ucons, uprim)
 
 real*8, intent(in) :: ucons(g_neqns)
 
-real*8  :: al1, p1, t1, rho1, rhoe1, u, rho, &
-           al2, p2, t2, rho2, rhoe2
+integer :: i
+real*8  :: almat(g_mmi%nummat), pmat(g_mmi%nummat), tmat(g_mmi%nummat), &
+           rhomat(g_mmi%nummat), rhoemat(g_mmi%nummat), u, rho
 real*8  :: uprim(g_neqns)
 
+associate (nummat=>g_mmi%nummat)
+
   ! conserved variables
-  al1 = ucons(1)
-  al2 = 1.0 -al1
-  rho1 = ucons(2) / al1
-  rho2 = ucons(3) / al2
-  rhoe1 = ucons(5) / al1
-  rhoe2 = ucons(6) / al2
+  rho = 0.0
+  do i = 1,nummat
+    almat(i) = ucons(i)
+    rhomat(i) = ucons(g_mmi%irmin+i-1) / almat(i)
+    rhoemat(i) = ucons(g_mmi%iemin+i-1) / almat(i)
+    rho = rho+ucons(g_mmi%irmin+i-1)
+  end do !i
 
   ! primitive variables
-  rho  = ucons(2) + ucons(3)
-  u = ucons(4) / rho
-  p1 = eos3_pr(g_gam1, g_pc1, rho1, rhoe1, u)
-  p2 = eos3_pr(g_gam2, g_pc2, rho2, rhoe2, u)
-  t1 = eos3_t(g_gam1, g_cp1, g_pc1, rho1, rhoe1, u)
-  t2 = eos3_t(g_gam2, g_cp2, g_pc2, rho2, rhoe2, u)
+  u = ucons(g_mmi%imome) / rho
+  do i = 1,nummat
+    pmat(i) = eos3_pr(g_gam(i), g_pc(i), rhomat(i), rhoemat(i), u)
+    tmat(i) = eos3_t(g_gam(i), g_cp(i), g_pc(i), rhomat(i), rhoemat(i), u)
+  end do !i
 
-  !--- phase-1 disappearing
-  if ( (dabs(al1-g_alphamin) .le. 0.1*g_alphamin) .or. &
-       (al1 .lt. g_alphamin) ) then
+  do i = 1,nummat
+    uprim(i) = almat(i)
+    uprim(g_mmi%irmin+i-1) = pmat(i)
+    uprim(g_mmi%iemin+i-1) = tmat(i)
+  end do !i
+  uprim(g_mmi%imome) = u
 
-    ! copy pressure and temperature
-    p1 = p2
-    t1 = t2
-
-    ! consistently update derived quantities
-    rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
-    rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
-
-    al1 = g_alphamin
-
-  !--- phase-2 disappearing
-  elseif ( (dabs(al2-g_alphamin) .le. 0.1*g_alphamin) .or. &
-           (al2 .lt. g_alphamin) ) then
-
-    ! copy pressure and temperature
-    p2 = p1
-    t2 = t1
-
-    ! consistently update derived quantities
-    rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
-    rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
-
-    al1 = 1.0-g_alphamin
-
-  end if
-
-  uprim(1) = al1
-  uprim(2) = p1
-  uprim(3) = p2
-  uprim(4) = u
-  uprim(5) = t1
-  uprim(6) = t2
+end associate
 
 end subroutine get_uprim_mm6eq
 

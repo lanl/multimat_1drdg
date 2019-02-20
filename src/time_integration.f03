@@ -176,7 +176,6 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
         end do !ielem
 
         call get_bc_mm6eq(ucons)
-        !call blend_disphase_mm6eq(ucons)
         call ignore_tinyphase_mm6eq(ucons)
 
         uconsi = ucons
@@ -341,181 +340,69 @@ real*8  :: alpha1, alpha2, u1, u2, pres, xi, gxi, rho, epsmin, epsmax, &
 end subroutine blend_disphase
 
 !----------------------------------------------------------------------------------------------
-!----- Disappearing phase treatment for mm6eq:
-!----- using blending
-!----------------------------------------------------------------------------------------------
-
-subroutine blend_disphase_mm6eq(ucons)
-
-integer :: ie
-real*8  :: al1, p1, t1, rho1, rhoe1, u, &
-           al2, p2, t2, rho2, rhoe2, xi, gxi, rho, epsmin, epsmax, &
-           uconsi(g_neqns), uprimi(g_neqns), &
-           ucons(g_tdof,g_neqns,0:imax+1)
-
-  epsmin = 1.0  * g_alphamin
-  epsmax = 10.0 * g_alphamin
-
-  do ie = 1,imax
-
-    ! conserved variables
-    al1 = ucons(1,1,ie)
-    al2 = 1.0 -al1
-    rho1 = ucons(1,2,ie) / al1
-    rho2 = ucons(1,3,ie) / al2
-    rhoe1 = ucons(1,5,ie) / al1
-    rhoe2 = ucons(1,6,ie) / al2
-
-    uconsi(:) = ucons(1,:,ie)
-    call get_uprim_mm6eq(uconsi, uprimi)
-
-    ! primitive variables
-    u = uprimi(4)
-    p1 = uprimi(2)
-    p2 = uprimi(3)
-    t1 = uprimi(5)
-    t2 = uprimi(6)
-  
-    !--- phase-1 disappearing
-    if (al1 .lt. epsmax) then
-
-      if ((al1 .ge. epsmin)) then
-            xi = (al1 - epsmin)/(epsmax - epsmin)
-      elseif (al1 .lt. epsmin) then
-            al1 = epsmin
-            xi = 0.0
-      end if
-
-      ! blend pressure and temperature
-      Gxi = - xi*xi * ((2.0 * xi) - 3.0)
-      p1 = (Gxi*p1) + ((1.0 - Gxi)*p2)
-      t1 = (Gxi*t1) + ((1.0 - Gxi)*t2)
-
-      ! consistently update derived quantities
-      rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
-      rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
-
-      ! update conserved variables
-      ucons(1,2,ie) = al1*rho1
-      ucons(1,5,ie) = al1*rhoe1
-
-    !--- phase-2 disappearing
-    elseif (al2 .lt. epsmax) then
-
-      if ((al2 .ge. epsmin)) then
-            xi = (al2 - epsmin)/(epsmax - epsmin)
-      elseif (al2 .lt. epsmin) then
-            al2 = epsmin
-            xi = 0.0
-      end if
-
-      ! blend pressure and temperature
-      Gxi = - xi*xi * ((2.0 * xi) - 3.0)
-      p2 = (Gxi*p2) + ((1.0 - Gxi)*p1)
-      t2 = (Gxi*t2) + ((1.0 - Gxi)*t1)
-
-      ! consistently update derived quantities
-      rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
-      rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
-
-      ucons(1,3,ie) = al2*rho2
-      ucons(1,6,ie) = al2*rhoe2
-
-    end if
-
-  end do !ie
-
-end subroutine blend_disphase_mm6eq
-
-!----------------------------------------------------------------------------------------------
 !----- Tiny phase treatment for mm6eq:
 !----- ignore it
 !----------------------------------------------------------------------------------------------
 
 subroutine ignore_tinyphase_mm6eq(ucons)
 
-integer :: ie
-real*8  :: al1, p1, t1, rho1, rhoe1, u, &
-           al2, p2, t2, rho2, rhoe2, &
-           al_eps, &
-           uconsi(g_neqns), uprimi(g_neqns), &
+integer :: ie, i, iamax
+real*8  :: almat(g_mmi%nummat), pmax, tmax, &
+           rhomat, rhoemat, &
+           al_eps, rho, u, alsum, &
            ucons(g_tdof,g_neqns,0:imax+1)
 
   al_eps = 1.0e-14
 
   do ie = 1,imax
 
-    ! conserved variables
-    al1 = ucons(1,1,ie)
-    al2 = 1.0 -al1
-    rho1 = ucons(1,2,ie) / al1
-    rho2 = ucons(1,3,ie) / al2
-    rhoe1 = ucons(1,5,ie) / al1
-    rhoe2 = ucons(1,6,ie) / al2
+    almat = ucons(1,g_mmi%iamin:g_mmi%iamax,ie)
+    iamax = maxloc(almat, 1)
 
-    uconsi(:) = ucons(1,:,ie)
-    call get_uprim_mm6eq(uconsi, uprimi)
+    rhomat  = ucons(1,g_mmi%irmin+iamax-1,ie)/almat(iamax)
+    rhoemat = ucons(1,g_mmi%iemin+iamax-1,ie)/almat(iamax)
+    rho     = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
+    u       = ucons(1,g_mmi%imome,ie)/rho
+    pmax = eos3_pr(g_gam(iamax), g_pc(iamax), rhomat, rhoemat, u)
+    tmax = eos3_t(g_gam(iamax), g_cp(iamax), g_pc(iamax), rhomat, rhoemat, u)
 
-    ! primitive variables
-    u = uprimi(4)
-    p1 = uprimi(2)
-    p2 = uprimi(3)
-    t1 = uprimi(5)
-    t2 = uprimi(6)
-  
-    !--- phase-1 disappearing
-    if (al1 .le. al_eps) then
+    alsum = 0.0
+    do i = 1,g_mmi%nummat
+      !--- phase-i disappearing
+      !if ( (dabs(almat(i)-g_alphamin) .le. 0.1*g_alphamin) .or. &
+      !     (almat(i) .lt. g_alphamin) ) then
+      if (almat(i) .le. al_eps) then
 
-      ! copy pressure and temperature
-      p1 = p2
-      t1 = t2
+        ! consistently update derived quantities
+        rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), pmax, tmax)
+        rhoemat = eos3_rhoe(g_gam(i), g_pc(i), pmax, rhomat, u)
 
-      ! consistently update derived quantities
-      rho1 = eos3_density(g_gam1, g_cp1, g_pc1, p1, t1);
-      rhoe1 = eos3_rhoe(g_gam1, g_pc1, p1, rho1, u)
+        almat(i) = al_eps
 
-      ! update conserved variables
-      ucons(1,1,ie) = al_eps
-      ucons(1,2,ie) = al_eps*rho1
-      ucons(1,5,ie) = al_eps*rhoe1
+        ! update conserved variables
+        ucons(1,i,ie) = almat(i)
+        ucons(1,g_mmi%irmin+i-1,ie) = almat(i)*rhomat
+        ucons(1,g_mmi%iemin+i-1,ie) = almat(i)*rhoemat
 
-      if (g_nsdiscr .ge. 11) then
-        ucons(2,1,ie) = 0.0
-        ucons(2,2,ie) = 0.0
-        ucons(2,5,ie) = 0.0
-        if (g_nsdiscr .ge. 12) then
-          ucons(3,1,ie) = 0.0
-          ucons(3,2,ie) = 0.0
-          ucons(3,5,ie) = 0.0
+        if (g_nsdiscr .ge. 11) then
+          ucons(2,i,ie) = 0.0
+          ucons(2,g_mmi%irmin+i-1,ie) = 0.0
+          ucons(2,g_mmi%iemin+i-1,ie) = 0.0
+          if (g_nsdiscr .ge. 12) then
+            ucons(3,i,ie) = 0.0
+            ucons(3,g_mmi%irmin+i-1,ie) = 0.0
+            ucons(3,g_mmi%iemin+i-1,ie) = 0.0
+          end if
         end if
+
       end if
 
-    !--- phase-2 disappearing
-    elseif (al2 .le. al_eps) then
+      alsum = alsum+almat(i)
+    end do !i
+    almat = ucons(1,1:g_mmi%nummat,ie)/alsum
 
-      ! copy pressure and temperature
-      p2 = p1
-      t2 = t1
-
-      ! consistently update derived quantities
-      rho2 = eos3_density(g_gam2, g_cp2, g_pc2, p2, t2);
-      rhoe2 = eos3_rhoe(g_gam2, g_pc2, p2, rho2, u)
-
-      ! update conserved variables
-      ucons(1,1,ie) = 1.0-al_eps
-      ucons(1,3,ie) = al_eps*rho2
-      ucons(1,6,ie) = al_eps*rhoe2
-
-      if (g_nsdiscr .ge. 11) then
-        ucons(2,3,ie) = 0.0
-        ucons(2,6,ie) = 0.0
-        if (g_nsdiscr .ge. 12) then
-          ucons(3,3,ie) = 0.0
-          ucons(3,6,ie) = 0.0
-        end if
-      end if
-
-    end if
+    !if (dabs(alsum-1.0) .gt. al_eps) write(*,*) &
+    !  "WARNING: volumefraction sum =", alsum, " element:", ie
 
   end do !ie
 
@@ -558,13 +445,13 @@ real*8  :: err(6)
   do ie = 1,imax
 
     !--- mass
-    mass_1 = ucons(1,2,ie)
-    mass_2 = ucons(1,3,ie)
+    mass_1 = ucons(1,g_mmi%irmin,ie)
+    mass_2 = ucons(1,g_mmi%irmin+1,ie)
     mass_m = mass_1 + mass_2
 
     !--- total energy
-    tenergy_1 = ucons(1,5,ie)
-    tenergy_2 = ucons(1,6,ie)
+    tenergy_1 = ucons(1,g_mmi%iemin,ie)
+    tenergy_2 = ucons(1,g_mmi%iemin+1,ie)
     tenergy_m = tenergy_1 + tenergy_2
 
     if (its .eq. 0) then

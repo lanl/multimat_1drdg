@@ -10,10 +10,18 @@ integer :: i_system, &
            iprob, i_restart, i_flux, n_opfile, n_screen
 real*8  :: dt_u, dt, dt_s, g_time
 
+!--- indexing into the multimaterial system
+type mmindex
+  integer :: nummat, iamin, iamax, irmin, irmax, imome, iemin, iemax
+end type mmindex
+
+type(mmindex) :: g_mmi
+
 !--- flow properties
-real*8  :: u1_fs, rho1_fs, pr1_fs, t1_fs, alpha1_fs, g_alphamin
-real*8  :: u2_fs, rho2_fs, pr2_fs, t2_fs
-real*8  :: u_fs, pr_fs
+real*8  :: u1_fs, rho1_fs, alpha1_fs, g_alphamin
+real*8  :: u2_fs, rho2_fs
+real*8  :: u_fs, pr_fs, t_fs
+real*8, allocatable  :: alpha_fs(:), rhomat_fs(:)
 
 !--- reference quantities for nondimensionalization
 real*8  :: a_nd, t_nd, p_nd, rho_nd
@@ -30,8 +38,7 @@ real*8  :: k0   = 2.15d9
 real*8  :: n0   = 7.15
 
 !--- stiffened gas constants
-real*8  :: g_gam1, g_cp1, g_pc1
-real*8  :: g_gam2, g_cp2, g_pc2
+real*8, allocatable :: g_gam(:), g_cp(:), g_pc(:)
 
 !--- interface pressure correction coeff
 real*8  :: ipsig = 2.0

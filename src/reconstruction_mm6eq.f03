@@ -324,9 +324,11 @@ end subroutine min_superbee
 
 subroutine sconsistent_superbee_p1(ucons)
 
-integer :: ie, ieqn, ifc
-real*8  :: al1, theta(g_neqns)
+integer :: ie, ieqn, iamax
+real*8  :: almax, theta(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
@@ -337,14 +339,16 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-    al1 = ucons(1,1,ie)
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    theta(1:nummat) = theta(iamax)
+    almax = ucons(1,iamax,ie)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
 
-      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(1))
+      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(iamax))
 
     else
 
@@ -354,7 +358,12 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
     end if
 
+    !if ( dabs(sum(ucons(2,1:nummat,ie))) .gt. 1.0d-8 ) &
+    !  print*, ie, " : ", sum(ucons(2,1:nummat,ie))
+
   end do !ie
+
+end associate
 
 end subroutine sconsistent_superbee_p1
 
@@ -471,11 +480,13 @@ end subroutine sconsistent_superbee_p2
 
 subroutine sconsistent_oversuperbee(ucons)
 
-integer :: ie, ieqn, ifc
+integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
-real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
+real*8  :: almax, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: rhoneigh(2,2,-1:1), &
            uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
@@ -486,12 +497,14 @@ real*8  :: rhoneigh(2,2,-1:1), &
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-    al1 = ucons(1,1,ie)
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    theta(1:nummat) = theta(iamax)
+    almax = ucons(1,1,ie)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
 
 !      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
 !      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
@@ -515,7 +528,7 @@ real*8  :: rhoneigh(2,2,-1:1), &
       rhoneigh(2,2,0) = 0.0
 
       !   compressive limiting for volume fraction
-      call overbee_fn(uneigh, theta_al)
+      call overbee_fn(uneigh(:,iamax,:), theta_al)
       call intfac_limiting(ucons(:,:,ie), rhoneigh(2,1,0), rhoneigh(2,2,0), theta, theta_al)
 
     else
@@ -527,6 +540,8 @@ real*8  :: rhoneigh(2,2,-1:1), &
     end if
 
   end do !ie
+
+end associate
 
 end subroutine sconsistent_oversuperbee
 
@@ -594,31 +609,36 @@ end subroutine superbee_fn
 subroutine intfac_limiting(ucons, drho1dx, drho2dx, theta, theta_al)
 
 real*8,  intent(in) :: theta(g_neqns), theta_al, drho1dx, drho2dx
-real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: ucons(g_tdof,g_neqns,1)
+
+integer :: imat
+real*8, dimension(g_mmi%nummat) :: al, rhom, rhoem
+real*8  :: ucons(g_tdof,g_neqns,1), vel
+
+associate (nummat=>g_mmi%nummat)
 
   !        get primitive variables
-  al1 = ucons(1,1,1)
-  rho1 = ucons(1,2,1)/al1
-  rho2 = ucons(1,3,1)/(1.0-al1)
-  vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
-  rhoe1 = ucons(1,5,1)/al1
-  rhoe2 = ucons(1,6,1)/(1.0-al1)
+  do imat = 1,nummat
+    al(imat)    = ucons(1,imat,1)
+    rhom(imat)  = ucons(1,g_mmi%irmin+imat-1,1)/al(imat)
+    rhoem(imat) = ucons(1,g_mmi%iemin+imat-1,1)/al(imat)
+  end do !imat
+  vel  = ucons(1,g_mmi%imome,1)/sum( ucons(1,g_mmi%irmin:g_mmi%irmax,1) )
 
-  !   i.   Volume fraction: Keep limiter function the same
-  ucons(2,1,1) = theta_al * ucons(2,1,1)
-  !   ii.  Continuity:
-  ucons(2,2,1) = rho1 * ucons(2,1,1) &
-                + al1  * drho1dx
-  ucons(2,3,1) = - rho2 * ucons(2,1,1) &
-                + (1.0-al1) * drho2dx
-  !   iii. Momentum:
-  ucons(2,4,1) = vel * (ucons(2,2,1) + ucons(2,3,1))
-  !   iv.  Energy:
-  ucons(2,5,1) = rhoe1 * ucons(2,1,1) &
-                + al1 * 0.5*vel*vel * drho1dx
-  ucons(2,6,1) = - rhoe2 * ucons(2,1,1) &
-                + (1.0-al1) * 0.5*vel*vel * drho2dx
+  do imat = 1,nummat
+  !        Volume fraction: Keep limiter function the same
+    ucons(2,imat,1) = theta_al * ucons(2,imat,1)
+  !        Continuity:
+    ucons(2,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2,imat,1) &
+                  + al(imat)  * drho1dx
+  !        Energy:
+    ucons(2,g_mmi%iemin+imat-1,1) = rhoem(imat) * ucons(2,imat,1) &
+                  + al(imat) * 0.5*vel*vel * drho1dx
+  end do !imat
+
+  !        Momentum:
+  ucons(2,g_mmi%imome,1) = vel * sum( ucons(2,g_mmi%irmin:g_mmi%irmax,1) )
+
+end associate
 
 end subroutine intfac_limiting
 
@@ -699,7 +719,7 @@ end subroutine intfac_limiting_onlyp2
 
 subroutine overbee_fn(ucons,theta)
 
-real*8,  intent(in) :: ucons(g_tdof,g_neqns,-1:1)
+real*8,  intent(in) :: ucons(g_tdof,1,-1:1)
 
 integer :: ifc
 real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
@@ -743,12 +763,14 @@ end subroutine overbee_fn
 
 subroutine weno_p1(ucons)
 
-integer :: ie,iel,ier,nsten,is,ieqn
-real*8  :: theta(g_neqns), theta_al, al1, dxalp
+integer :: ie,iel,ier,nsten,is,ieqn,iamax
+real*8  :: theta(g_neqns), theta_al, almax, dxalp
 real*8  :: wi,epsweno,wenocp1,wt, &
            dx,dxl,dxr,weight(3), &
            gradv(3),osc(3),gradu(g_neqns,imax), &
            ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
 
   epsweno = 1.d-8
   wenocp1 = 10.0
@@ -823,15 +845,18 @@ real*8  :: wi,epsweno,wenocp1,wt, &
 
     dx = 0.5 * (coord(ie+1)-coord(ie))
     gradu(:,ie) = dx * gradu(:,ie)
-    al1 = ucons(1,1,ie)
+
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    theta(1:nummat) = theta(iamax)
+    almax = ucons(1,iamax,ie)
 
     ! Obtain consistent limiter functions for the equation system
     ! Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (al1 .gt. 10.0*g_alphamin) .and. (al1 .lt. 1.0-10.0*g_alphamin) ) then
+         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
 
-      dxalp = ucons(2,1,ie)
-      theta_al = gradu(1,ie)/( dxalp + dsign(1.0d-12,dxalp) )
+      dxalp = ucons(2,iamax,ie)
+      theta_al = gradu(iamax,ie)/( dxalp + dsign(1.0d-12,dxalp) )
       theta = 0.0
       call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta_al)
 
@@ -844,6 +869,8 @@ real*8  :: wi,epsweno,wenocp1,wt, &
     end if
 
   end do !ie
+
+end associate
 
 end subroutine weno_p1
 
