@@ -18,8 +18,8 @@ end type mmindex
 type(mmindex) :: g_mmi
 
 !--- flow properties
-real*8  :: u1_fs, rho1_fs, alpha1_fs, g_alphamin
-real*8  :: u2_fs, rho2_fs
+real*8  :: rho1_fs, alpha1_fs, g_alphamin
+real*8  :: rho2_fs
 real*8  :: u_fs, pr_fs, t_fs
 real*8, allocatable  :: alpha_fs(:), rhomat_fs(:)
 
@@ -41,7 +41,6 @@ real*8  :: n0   = 7.15
 real*8, allocatable :: g_gam(:), g_cp(:), g_pc(:)
 
 !--- interface pressure correction coeff
-real*8  :: ipsig = 2.0
 real*8  :: g_prelct
 
 !--- conservation

@@ -150,6 +150,8 @@ subroutine limiting_p1(ucons)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
+  call boundpreserve_alpha_p1(ucons)
+
   select case (g_nlim)
 
   case(0)
@@ -196,6 +198,96 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end select
 
 end subroutine limiting_p2
+
+!-------------------------------------------------------------------------------
+!----- Positivity preserving limiter for p1:
+!-------------------------------------------------------------------------------
+
+subroutine boundpreserve_alpha_p1(ucons)
+
+integer :: ie, ig, ngauss, imat, iamax
+real*8  :: careap(4), &
+           alm, thal(g_mmi%nummat), thal1, thal2, &
+           alm_min, alm_max, eps, al_eps, diff, &
+           !arhom, arhom_min, &
+           theta(g_neqns), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  eps = 1.0d-16
+  al_eps = 0.0001*g_alphamin
+
+  ngauss = 2
+  careap(1) = -1.0
+  careap(2) = 1.0
+
+  theta = 1.0
+
+  do ie = 1,imax
+  do imat = 1,nummat
+
+    alm_min   = 10.0
+    alm_max   = 0.0001 * eps
+    !arhom_min = 1.0d20
+
+    do ig = 1,ngauss
+
+      ! reconstructed volume fraction
+      alm = ucons(1,imat,ie) + careap(ig) * ucons(2,imat,ie)
+      !arhom = ucons(1,g_mmi%irmin+imat-1,ie) + careap(ig) * ucons(2,g_mmi%irmin+imat-1,ie)
+
+      alm_min = min(alm, alm_min)
+      alm_max = max(alm, alm_max)
+      !arhom_min = min(arhom, arhom_min)
+
+    end do !ig
+
+    diff = alm_min-ucons(1,imat,ie)
+    if (dabs(diff) .le. eps) then
+      thal1 = 1.0
+    else
+      thal1 = dabs((ucons(1,imat,ie)-al_eps)/(diff))
+    end if
+
+    diff = alm_max-ucons(1,imat,ie)
+    if (dabs(diff) .le. eps) then
+      thal2 = 1.0
+    else
+      thal2 = dabs((ucons(1,imat,ie)-(1.0-al_eps))/(diff))
+    end if
+    thal(imat) = min(1.0, thal1, thal2)
+
+    !diff = arhom_min-ucons(1,g_mmi%irmin+imat-1,ie)
+    !if (dabs(diff) .le. eps) then
+    !  thal1 = 1.0
+    !else
+    !  thal1 = dabs((ucons(1,g_mmi%irmin+imat-1,ie))/(diff))
+    !end if
+    !thal1 = min(1.0, thal1)
+
+    !ucons(2,g_mmi%irmin+imat-1,ie) = thal1 * ucons(2,g_mmi%irmin+imat-1,ie)
+
+  end do !imat
+
+  iamax = maxloc(ucons(1,1:nummat,ie), 1)
+  thal(1:nummat) = minval(thal)!thal(iamax)
+
+  ucons(2,1:nummat,ie) = thal(1:nummat) * ucons(2,1:nummat,ie)
+
+  if ( (g_nmatint .eq. 1) .and. &
+       (ucons(1,iamax,ie) .gt. 10.0*g_alphamin) .and. &
+       (ucons(1,iamax,ie) .lt. 1.0-10.0*g_alphamin) ) then
+
+    call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, thal(iamax))
+
+  end if
+
+  end do !ie
+
+end associate
+
+end subroutine boundpreserve_alpha_p1
 
 !-------------------------------------------------------------------------------
 !----- Positivity preserving limiter for p2:

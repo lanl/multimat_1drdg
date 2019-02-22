@@ -4,7 +4,6 @@ all:
 		glob_var.f03\
 		gquadrature.f03\
 		eos.f03\
-		rhs_flux.f03\
 		reconstruction_mm6eq.f03\
 		rhs_flux_mm6eq.f03\
 		preprocess.f03\

@@ -6,7 +6,6 @@
 
 MODULE preprocess
 
-USE rhs_flux
 USE rhs_flux_mm6eq
 
 implicit none
@@ -243,120 +242,6 @@ real*8  :: dx, xg, wi, xc, &
   end if
 
 end subroutine init_soln_kex
-
-!----------------------------------------------------------------------------------------------
-!----- Solution initialization for 4-eq isothermal 2fluid model:
-!----------------------------------------------------------------------------------------------
-
-subroutine init_soln_4eq(uprim, uprimn, ucons, uconsn)
-
-integer :: i, ielem
-real*8  :: uprim(g_tdof,g_neqns,0:imax+1), uprimn(g_tdof,g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1)
-real*8  :: xf, pl, pr
-
-        !--- SCD
-        if (iprob .eq. 0) then
-
-           g_alphamin = 1.d-6
-
-           alpha1_fs = g_alphamin
-           u1_fs = u_fs
-           u2_fs = u_fs
-           pr_fs = 1.1d5
-           rho1_fs = eos1_density(pr_fs)
-           rho2_fs = eos2_density(pr_fs)
-
-           do ielem = 0,imax+1
-
-              xf = coord(ielem)
-              pl = 1.1d5
-              pr = 1.1d5
-
-              if (xf .le. 0.5) then
-                 ucons(1,1,ielem) = g_alphamin * eos1_density(pl)
-                 ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
-                 ucons(1,3,ielem) = (1.0-g_alphamin) * eos2_density(pl)
-                 ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
-                 uprim(1,2,ielem) = pl
-              else
-                 ucons(1,1,ielem) = (1.0-g_alphamin) * eos1_density(pr)
-                 ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
-                 ucons(1,3,ielem) = g_alphamin * eos2_density(pr)
-                 ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
-                 uprim(1,2,ielem) = pr
-              end if
-
-           end do !ielem
-
-        !--- Saurel 2001 water-air shocktube
-        elseif (iprob .eq. 1) then
-
-           g_alphamin = 1.d-6
-
-           do ielem = 0,imax+1
-
-              xf = coord(ielem)
-              pl = 1.d9
-              pr = 101325.0
-
-              if (xf .le. 0.7) then
-                 ucons(1,1,ielem) = g_alphamin * eos1_density(pl)
-                 ucons(1,2,ielem) = 0.0
-                 ucons(1,3,ielem) = (1.0-g_alphamin) * eos2_density(pl)
-                 ucons(1,4,ielem) = 0.0
-                 uprim(1,2,ielem) = pl
-              else
-                 ucons(1,1,ielem) = (1.0-g_alphamin) * eos1_density(pr)
-                 ucons(1,2,ielem) = 0.0
-                 ucons(1,3,ielem) = g_alphamin * eos2_density(pr)
-                 ucons(1,4,ielem) = 0.0
-                 uprim(1,2,ielem) = pr
-              end if
-
-           end do !ielem
-
-        !--- Ransom's faucet   
-        else if (iprob .eq. 2) then
-
-           g_alphamin = 1.d-6
-
-           alpha1_fs = 0.2
-           u1_fs = 0.0
-           u2_fs = 10.0
-           pr_fs = 1.1d5
-           rho1_fs = eos1_density(pr_fs)
-           rho2_fs = eos2_density(pr_fs)
-
-           do ielem = 0,imax+1
-
-              xf = coord(ielem)
-              pl = 1.1d5
-              pr = 1.1d5
-
-              ucons(1,1,ielem) = alpha1_fs * eos1_density(pl)
-              ucons(1,2,ielem) = ucons(1,1,ielem) * u1_fs
-              ucons(1,3,ielem) = (1.0-alpha1_fs) * eos2_density(pl)
-              ucons(1,4,ielem) = ucons(1,3,ielem) * u2_fs
-              uprim(1,2,ielem) = pl
-
-           end do !ielem
-
-        else
-           write(*,*) "Incorrect problem setup code!"
-
-        end if
-
-        ! boundary conditions:
-        call get_bc_4eq(ucons)
-        call decode_uprim(ucons,uprim)
-
-        uprimn(:,:,:) = uprim(:,:,:)
-        uconsn(:,:,:) = ucons(:,:,:)
-
-        call gnuplot_flow_4eq(uprim, ucons, 0)
-
-end subroutine init_soln_4eq
 
 !----------------------------------------------------------------------------------------------
 !----- Solution initialization for multimaterial 6-eq pressure non-equilibrium 
@@ -718,50 +603,6 @@ real*8  :: xc, quadraticfn(g_neqns)
   quadraticfn(3) = dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) )
 
 end function
-
-!----------------------------------------------------------------------------------------------
-!----- GNUPLOT outputs:
-!----------------------------------------------------------------------------------------------
-
-subroutine gnuplot_flow_4eq(uprim, ucons, itstep)
-
-integer, intent(in) :: itstep
-real*8,  intent(in) :: uprim(g_tdof,g_neqns,0:imax+1), &
-                       ucons(g_tdof,g_neqns,0:imax+1)
-
-integer :: ielem
-real*8  :: xcc, pres, rhomix, umix, &
-           rho1, rho2, u1, u2, alp1, alp2
-
-character(len=100) :: filename2,filename3
-
-        write(filename2,'(1I50)')itstep
-        filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
-        open(23,file=trim(adjustl(filename3)),status='unknown')
-
-        do ielem = 1,imax
-
-           xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
-           alp1 = uprim(1,1,ielem)
-           pres = uprim(1,2,ielem)
-           u1   = uprim(1,3,ielem)
-           u2   = uprim(1,4,ielem)
-           alp2 = 1.0 - alp1
-
-           rho1 = eos1_density(pres)
-           rho2 = eos2_density(pres)
-
-           rhomix = alp1*rho1 + alp2*rho2
-           umix   = alp1*  u1 + alp2*  u2
-
-           write(23,'(11E16.6)') xcc, alp1, rhomix, pres, umix, u1, u2, &
-                                ucons(1,1,ielem), ucons(1,2,ielem), ucons(1,3,ielem), ucons(1,4,ielem)
-
-        end do !ielem
-
-        close(23)
-
-end subroutine gnuplot_flow_4eq
 
 !----------------------------------------------------------------------------------------------
 
