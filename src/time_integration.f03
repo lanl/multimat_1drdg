@@ -135,6 +135,46 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 end subroutine ExplicitRK3_mm6eq
 
 !----------------------------------------------------------------------------------------------
+!----- Determine what materials are present in cell
+!----------------------------------------------------------------------------------------------
+
+subroutine checkmat_mm6eq(ie, ui, mat_present, mat_index)
+
+integer, intent(in) :: ie
+
+integer :: i, mat_present, mat_index(g_mmi%nummat)
+real*8  :: rhomat, al_eps, rho, &
+           ui(g_tdof,g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  al_eps = 1.d-14
+
+  rho = sum(ui(1,g_mmi%irmin:g_mmi%irmax))
+
+  mat_present = 0
+  mat_index = -1
+
+  do i = 1,g_mmi%nummat
+    if (ui(1,i) .gt. al_eps) then
+
+      rhomat  = ui(1,g_mmi%irmin+i-1)/ui(1,i)
+
+      mat_present = mat_present + 1
+      mat_index(mat_present) = i
+    end if
+  end do !i
+
+  if (mat_present .eq. 0) then
+    write(*,*) "Error: No materials present in cell: ", ie
+    call exit
+  end if
+
+end associate
+
+end subroutine checkmat_mm6eq
+
+!----------------------------------------------------------------------------------------------
 !----- Tiny phase treatment for mm6eq:
 !----- ignore it
 !----------------------------------------------------------------------------------------------
@@ -147,7 +187,7 @@ real*8  :: almat(g_mmi%nummat), pmax, tmax, &
            al_eps, rho, u, alsum, &
            ucons(g_tdof,g_neqns,0:imax+1)
 
-  al_eps = 0.0001*g_alphamin
+  al_eps = 0.01*g_alphamin
 
   do ie = 1,imax
 
@@ -163,10 +203,9 @@ real*8  :: almat(g_mmi%nummat), pmax, tmax, &
 
     alsum = 0.0
     do i = 1,g_mmi%nummat
+      rhomat = ucons(1,g_mmi%irmin+i-1,ie)
       !--- phase-i disappearing
-      !if ( (dabs(almat(i)-g_alphamin) .le. 0.1*g_alphamin) .or. &
-      !     (almat(i) .lt. g_alphamin) ) then
-      if (almat(i) .le. al_eps) then
+      if ( (almat(i) .le. al_eps) .or. (rhomat/rho .lt. 1.d-14) ) then
 
         ! consistently update derived quantities
         rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), pmax, tmax)

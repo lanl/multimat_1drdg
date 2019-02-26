@@ -29,16 +29,18 @@ else if (i_system .eq. 1) then
   write(*,*) " Multi-material system: "
   write(*,*) " Pressure non-equilibrium " 
   write(*,*) " Velocity equilibrium "
-
+  write(*,*) " "
   write(*,*) "  Indices used: "
   write(*,*) "    nummat:", g_mmi%nummat
-  write(*,*) "    iamin:", g_mmi%iamin
-  write(*,*) "    iamax:", g_mmi%iamax
-  write(*,*) "    irmin:", g_mmi%irmin
-  write(*,*) "    irmax:", g_mmi%irmax
-  write(*,*) "    imome:", g_mmi%imome
-  write(*,*) "    iemin:", g_mmi%iemin
-  write(*,*) "    iemax:", g_mmi%iemax
+  write(*,*) "    iamin: ", g_mmi%iamin
+  write(*,*) "    iamax: ", g_mmi%iamax
+  write(*,*) "    irmin: ", g_mmi%irmin
+  write(*,*) "    irmax: ", g_mmi%irmax
+  write(*,*) "    imome: ", g_mmi%imome
+  write(*,*) "    iemin: ", g_mmi%iemin
+  write(*,*) "    iemax: ", g_mmi%iemax
+  write(*,*) " "
+  write(*,*) "  # equations:", g_neqns
 end if
 
 write(*,*) " "
@@ -287,7 +289,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 0) then
 
-     g_alphamin = 1.d-10
+     g_alphamin = 1.d-12
 
      alpha_fs(1) = g_alphamin
      alpha_fs(2) = 1.0-alpha_fs(1)
@@ -349,7 +351,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 1) then
 
-     g_alphamin = 1.d-10
+     g_alphamin = 1.d-12
 
      alpha_fs(1) = g_alphamin
      alpha_fs(2) = 1.0-alpha_fs(1)
@@ -408,6 +410,53 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         end if
 
      end do !ielem
+
+     !--- single-material Sod problem
+     !g_alphamin = 1.d-14
+
+     !alpha_fs(1) = 1.0
+     !u_fs = 0.0
+     !pr_fs = 1.0
+     !t_fs = 3.484321d-3
+     !rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+
+     !call nondimen_mm6eq()
+
+     !! left state
+     !p1l = pr_fs
+     !t1l = t_fs
+     !ul  = u_fs
+     !! right state
+     !p1r = 0.1*pr_fs
+     !t1r = 0.8*t_fs
+     !ur  = u_fs
+
+     !do ielem = 0,imax+1
+
+     !   xf = coord(ielem)
+
+     !   if (xf .le. 0.5) then
+     !      rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+     !      ucons(1,1,ielem) = alpha_fs(1)
+     !      ucons(1,2,ielem) = alpha_fs(1) * rho1
+     !      ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+     !      ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+     !   else
+     !      rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+     !      ucons(1,1,ielem) = alpha_fs(1)
+     !      ucons(1,2,ielem) = alpha_fs(1) * rho1
+     !      ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+     !      ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+     !   end if
+
+     !   if (g_nsdiscr .ge. 1) then
+     !     ucons(2,:,ielem) = 0.0
+     !       if (g_nsdiscr .ge. 12) then
+     !         ucons(3,:,ielem) = 0.0
+     !       end if
+     !   end if
+
+     !end do !ielem
 
   !--- Abgrall's water-air Shocktube
   !----------
@@ -623,18 +672,19 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
   open(23,file=trim(adjustl(filename3)),status='unknown')
 
-  write(23,'(12A8)') "# xcc,", &   !1
+  write(23,'(13A8)') "# xcc,", &   !1
                      "alp1,", &    !2
-                     "rhomix,", &  !3
-                     "umix," , &   !4
-                     "pmix,", &    !5
-                     "tmix,", &    !6
-                     "p1,", &      !7
-                     "p2,", &      !8
-                     "t1,", &      !9
-                     "t2,", &      !10
-                     "e_m", &      !11
-                     "int_cell"    !12
+                     "alp2,", &    !3
+                     "rhomix,", &  !4
+                     "umix," , &   !5
+                     "pmix,", &    !6
+                     "tmix,", &    !7
+                     "p1,", &      !8
+                     "p2,", &      !9
+                     "t1,", &      !10
+                     "t2,", &      !11
+                     "e_m", &      !12
+                     "int_cell"    !13
 
   do ielem = 1,imax
 
@@ -664,18 +714,19 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(23,'(12E16.6)') xcc, &                         !1
+     write(23,'(13E16.6)') xcc, &                         !1
                            uprimi(1), &                   !2
-                           rhomix*rho_nd, &               !3
-                           uprimi(g_mmi%imome)*a_nd , &   !4
-                           pmix*p_nd, &                   !5
-                           tmix*t_nd, &                   !6
-                           uprimi(g_mmi%irmin)*p_nd, &    !7
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
-                           uprimi(g_mmi%iemin)*t_nd, &    !9
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
-                           emix, &                        !11
-                           trcell                         !12
+                           uprimi(2), &                   !3
+                           rhomix*rho_nd, &               !4
+                           uprimi(g_mmi%imome)*a_nd , &   !5
+                           pmix*p_nd, &                   !6
+                           tmix*t_nd, &                   !7
+                           uprimi(g_mmi%irmin)*p_nd, &    !8
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
+                           uprimi(g_mmi%iemin)*t_nd, &    !10
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
+                           emix, &                        !12
+                           trcell                         !13
 
   end do !ielem
 
@@ -708,18 +759,19 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
   open(25,file=trim(adjustl(filename3)),status='unknown')
 
-  write(24,'(12A8)') "# xcc,", &   !1
+  write(24,'(13A8)') "# xcc,", &   !1
                      "alp1,", &    !2
-                     "rhomix,", &  !3
-                     "umix," , &   !4
-                     "pmix,", &    !5
-                     "tmix,", &    !6
-                     "p1,", &      !7
-                     "p2,", &      !8
-                     "t1,", &      !9
-                     "t2,", &      !10
-                     "e_m", &      !11
-                     "int_cell"    !12
+                     "alp2,", &    !3
+                     "rhomix,", &  !4
+                     "umix," , &   !5
+                     "pmix,", &    !6
+                     "tmix,", &    !7
+                     "p1,", &      !8
+                     "p2,", &      !9
+                     "t1,", &      !10
+                     "t2,", &      !11
+                     "e_m", &      !12
+                     "int_cell"    !13
 
   write(25,'(8A8)') "# xcc,", &   !1
                     "arho1,", &   !2
@@ -765,18 +817,19 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(24,'(12E16.6)') xp, &                          !1
+     write(24,'(13E16.6)') xp, &                          !1
                            uconsi(1), &                   !2
-                           rhomix*rho_nd, &               !3
-                           uprimi(g_mmi%imome)*a_nd , &   !4
-                           pmix*p_nd, &                   !5
-                           tmix*t_nd, &                   !6
-                           uprimi(g_mmi%irmin)*p_nd, &    !7
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
-                           uprimi(g_mmi%iemin)*t_nd, &    !9
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
-                           emix, &                        !11
-                           trcell                         !12
+                           uconsi(2), &                   !3
+                           rhomix*rho_nd, &               !4
+                           uprimi(g_mmi%imome)*a_nd , &   !5
+                           pmix*p_nd, &                   !6
+                           tmix*t_nd, &                   !7
+                           uprimi(g_mmi%irmin)*p_nd, &    !8
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
+                           uprimi(g_mmi%iemin)*t_nd, &    !10
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
+                           emix, &                        !12
+                           trcell                         !13
 
      write(25,'(8E16.6)') xp, &                                                               !1
                           uconsi(g_mmi%irmin), &                                              !2
@@ -820,18 +873,19 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(24,'(12E16.6)') xp, &                          !1
+     write(24,'(13E16.6)') xp, &                          !1
                            uconsi(1), &                   !2
-                           rhomix*rho_nd, &               !3
-                           uprimi(g_mmi%imome)*a_nd , &   !4
-                           pmix*p_nd, &                   !5
-                           tmix*t_nd, &                   !6
-                           uprimi(g_mmi%irmin)*p_nd, &    !7
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !8
-                           uprimi(g_mmi%iemin)*t_nd, &    !9
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !10
-                           emix, &                        !11
-                           trcell                         !12
+                           uconsi(2), &                   !3
+                           rhomix*rho_nd, &               !4
+                           uprimi(g_mmi%imome)*a_nd , &   !5
+                           pmix*p_nd, &                   !6
+                           tmix*t_nd, &                   !7
+                           uprimi(g_mmi%irmin)*p_nd, &    !8
+                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
+                           uprimi(g_mmi%iemin)*t_nd, &    !10
+                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
+                           emix, &                        !12
+                           trcell                         !13
 
      write(25,'(8E16.6)') xp, &                                                               !1
                           uconsi(g_mmi%irmin), &                                              !2

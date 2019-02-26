@@ -243,19 +243,28 @@ associate (nummat=>g_mmi%nummat)
 
     end do !ig
 
+    if (alm_min .lt. al_eps) then
     diff = alm_min-ucons(1,imat,ie)
     if (dabs(diff) .le. eps) then
       thal1 = 1.0
     else
       thal1 = dabs((ucons(1,imat,ie)-al_eps)/(diff))
     end if
+    else
+    thal1 = 1.0
+    end if
 
+    if (alm_max .gt. 1.0-al_eps) then
     diff = alm_max-ucons(1,imat,ie)
     if (dabs(diff) .le. eps) then
       thal2 = 1.0
     else
       thal2 = dabs((ucons(1,imat,ie)-(1.0-al_eps))/(diff))
     end if
+    else
+    thal2 = 1.0
+    end if
+
     thal(imat) = min(1.0, thal1, thal2)
 
     !diff = arhom_min-ucons(1,g_mmi%irmin+imat-1,ie)
@@ -271,15 +280,19 @@ associate (nummat=>g_mmi%nummat)
   end do !imat
 
   iamax = maxloc(ucons(1,1:nummat,ie), 1)
-  thal(1:nummat) = minval(thal)!thal(iamax)
+  thal(1:nummat) = minval(thal)
 
   ucons(2,1:nummat,ie) = thal(1:nummat) * ucons(2,1:nummat,ie)
 
   if ( (g_nmatint .eq. 1) .and. &
+       (minval(thal) .lt. 1.0) .and. &
        (ucons(1,iamax,ie) .gt. 10.0*g_alphamin) .and. &
        (ucons(1,iamax,ie) .lt. 1.0-10.0*g_alphamin) ) then
 
-    call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, thal(iamax))
+    do imat = 1,nummat
+      ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
+      ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
+    end do !imat
 
   end if
 
@@ -451,7 +464,7 @@ associate (nummat=>g_mmi%nummat)
     end if
 
     !if ( dabs(sum(ucons(2,1:nummat,ie))) .gt. 1.0d-8 ) &
-    !  print*, ie, " : ", sum(ucons(2,1:nummat,ie))
+    !  print*, ie, " : ", sum(ucons(2,1:nummat,ie)), minval(ucons(1,1:nummat,ie))
 
   end do !ie
 
