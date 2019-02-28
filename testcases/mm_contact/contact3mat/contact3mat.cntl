@@ -6,7 +6,7 @@
 0               / initialize from restart file './output/frozen_flow/frozenflow.dat'
 2               / Numerical Flux (1:LLF; 2:AUSM+)
 ----------------------------------------------------------------------------------------------
-1       0.01               / pressure relaxation (0: no p-relx) and scaling
+1       1.0                / pressure relaxation (0: no p-relx) and scaling
 3                          / number of materials: nummat
 1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
 2.8     8.5d8   4186.0     / material-2 properties: gamma, P_c, C_p
@@ -15,10 +15,10 @@
 10.0            / Freestream velocity
 1.1d5           / Freestream pressure
 ----------------------------------------------------------------------------------------------
-11   2   1      / Space discretization, limiter and material interface detection
-2.5d-07         / Time-step size
-80000           / Maximum number of timesteps
+1    2   1      / Space discretization, limiter and material interface detection
+5.0d-07         / Time-step size
+20000           / Maximum number of timesteps
 ----------------------------------------------------------------------------------------------
-5000            / File-output dump
+100000          / File-output dump
 1000            / On-screen output
 ----------------------------------------------------------------------------------------------

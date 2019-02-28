@@ -21,7 +21,7 @@ subroutine rhs_p0_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call flux_p0_mm6eq(ucons, ulim, rhsel)
 
@@ -40,7 +40,9 @@ subroutine rhs_p0p1_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call boundpreserve_alpha_p1(ucons)
 
   call flux_p0p1_mm6eq(ucons, ulim, rhsel)
 
@@ -59,7 +61,9 @@ subroutine rhs_p1_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call boundpreserve_alpha_p1(ucons)
 
   call flux_p1_mm6eq(ucons, ulim, rhsel)
 
@@ -78,7 +82,7 @@ subroutine rhs_p1p2_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call flux_p1p2_mm6eq(ucons, ulim, rhsel)
 
@@ -217,10 +221,11 @@ end subroutine flux_p0p1_mm6eq
 
 subroutine flux_p1_mm6eq(ucons, ulim, rhsel)
 
+integer :: ie
 real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
 
 real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
-           vriemann(imax+1), &
+           vriemann(g_mmi%nummat+1,imax+1), &
            ulim(g_tdof,g_neqns,0:imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
@@ -275,7 +280,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            lplus, lminu, lmag, &
            alpha_star, u_star
 
-real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(imax+1), &
+real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -304,8 +309,12 @@ associate (nummat=>g_mmi%nummat)
      stop
   endif
 
+  do imat = 1,nummat
+    alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+    vriem(imat,ifc) = alpha_star
+  end do !imat
   u_star = lmag*(lplus+lminu)
-  vriem(ifc) = u_star
+  vriem(nummat+1,ifc) = u_star
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
@@ -361,7 +370,7 @@ real*8  :: dx2, p, hmat, viriem, &
            nflux(g_gdof,g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
 
-real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(imax+1), &
+real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
                       ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -382,14 +391,14 @@ associate (nummat=>g_mmi%nummat)
     do ieqn = 1,g_neqns
       u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
     end do !ieqn
-    viriem = 0.5* (vriem(ie) + vriem(ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
+    viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
 
     call get_uprim_mm6eq(u, up)
 
     ! bulk pressure
     p = 0.0
     do imat = 1,nummat
-    p = p + up(imat)*up(g_mmi%irmin+imat-1)
+    p = p + u(imat)*up(g_mmi%irmin+imat-1)
     end do !imat
 
     !--- flux terms
@@ -404,13 +413,13 @@ associate (nummat=>g_mmi%nummat)
       cflux(g_mmi%irmin+imat-1) = up(g_mmi%imome) * u(g_mmi%irmin+imat-1)
       cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat!(u(g_mmi%iemin+imat-1) )
       ! non-conservative fluxes
-      nflux(1,imat) = up(imat) * rgrad(nummat+1,ie)
+      nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = p * up(g_mmi%imome) * rgrad(imat,ie)
-      nflux(2,imat) = nflux(1,imat) * carea(ig) + up(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
+      nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
       nflux(2,g_mmi%irmin+imat-1) = 0.0
       nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)! &
-                                    !+ p * up(g_mmi%imome) * up(imat) * 2.0
+                                    !+ p * up(g_mmi%imome) * u(imat) * 2.0
     end do !imat
 
     do ieqn = 1,g_neqns

@@ -150,8 +150,6 @@ subroutine limiting_p1(ucons)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call boundpreserve_alpha_p1(ucons)
-
   select case (g_nlim)
 
   case(0)
@@ -216,7 +214,7 @@ real*8  :: careap(4), &
 associate (nummat=>g_mmi%nummat)
 
   eps = 1.0d-16
-  al_eps = 0.0001*g_alphamin
+  al_eps = 0.01*g_alphamin
 
   ngauss = 2
   careap(1) = -1.0
@@ -604,7 +602,7 @@ associate (nummat=>g_mmi%nummat)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(iamax)
-    almax = ucons(1,1,ie)
+    almax = ucons(1,iamax,ie)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection

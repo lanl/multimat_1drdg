@@ -205,7 +205,7 @@ real*8  :: almat(g_mmi%nummat), pmax, tmax, &
     do i = 1,g_mmi%nummat
       rhomat = ucons(1,g_mmi%irmin+i-1,ie)
       !--- phase-i disappearing
-      if ( (almat(i) .le. al_eps) .or. (rhomat/rho .lt. 1.d-14) ) then
+      if (almat(i) .le. al_eps) then
 
         ! consistently update derived quantities
         rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), pmax, tmax)
