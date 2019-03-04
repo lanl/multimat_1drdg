@@ -1375,7 +1375,7 @@ real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
   gaussian(2) = 1.0-al1
   gaussian(3) = al1 * rho1
   gaussian(4) = (1.0-al1) * rho2
-  gaussian(5) = (gaussian(2)+gaussian(3)) * u_fs
+  gaussian(5) = (gaussian(3)+gaussian(4)) * u_fs
   gaussian(6) = al1 * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
   gaussian(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
 

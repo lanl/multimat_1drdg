@@ -696,16 +696,16 @@ subroutine intfac_limiting(ucons, drho1dx, drho2dx, theta, theta_al)
 real*8,  intent(in) :: theta(g_neqns), theta_al, drho1dx, drho2dx
 
 integer :: imat
-real*8, dimension(g_mmi%nummat) :: al, rhom, rhoem
-real*8  :: ucons(g_tdof,g_neqns,1), vel
+real*8, dimension(g_mmi%nummat) :: rhom, rhoem
+real*8  :: ucons(g_tdof,g_neqns,1), alm, vel
 
 associate (nummat=>g_mmi%nummat)
 
   !        get primitive variables
   do imat = 1,nummat
-    al(imat)    = ucons(1,imat,1)
-    rhom(imat)  = ucons(1,g_mmi%irmin+imat-1,1)/al(imat)
-    rhoem(imat) = ucons(1,g_mmi%iemin+imat-1,1)/al(imat)
+    alm         = ucons(1,imat,1)
+    rhom(imat)  = ucons(1,g_mmi%irmin+imat-1,1)/alm
+    rhoem(imat) = ucons(1,g_mmi%iemin+imat-1,1)/alm
   end do !imat
   vel  = ucons(1,g_mmi%imome,1)/sum( ucons(1,g_mmi%irmin:g_mmi%irmax,1) )
 
@@ -713,11 +713,11 @@ associate (nummat=>g_mmi%nummat)
   !        Volume fraction: Keep limiter function the same
     ucons(2,imat,1) = theta_al * ucons(2,imat,1)
   !        Continuity:
-    ucons(2,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2,imat,1) &
-                  + al(imat)  * drho1dx
+    ucons(2,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2,imat,1)! &
+                  !+ al(imat)  * drho1dx
   !        Energy:
-    ucons(2,g_mmi%iemin+imat-1,1) = rhoem(imat) * ucons(2,imat,1) &
-                  + al(imat) * 0.5*vel*vel * drho1dx
+    ucons(2,g_mmi%iemin+imat-1,1) = rhoem(imat) * ucons(2,imat,1)! &
+                  !+ al(imat) * 0.5*vel*vel * drho1dx
   end do !imat
 
   !        Momentum:
@@ -737,16 +737,16 @@ subroutine intfac_limiting_p2(ucons, theta1_al, theta2_al)
 real*8,  intent(in) :: theta1_al, theta2_al
 
 integer :: imat
-real*8, dimension(g_mmi%nummat) :: al, rhom, rhoem
-real*8  :: ucons(g_tdof,g_neqns,1), vel
+real*8, dimension(g_mmi%nummat) :: rhom, rhoem
+real*8  :: ucons(g_tdof,g_neqns,1), alm, vel
 
 associate (nummat=>g_mmi%nummat)
 
   !        get primitive variables
   do imat = 1,nummat
-    al(imat)    = ucons(1,imat,1)
-    rhom(imat)  = ucons(1,g_mmi%irmin+imat-1,1)/al(imat)
-    rhoem(imat) = ucons(1,g_mmi%iemin+imat-1,1)/al(imat)
+    alm         = ucons(1,imat,1)
+    rhom(imat)  = ucons(1,g_mmi%irmin+imat-1,1)/alm
+    rhoem(imat) = ucons(1,g_mmi%iemin+imat-1,1)/alm
   end do !imat
   vel  = ucons(1,g_mmi%imome,1)/sum( ucons(1,g_mmi%irmin:g_mmi%irmax,1) )
 
