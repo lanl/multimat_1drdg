@@ -552,6 +552,8 @@ associate (nummat=>g_mmi%nummat)
   call rutope(1, ngauss, carea, weight)
 
   do ie = 1,imax
+  cflux = 0.0
+  nflux = 0.0
   do ig = 1,ngauss
 
     dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
@@ -791,6 +793,7 @@ real*8 :: temp
 real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
 
 real*8 :: k_p, k_u
+!real*8 :: mbar2, umag_fs, m_0
 
 associate (nummat=>g_mmi%nummat)
 
@@ -857,9 +860,9 @@ associate (nummat=>g_mmi%nummat)
   m_r = u_r/ac_12
 
   ! all-speed scaling:
-  !mbar2 = c05 * (vn_l*vn_l + vn_r*vn_r)/(ac_12*ac_12)
-  !umag_fs = sqrt(g_freestream.u*g_freestream.u + g_freestream.v*g_freestream.v)
-  !m_0   = sqrt(min(1.0, max(mbar2, umag_fs/ac_12)))
+  !mbar2 = 0.5 * (u_l*u_l + u_r*u_r)/(ac_12*ac_12)
+  !umag_fs = u_fs*u_fs/(ac_12*ac_12)
+  !m_0   = dsqrt(min(1.0, max(mbar2, umag_fs)))
   f_a = 1.0 !m_0 * (2.0 - m_0)
 
   ! split mach number functions
