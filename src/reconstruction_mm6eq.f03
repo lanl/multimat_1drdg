@@ -41,8 +41,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
-  !--- limit reconstructed solution
-  call limiting_p1(ucons)
+  call boundpreserve_alpha_p1(ucons)
 
 end subroutine reconstruction_p0p1
 
@@ -55,8 +54,7 @@ subroutine reconstruction_p1(ucons)
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  !--- limit reconstructed solution
-  call limiting_p1(ucons)
+  call boundpreserve_alpha_p1(ucons)
 
 end subroutine reconstruction_p1
 
@@ -134,12 +132,21 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   !dxj = 0.5 * (coord(ie)-coord(ie-1))
   !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie)/dxi - ucons(2,ieqn,ie-1)/dxj) / (dxi+dxj)
 
+  call boundpreserve_alpha_p2(ucons)
+
   end do !ieqn
 
-  !--- limit reconstructed solution
-  call limiting_p2(ucons)
-
 end subroutine reconstruction_p1p2
+
+!-------------------------------------------------------------------------------
+!----- P0 limiting:
+!-------------------------------------------------------------------------------
+
+subroutine limiting_p0(ucons)
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+end subroutine limiting_p0
 
 !-------------------------------------------------------------------------------
 !----- P1 limiting:
@@ -197,7 +204,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 end subroutine limiting_p2
 
 !-------------------------------------------------------------------------------
-!----- Positivity preserving limiter for p1:
+!----- Bound preserving limiter for p1:
 !-------------------------------------------------------------------------------
 
 subroutine boundpreserve_alpha_p1(ucons)
@@ -300,7 +307,7 @@ end associate
 end subroutine boundpreserve_alpha_p1
 
 !-------------------------------------------------------------------------------
-!----- Positivity preserving limiter for p2:
+!----- Bound preserving limiter for p2:
 !-------------------------------------------------------------------------------
 
 subroutine boundpreserve_alpha_p2(ucons)

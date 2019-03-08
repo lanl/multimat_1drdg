@@ -546,12 +546,12 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
         xf = coord(ielem)
 
-        if (xf .le. 0.4) then
+        if (xf .le. 0.25) then
            ucons(1,1,ielem) = alpha_fs(1)
            ucons(1,2,ielem) = alpha_fs(2)
            ucons(1,3,ielem) = alpha_fs(3)
 
-        elseif (xf .le. 0.5) then
+        elseif (xf .le. 0.35) then
            ucons(1,1,ielem) = g_alphamin
            ucons(1,2,ielem) = 1.0-2.0*g_alphamin
            ucons(1,3,ielem) = g_alphamin

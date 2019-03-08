@@ -21,9 +21,10 @@ subroutine rhs_p0_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call flux_p0_mm6eq(ucons, ulim, rhsel)
+  ulim = ucons
+  call flux_p0_mm6eq(ulim, rhsel)
 
   if (g_nprelx .eq. 1) then
     call relaxpressure_p0(ulim, rhsel)
@@ -40,11 +41,13 @@ subroutine rhs_p0p1_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call boundpreserve_alpha_p1(ucons)
+  !--- limiting
+  ulim = ucons
+  call limiting_p1(ulim)
 
-  call flux_p0p1_mm6eq(ucons, ulim, rhsel)
+  call flux_p0p1_mm6eq(ulim, rhsel)
 
   if (g_nprelx .eq. 1) then
     call relaxpressure_p0(ulim, rhsel)
@@ -61,11 +64,13 @@ subroutine rhs_p1_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call boundpreserve_alpha_p1(ucons)
+  !--- limiting
+  ulim = ucons
+  call limiting_p1(ulim)
 
-  call flux_p1_mm6eq(ucons, ulim, rhsel)
+  call flux_p1_mm6eq(ulim, rhsel)
 
   if (g_nprelx .eq. 1) then
     call relaxpressure_p1(ulim, rhsel)
@@ -82,11 +87,13 @@ subroutine rhs_p1p2_mm6eq(ucons, ulim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax), &
            ulim(g_tdof,g_neqns,0:imax+1)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call boundpreserve_alpha_p2(ucons)
+  !--- limiting
+  ulim = ucons
+  call limiting_p2(ulim)
 
-  call flux_p1p2_mm6eq(ucons, ulim, rhsel)
+  call flux_p1p2_mm6eq(ulim, rhsel)
 
   if (g_nprelx .eq. 1) then
     call relaxpressure_p1p2(ulim, rhsel)
@@ -98,17 +105,14 @@ end subroutine rhs_p1p2_mm6eq
 !----- P0 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p0_mm6eq(ucons, ulim, rhsel)
+subroutine flux_p0_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), lplus, lminu, lmag, &
-           rhsel(g_gdof,g_neqns,imax), &
-           ulim(g_tdof,g_neqns,0:imax+1)
+           rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-
-  ulim = ucons
 
   do ifc = 1,imax+1
 
@@ -156,17 +160,14 @@ end subroutine flux_p0_mm6eq
 !----- P0P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p0p1_mm6eq(ucons, ulim, rhsel)
+subroutine flux_p0p1_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag
 
-real*8  :: ulim(g_tdof,g_neqns,0:imax+1), ucons(g_tdof,g_neqns,0:imax+1)
-
-  call reconstruction_p0p1(ucons)
-  ulim = ucons
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
   do ifc = 1,imax+1
 
@@ -221,19 +222,14 @@ end subroutine flux_p0p1_mm6eq
 !----- P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1_mm6eq(ucons, ulim, rhsel)
+subroutine flux_p1_mm6eq(ulim, rhsel)
 
+real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
 integer :: ie
-real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
 
 real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
            vriemann(g_mmi%nummat+1,imax+1), &
-           ulim(g_tdof,g_neqns,0:imax+1), &
            rhsel(g_gdof,g_neqns,imax)
-
-  !--- limiting
-  ulim = ucons
-  call limiting_p1(ulim)
 
   riemanngrad = 0.0
   vriemann = 0.0
@@ -249,18 +245,13 @@ end subroutine flux_p1_mm6eq
 !----- P1P2 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1p2_mm6eq(ucons, ulim, rhsel)
+subroutine flux_p1p2_mm6eq(ulim, rhsel)
 
-real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
 
 real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
            vriemann(g_mmi%nummat+1,imax+1), &
-           ulim(g_tdof,g_neqns,0:imax+1), &
            rhsel(g_gdof,g_neqns,imax)
-
-  !--- limiting
-  ulim = ucons
-  call reconstruction_p1p2(ulim)
 
   riemanngrad = 0.0
   vriemann = 0.0

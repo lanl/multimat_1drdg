@@ -22,6 +22,7 @@ real*8, allocatable :: ucons(:,:,:), uconsn(:,:,:), err_log(:)
 
 procedure(rhs_p0p1_mm6eq), pointer :: rhs_mm6eq => NULL()
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
+procedure(limiting_p1), pointer :: tvdlimiting_mm6eq => NULL()
 
 !----- Read control file:
 call read_cntl()
@@ -123,15 +124,19 @@ else if (i_system .eq. 1) then
   case(0)
     rhs_mm6eq => rhs_p0_mm6eq
     reconst_mm6eq => reconstruction_p0
+    tvdlimiting_mm6eq => limiting_p0
   case(1)
     rhs_mm6eq => rhs_p0p1_mm6eq
     reconst_mm6eq => reconstruction_p0p1
+    tvdlimiting_mm6eq => limiting_p1
   case(11)
     rhs_mm6eq => rhs_p1_mm6eq
     reconst_mm6eq => reconstruction_p1
+    tvdlimiting_mm6eq => limiting_p1
   case(12)
     rhs_mm6eq => rhs_p1p2_mm6eq
     reconst_mm6eq => reconstruction_p1p2
+    tvdlimiting_mm6eq => limiting_p2
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
                g_nsdiscr
@@ -139,7 +144,7 @@ else if (i_system .eq. 1) then
 
   end select
 
-  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
+  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq, ucons, uconsn)
 
 end if
 

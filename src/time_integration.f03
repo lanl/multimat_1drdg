@@ -16,13 +16,12 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq, ucons, uconsn)
 
-procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
+procedure(), pointer :: rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof), err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
-            uconsi(g_tdof,g_neqns,0:imax+1), &
             ulim(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
@@ -41,15 +40,13 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
   do itstep = 1,ntstep
 
-     uconsi = uconsn
-
      !---------------------------------------------------------
      !--- RK stages
      do istage = 1,3 !2
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_mm6eq(uconsi, ulim, rhsel)
+        call rhs_mm6eq(ucons, ulim, rhsel)
 
         do ielem = 1,imax
 
@@ -61,7 +58,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
           ucons(idof, ieqn,ielem) = &
               k1(istage) *   uconsn(idof,ieqn,ielem) &
-            + k2(istage) * ( uconsi(idof,ieqn,ielem) &
+            + k2(istage) * ( ucons(idof,ieqn,ielem) &
                            + dt * rhsel(idof,ieqn,ielem) &
                              / mm(idof) )
 
@@ -72,7 +69,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
         call get_bc_mm6eq(ucons)
         call ignore_tinyphase_mm6eq(ucons)
 
-        uconsi = ucons
+        call reconst_mm6eq(ucons)
 
      end do !istage
      !---------------------------------------------------------
@@ -97,10 +94,12 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
      !--- solution update
      uconsn(:,:,:) = ucons(:,:,:)
 
+     call tvdlimiting_mm6eq(ucons)
+
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
-     call gnuplot_flow_mm6eq(ulim, itstep)
-     call gnuplot_flow_p1_mm6eq(ulim, itstep)
+     call gnuplot_flow_mm6eq(ucons, itstep)
+     call gnuplot_flow_p1_mm6eq(ucons, itstep)
      end if
 
      if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
@@ -111,12 +110,11 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
 
   itstep = itstep - 1
 
-  call gnuplot_flow_mm6eq(ulim, itstep)
-  call gnuplot_flow_p1_mm6eq(ulim, itstep)
+  call gnuplot_flow_mm6eq(ucons, itstep)
+  call gnuplot_flow_p1_mm6eq(ucons, itstep)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
-  !----- Update ucons with reconstructed solutions, if any:
-  call reconst_mm6eq(ucons)
+  !----- compute L2-error-norm
   call errorcalc_p1(ucons, g_time*a_nd, err_log)
 
   !----- Screen-output:
