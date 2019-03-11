@@ -44,8 +44,6 @@ real*8, allocatable :: g_gam(:), g_cp(:), g_pc(:)
 real*8  :: g_prelct
 
 !--- conservation
-real*8  :: g_mass0_1, g_tenergy0_1
-real*8  :: g_mass0_2, g_tenergy0_2
 real*8  :: g_mass0_m, g_tenergy0_m
 
 !--- geometry

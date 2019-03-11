@@ -24,7 +24,7 @@ real*8   :: mm(g_tdof), err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             ulim(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
-real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
+real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
   g_time = 0.d0
 
@@ -85,8 +85,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
      write(*,*) "  itstep: ", itstep, "   Time: ", g_time
      write(*,*) "  Time step: ", dt/a_nd
      write(*,*) "  Conservation: "
-     write(*,*) "  Mass:         ", cons_err(3)
-     write(*,*) "  Total-energy: ", cons_err(6)
+     write(*,*) "  Mass:         ", cons_err(1)
+     write(*,*) "  Total-energy: ", cons_err(2)
      write(*,*) "--------------------------------------------"
      write(*,*) " "
      end if
@@ -123,8 +123,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(6)
   write(*,*) "  itstep: ", itstep, "   Time: ", g_time
   write(*,*) "  Time step: ", dt/a_nd
   write(*,*) "  Conservation: "
-  write(*,*) "  Mass:         ", cons_err(3)
-  write(*,*) "  Total-energy: ", cons_err(6)
+  write(*,*) "  Mass:         ", cons_err(1)
+  write(*,*) "  Total-energy: ", cons_err(2)
   write(*,*) "  log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
@@ -249,57 +249,41 @@ subroutine meconservation_mm6eq(its, ucons, err)
 integer, intent(in) :: its
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-integer :: ie
-real*8  :: mass_1, tenergy_1, massi_1, tenergyi_1, &
-           mass_2, tenergy_2, massi_2, tenergyi_2, &
-           mass_m, tenergy_m, massi_m, tenergyi_m
-real*8  :: err(6)
+integer :: ie, imat
+real*8  :: mass_m, tenergy_m, massi_m, tenergyi_m
+real*8  :: err(2)
+
+associate (nummat=>g_mmi%nummat)
 
   !--- initialize
   if (its .eq. 0) then
-    g_mass0_1 = 0.0
-    g_mass0_2 = 0.0
     g_mass0_m = 0.0
-    g_tenergy0_1 = 0.0
-    g_tenergy0_2 = 0.0
     g_tenergy0_m = 0.0
 
   else
-    massi_1 = 0.0
-    massi_2 = 0.0
     massi_m = 0.0
-    tenergyi_1 = 0.0
-    tenergyi_2 = 0.0
     tenergyi_m = 0.0
 
   end if
 
   do ie = 1,imax
 
-    !--- mass
-    mass_1 = ucons(1,g_mmi%irmin,ie)
-    mass_2 = ucons(1,g_mmi%irmin+1,ie)
-    mass_m = mass_1 + mass_2
+    mass_m = 0.0
+    tenergy_m = 0.0
+    do imat = 1,nummat
+      !--- mass
+      mass_m = mass_m + ucons(1,g_mmi%irmin+imat-1,ie)
 
-    !--- total energy
-    tenergy_1 = ucons(1,g_mmi%iemin,ie)
-    tenergy_2 = ucons(1,g_mmi%iemin+1,ie)
-    tenergy_m = tenergy_1 + tenergy_2
+      !--- total energy
+      tenergy_m = tenergy_m + ucons(1,g_mmi%iemin+imat-1,ie)
+    end do !imat
 
     if (its .eq. 0) then
-      g_mass0_1 = g_mass0_1 + mass_1
-      g_mass0_2 = g_mass0_2 + mass_2
       g_mass0_m = g_mass0_m + mass_m
-      g_tenergy0_1 = g_tenergy0_1 + tenergy_1
-      g_tenergy0_2 = g_tenergy0_2 + tenergy_2
       g_tenergy0_m = g_tenergy0_m + tenergy_m
 
     else
-      massi_1 = massi_1 + mass_1
-      massi_2 = massi_2 + mass_2
       massi_m = massi_m + mass_m
-      tenergyi_1 = tenergyi_1 + tenergy_1
-      tenergyi_2 = tenergyi_2 + tenergy_2
       tenergyi_m = tenergyi_m + tenergy_m
 
     end if
@@ -307,15 +291,13 @@ real*8  :: err(6)
   end do !ie
 
   if (its .ne. 0) then
-    err(1) = (massi_1 - g_mass0_1) / g_mass0_1
-    err(2) = (massi_2 - g_mass0_2) / g_mass0_2
-    err(3) = (massi_m - g_mass0_m) / g_mass0_m
-    err(4) = (tenergyi_1 - g_tenergy0_1) / g_tenergy0_1
-    err(5) = (tenergyi_2 - g_tenergy0_2) / g_tenergy0_2
-    err(6) = (tenergyi_m - g_tenergy0_m) / g_tenergy0_m
+    err(1) = (massi_m - g_mass0_m) !/ g_mass0_m
+    err(2) = (tenergyi_m - g_tenergy0_m) !/ g_tenergy0_m
   else
     err(:) = 0.0;
   end if
+
+end associate
 
 end subroutine meconservation_mm6eq
 

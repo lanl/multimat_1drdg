@@ -385,21 +385,21 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2l, t2l)
            ucons(1,1,ielem) = 1.0-alpha_fs(1)
            ucons(1,2,ielem) = alpha_fs(1)
-           ucons(1,3,ielem) = (1.0-alpha_fs(1)) * rho1
-           ucons(1,4,ielem) = alpha_fs(1) * rho2
+           ucons(1,3,ielem) = ucons(1,1,ielem) * rho1
+           ucons(1,4,ielem) = ucons(1,2,ielem) * rho2
            ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
-           ucons(1,6,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
-           ucons(1,7,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(2), g_pc(2), p2l, rho2, ul)
+           ucons(1,6,ielem) = ucons(1,1,ielem) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+           ucons(1,7,ielem) = ucons(1,2,ielem) * eos3_rhoe(g_gam(2), g_pc(2), p2l, rho2, ul)
         else
            rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
            rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), p2r, t2r)
            ucons(1,1,ielem) = alpha_fs(1)
            ucons(1,2,ielem) = 1.0-alpha_fs(1)
-           ucons(1,3,ielem) = alpha_fs(1) * rho1
-           ucons(1,4,ielem) = (1.0-alpha_fs(1)) * rho2
+           ucons(1,3,ielem) = ucons(1,1,ielem) * rho1
+           ucons(1,4,ielem) = ucons(1,2,ielem) * rho2
            ucons(1,5,ielem) = (ucons(1,3,ielem)+ucons(1,4,ielem)) * u_fs
-           ucons(1,6,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
-           ucons(1,7,ielem) = (1.0-alpha_fs(1)) * eos3_rhoe(g_gam(2), g_pc(2), p2r, rho2, ur)
+           ucons(1,6,ielem) = ucons(1,1,ielem) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+           ucons(1,7,ielem) = ucons(1,2,ielem) * eos3_rhoe(g_gam(2), g_pc(2), p2r, rho2, ur)
         end if
 
         if (g_nsdiscr .ge. 1) then
@@ -672,19 +672,23 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.twofluid.'//'dat'
   open(23,file=trim(adjustl(filename3)),status='unknown')
 
-  write(23,'(13A8)') "# xcc,", &   !1
-                     "alp1,", &    !2
-                     "alp2,", &    !3
-                     "rhomix,", &  !4
-                     "umix," , &   !5
-                     "pmix,", &    !6
-                     "tmix,", &    !7
-                     "p1,", &      !8
-                     "p2,", &      !9
-                     "t1,", &      !10
-                     "t2,", &      !11
-                     "e_m", &      !12
-                     "int_cell"    !13
+  !--- write material and bulk meta-data to gnuplot file
+  write(23,'(A8)',advance='no') "# xcc, "
+  do imat = 1,nummat
+     write(23,'(A12)',advance='no') "alphamat, "
+  end do !imat
+  write(23,'(4A8)',advance='no') "rhomix, ", &
+                                 "umix, ", &
+                                 "pmix, ", &
+                                 "tmix, "
+  do imat = 1,nummat
+     write(23,'(A8)',advance='no') "pmat, "
+  end do !imat
+  do imat = 1,nummat
+     write(23,'(A8)',advance='no') "tmat, "
+  end do !imat
+  write(23,'(2A8)') "e_m, ", &
+                    "int_cell"
 
   do ielem = 1,imax
 
@@ -714,19 +718,23 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(23,'(13E16.6)') xcc, &                         !1
-                           uprimi(1), &                   !2
-                           uprimi(2), &                   !3
-                           rhomix*rho_nd, &               !4
-                           uprimi(g_mmi%imome)*a_nd , &   !5
-                           pmix*p_nd, &                   !6
-                           tmix*t_nd, &                   !7
-                           uprimi(g_mmi%irmin)*p_nd, &    !8
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
-                           uprimi(g_mmi%iemin)*t_nd, &    !10
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
-                           emix, &                        !12
-                           trcell                         !13
+     !--- write material and bulk data to gnuplot file
+     write(23,'(E16.6)',advance='no') xcc
+     do imat = 1,nummat
+        write(23,'(E16.6)',advance='no') uprimi(imat)
+     end do !imat
+     write(23,'(4E16.6)',advance='no') rhomix*rho_nd, &
+                                       uprimi(g_mmi%imome)*a_nd , &
+                                       pmix*p_nd, &
+                                       tmix*t_nd
+     do imat = 1,nummat
+        write(23,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+     end do !imat
+     do imat = 1,nummat
+        write(23,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+     end do !imat
+     write(23,'(2E16.6)') emix, &
+                          trcell
 
   end do !ielem
 
@@ -755,32 +763,36 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
   open(24,file=trim(adjustl(filename3)),status='unknown')
 
-  write(filename2,'(1I50)')itstep
-  filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
-  open(25,file=trim(adjustl(filename3)),status='unknown')
+  !write(filename2,'(1I50)')itstep
+  !filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
+  !open(25,file=trim(adjustl(filename3)),status='unknown')
 
-  write(24,'(13A8)') "# xcc,", &   !1
-                     "alp1,", &    !2
-                     "alp2,", &    !3
-                     "rhomix,", &  !4
-                     "umix," , &   !5
-                     "pmix,", &    !6
-                     "tmix,", &    !7
-                     "p1,", &      !8
-                     "p2,", &      !9
-                     "t1,", &      !10
-                     "t2,", &      !11
-                     "e_m", &      !12
-                     "int_cell"    !13
+  !--- write material and bulk meta-data to gnuplot file
+  write(24,'(A8)',advance='no') "# xcc, "
+  do imat = 1,nummat
+     write(24,'(A12)',advance='no') "alphamat, "
+  end do !imat
+  write(24,'(4A8)',advance='no') "rhomix, ", &
+                                 "umix, ", &
+                                 "pmix, ", &
+                                 "tmix, "
+  do imat = 1,nummat
+     write(24,'(A8)',advance='no') "pmat, "
+  end do !imat
+  do imat = 1,nummat
+     write(24,'(A8)',advance='no') "tmat, "
+  end do !imat
+  write(24,'(2A8)') "e_m, ", &
+                    "int_cell"
 
-  write(25,'(8A8)') "# xcc,", &   !1
-                    "arho1,", &   !2
-                    "arho2," , &  !3
-                    "rhou,", &    !4
-                    "arhoE1,", &  !5
-                    "arhoE2,", &  !6
-                    "arhoe1,", &  !7
-                    "arhoe2"      !8
+  !write(25,'(8A8)') "# xcc,", &   !1
+  !                  "arho1,", &   !2
+  !                  "arho2," , &  !3
+  !                  "rhou,", &    !4
+  !                  "arhoE1,", &  !5
+  !                  "arhoE2,", &  !6
+  !                  "arhoe1,", &  !7
+  !                  "arhoe2"      !8
 
   do ielem = 1,imax
 
@@ -817,28 +829,32 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(24,'(13E16.6)') xp, &                          !1
-                           uconsi(1), &                   !2
-                           uconsi(2), &                   !3
-                           rhomix*rho_nd, &               !4
-                           uprimi(g_mmi%imome)*a_nd , &   !5
-                           pmix*p_nd, &                   !6
-                           tmix*t_nd, &                   !7
-                           uprimi(g_mmi%irmin)*p_nd, &    !8
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
-                           uprimi(g_mmi%iemin)*t_nd, &    !10
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
-                           emix, &                        !12
-                           trcell                         !13
+     !--- write material and bulk data to gnuplot file
+     write(24,'(E16.6)',advance='no') xp
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uconsi(imat)
+     end do !imat
+     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
+                                       uprimi(g_mmi%imome)*a_nd , &
+                                       pmix*p_nd, &
+                                       tmix*t_nd
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+     end do !imat
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+     end do !imat
+     write(24,'(2E16.6)') emix, &
+                          trcell
 
-     write(25,'(8E16.6)') xp, &                                                               !1
-                          uconsi(g_mmi%irmin), &                                              !2
-                          uconsi(g_mmi%irmin+1), &                                            !3
-                          uconsi(g_mmi%imome), &                                              !4
-                          uconsi(g_mmi%iemin), &                                              !5
-                          uconsi(g_mmi%iemin+1), &                                            !6
-                          uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-                          uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     !write(25,'(8E16.6)') xp, &                                                               !1
+     !                     uconsi(g_mmi%irmin), &                                              !2
+     !                     uconsi(g_mmi%irmin+1), &                                            !3
+     !                     uconsi(g_mmi%imome), &                                              !4
+     !                     uconsi(g_mmi%iemin), &                                              !5
+     !                     uconsi(g_mmi%iemin+1), &                                            !6
+     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
+     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
 
      ! right face
      if (g_nsdiscr .gt. 12) then
@@ -873,37 +889,41 @@ associate (nummat=>g_mmi%nummat)
        trcell = 0.0
      end if
 
-     write(24,'(13E16.6)') xp, &                          !1
-                           uconsi(1), &                   !2
-                           uconsi(2), &                   !3
-                           rhomix*rho_nd, &               !4
-                           uprimi(g_mmi%imome)*a_nd , &   !5
-                           pmix*p_nd, &                   !6
-                           tmix*t_nd, &                   !7
-                           uprimi(g_mmi%irmin)*p_nd, &    !8
-                           uprimi(g_mmi%irmin+1)*p_nd, &  !9
-                           uprimi(g_mmi%iemin)*t_nd, &    !10
-                           uprimi(g_mmi%iemin+1)*t_nd, &  !11
-                           emix, &                        !12
-                           trcell                         !13
+     !--- write material and bulk data to gnuplot file
+     write(24,'(E16.6)',advance='no') xp
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uconsi(imat)
+     end do !imat
+     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
+                                       uprimi(g_mmi%imome)*a_nd , &
+                                       pmix*p_nd, &
+                                       tmix*t_nd
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+     end do !imat
+     do imat = 1,nummat
+        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+     end do !imat
+     write(24,'(2E16.6)') emix, &
+                          trcell
 
-     write(25,'(8E16.6)') xp, &                                                               !1
-                          uconsi(g_mmi%irmin), &                                              !2
-                          uconsi(g_mmi%irmin+1), &                                            !3
-                          uconsi(g_mmi%imome), &                                              !4
-                          uconsi(g_mmi%iemin), &                                              !5
-                          uconsi(g_mmi%iemin+1), &                                            !6
-                          uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-                          uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     !write(25,'(8E16.6)') xp, &                                                               !1
+     !                     uconsi(g_mmi%irmin), &                                              !2
+     !                     uconsi(g_mmi%irmin+1), &                                            !3
+     !                     uconsi(g_mmi%imome), &                                              !4
+     !                     uconsi(g_mmi%iemin), &                                              !5
+     !                     uconsi(g_mmi%iemin+1), &                                            !6
+     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
+     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
 
      write(24,*) " "
 
-     write(25,*) " "
+     !write(25,*) " "
 
   end do !ielem
 
   close(24)
-  close(25)
+  !close(25)
 
 end associate
 
@@ -914,15 +934,11 @@ end subroutine gnuplot_flow_p1_mm6eq
 subroutine gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: cons_err(6)
+real*8,  intent(in) :: cons_err(2)
 
   write(33,*) itstep, &       !1
               cons_err(1), &  !2
-              cons_err(2), &  !3
-              cons_err(3), &  !4
-              cons_err(4), &  !5
-              cons_err(5), &  !6
-              cons_err(6)     !7
+              cons_err(2)     !3
 
 end subroutine gnuplot_diagnostics_mm6eq
 
