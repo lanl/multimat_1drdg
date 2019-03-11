@@ -305,7 +305,7 @@ associate (nummat=>g_mmi%nummat)
   endif
 
   do imat = 1,nummat
-    alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+    alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
     vriem(imat,ifc) = alpha_star
   end do !imat
   u_star = lmag*(lplus+lminu)
@@ -320,7 +320,7 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
       rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
@@ -336,7 +336,7 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
       rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
@@ -475,7 +475,7 @@ associate (nummat=>g_mmi%nummat)
   endif
 
   do imat = 1,nummat
-    alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+    alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
     vriem(imat,ifc) = alpha_star
   end do !imat
   u_star = lmag*(lplus+lminu)
@@ -490,7 +490,7 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
       rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
@@ -506,7 +506,7 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = dabs(lplus) * ul(imat) + dabs(lminu) * ur(imat)
+      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
       rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
@@ -1374,6 +1374,22 @@ real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
   gaussian(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
 
 end function
+
+!-------------------------------------------------------------------------------
+
+function al_star(lplus, lminu, al, ar)
+  real*8, intent(in) :: al, ar, lplus, lminu
+  real*8 :: al_star
+
+  if (dabs(lplus) .gt. 1.0e-10) then
+    al_star = al
+  elseif (dabs(lminu) .gt. 1.0e-10) then
+    al_star = ar
+  else
+    al_star = 0.5 * (al+ar)
+  end if
+
+end function al_star
 
 !!----- Old DGP1 surface and volume subroutines.
 !!-------------------------------------------------------------------------------
