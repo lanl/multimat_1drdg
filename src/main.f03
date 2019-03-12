@@ -144,7 +144,8 @@ else if (i_system .eq. 1) then
 
   end select
 
-  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq, ucons, uconsn)
+  call reconst_mm6eq(ucons)
+  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
 
 end if
 

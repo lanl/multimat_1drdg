@@ -586,6 +586,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
+  call ignore_tinyphase_mm6eq(ucons)
 
   uconsn(:,:,:) = ucons(:,:,:)
 

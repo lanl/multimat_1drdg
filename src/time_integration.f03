@@ -16,13 +16,12 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq, ucons, uconsn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
 
-procedure(), pointer :: rhs_mm6eq, reconst_mm6eq, tvdlimiting_mm6eq
+procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof), err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
-            ulim(g_tdof,g_neqns,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
@@ -46,7 +45,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_mm6eq(ucons, ulim, rhsel)
+        call rhs_mm6eq(ucons, rhsel)
 
         do ielem = 1,imax
 
@@ -93,8 +92,6 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
      !--- solution update
      uconsn(:,:,:) = ucons(:,:,:)
-
-     call tvdlimiting_mm6eq(ucons)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
@@ -171,74 +168,6 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine checkmat_mm6eq
-
-!----------------------------------------------------------------------------------------------
-!----- Tiny phase treatment for mm6eq:
-!----- ignore it
-!----------------------------------------------------------------------------------------------
-
-subroutine ignore_tinyphase_mm6eq(ucons)
-
-integer :: ie, i, iamax
-real*8  :: almat(g_mmi%nummat), pmax, tmax, &
-           rhomat, rhoemat, &
-           al_eps, rho, u, alsum, &
-           ucons(g_tdof,g_neqns,0:imax+1)
-
-  al_eps = 0.01*g_alphamin
-
-  do ie = 1,imax
-
-    almat = ucons(1,g_mmi%iamin:g_mmi%iamax,ie)
-    iamax = maxloc(almat, 1)
-
-    rhomat  = ucons(1,g_mmi%irmin+iamax-1,ie)/almat(iamax)
-    rhoemat = ucons(1,g_mmi%iemin+iamax-1,ie)/almat(iamax)
-    rho     = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
-    u       = ucons(1,g_mmi%imome,ie)/rho
-    pmax = eos3_pr(g_gam(iamax), g_pc(iamax), rhomat, rhoemat, u)
-    tmax = eos3_t(g_gam(iamax), g_cp(iamax), g_pc(iamax), rhomat, rhoemat, u)
-
-    alsum = 0.0
-    do i = 1,g_mmi%nummat
-      rhomat = ucons(1,g_mmi%irmin+i-1,ie)
-      !--- phase-i disappearing
-      if (almat(i) .le. al_eps) then
-
-        ! consistently update derived quantities
-        rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), pmax, tmax)
-        rhoemat = eos3_rhoe(g_gam(i), g_pc(i), pmax, rhomat, u)
-
-        almat(i) = al_eps
-
-        ! update conserved variables
-        ucons(1,i,ie) = almat(i)
-        ucons(1,g_mmi%irmin+i-1,ie) = almat(i)*rhomat
-        ucons(1,g_mmi%iemin+i-1,ie) = almat(i)*rhoemat
-
-        if (g_nsdiscr .ge. 11) then
-          ucons(2,i,ie) = 0.0
-          ucons(2,g_mmi%irmin+i-1,ie) = 0.0
-          ucons(2,g_mmi%iemin+i-1,ie) = 0.0
-          if (g_nsdiscr .ge. 12) then
-            ucons(3,i,ie) = 0.0
-            ucons(3,g_mmi%irmin+i-1,ie) = 0.0
-            ucons(3,g_mmi%iemin+i-1,ie) = 0.0
-          end if
-        end if
-
-      end if
-
-      alsum = alsum+almat(i)
-    end do !i
-    almat = ucons(1,1:g_mmi%nummat,ie)/alsum
-
-    !if (dabs(alsum-1.0) .gt. al_eps) write(*,*) &
-    !  "WARNING: volumefraction sum =", alsum, " element:", ie
-
-  end do !ie
-
-end subroutine ignore_tinyphase_mm6eq
 
 !----------------------------------------------------------------------------------------------
 !----- Compute mass and energy conservation for the mm6eq system:

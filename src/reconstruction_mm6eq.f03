@@ -41,6 +41,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
+  call limiting_p1(ucons)
+
 end subroutine reconstruction_p0p1
 
 !-------------------------------------------------------------------------------
@@ -51,6 +53,8 @@ subroutine reconstruction_p1(ucons)
 
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  call limiting_p1(ucons)
 
 end subroutine reconstruction_p1
 
@@ -129,6 +133,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie)/dxi - ucons(2,ieqn,ie-1)/dxj) / (dxi+dxj)
 
   end do !ieqn
+
+  call limiting_p2(ucons)
 
 end subroutine reconstruction_p1p2
 

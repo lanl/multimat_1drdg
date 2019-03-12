@@ -16,18 +16,16 @@ CONTAINS
 !----- P0 RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_p0_mm6eq(ucons, ulim, rhsel)
+subroutine rhs_p0_mm6eq(ucons, rhsel)
 
-real*8  :: rhsel(g_gdof,g_neqns,imax), &
-           ulim(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  ulim = ucons
-  call flux_p0_mm6eq(ulim, rhsel)
+  call flux_p0_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p0(ulim, rhsel)
+    call relaxpressure_p0(ucons, rhsel)
   end if
 
 end subroutine rhs_p0_mm6eq
@@ -36,21 +34,16 @@ end subroutine rhs_p0_mm6eq
 !----- P0P1 RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_p0p1_mm6eq(ucons, ulim, rhsel)
+subroutine rhs_p0p1_mm6eq(ucons, rhsel)
 
-real*8  :: rhsel(g_gdof,g_neqns,imax), &
-           ulim(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  !--- limiting
-  ulim = ucons
-  call limiting_p1(ulim)
-
-  call flux_p0p1_mm6eq(ulim, rhsel)
+  call flux_p0p1_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p0(ulim, rhsel)
+    call relaxpressure_p0(ucons, rhsel)
   end if
 
 end subroutine rhs_p0p1_mm6eq
@@ -59,21 +52,16 @@ end subroutine rhs_p0p1_mm6eq
 !----- P1 RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_p1_mm6eq(ucons, ulim, rhsel)
+subroutine rhs_p1_mm6eq(ucons, rhsel)
 
-real*8  :: rhsel(g_gdof,g_neqns,imax), &
-           ulim(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  !--- limiting
-  ulim = ucons
-  call limiting_p1(ulim)
-
-  call flux_p1_mm6eq(ulim, rhsel)
+  call flux_p1_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p1(ulim, rhsel)
+    call relaxpressure_p1(ucons, rhsel)
   end if
 
 end subroutine rhs_p1_mm6eq
@@ -82,21 +70,16 @@ end subroutine rhs_p1_mm6eq
 !----- P1P2 RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_p1p2_mm6eq(ucons, ulim, rhsel)
+subroutine rhs_p1p2_mm6eq(ucons, rhsel)
 
-real*8  :: rhsel(g_gdof,g_neqns,imax), &
-           ulim(g_tdof,g_neqns,0:imax+1)
+real*8  :: rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  !--- limiting
-  ulim = ucons
-  call limiting_p2(ulim)
-
-  call flux_p1p2_mm6eq(ulim, rhsel)
+  call flux_p1p2_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p1p2(ulim, rhsel)
+    call relaxpressure_p1p2(ucons, rhsel)
   end if
 
 end subroutine rhs_p1p2_mm6eq
@@ -222,9 +205,9 @@ end subroutine flux_p0p1_mm6eq
 !----- P1 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1_mm6eq(ulim, rhsel)
+subroutine flux_p1_mm6eq(ucons, rhsel)
 
-real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 integer :: ie
 
 real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
@@ -235,9 +218,9 @@ real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
   vriemann = 0.0
 
   !--- surface integration
-  call surfaceint_p1(ulim, riemanngrad, vriemann, rhsel)
+  call surfaceint_p1(ucons, riemanngrad, vriemann, rhsel)
   !--- volume integration
-  call volumeint_p1(ulim, riemanngrad, vriemann, rhsel)
+  call volumeint_p1(ucons, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_p1_mm6eq
 
@@ -245,9 +228,9 @@ end subroutine flux_p1_mm6eq
 !----- P1P2 Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_p1p2_mm6eq(ulim, rhsel)
+subroutine flux_p1p2_mm6eq(ucons, rhsel)
 
-real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
            vriemann(g_mmi%nummat+1,imax+1), &
@@ -257,9 +240,9 @@ real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
   vriemann = 0.0
 
   !--- surface integration
-  call surfaceint_p1p2(ulim, riemanngrad, vriemann, rhsel)
+  call surfaceint_p1p2(ucons, riemanngrad, vriemann, rhsel)
   !--- volume integration
-  call volumeint_p1p2(ulim, riemanngrad, vriemann, rhsel)
+  call volumeint_p1p2(ucons, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_p1p2_mm6eq
 
@@ -945,47 +928,6 @@ end associate
 end subroutine ausmplus_nonconserv
 
 !-------------------------------------------------------------------------------
-
-subroutine ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, lplus, lminu, lmag, &
-                                  ncnflux)
-
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
-                      uavgl(g_neqns), uavgr(g_neqns), &
-                      lplus, lminu, lmag
-
-real*8  :: ncnflux(g_neqns,2), &
-           uprim(g_neqns), &
-           u_conv_l, u_conv_r, uf, p, &
-           alp1f, alp2f, ncnfl, ncnfr
-
-  alp1f = dabs(lplus)*ul(1) + dabs(lminu)*ur(1)
-  alp2f = dabs(lplus)*(1.0-ul(1)) + dabs(lminu)*(1.0-ur(1))
-
-  ! left element
-  call get_uprim_mm6eq(ul, uprim)
-  u_conv_l = uprim(4)
-  p = ul(1)*uprim(2) + (1.0-ul(1))*uprim(3)
-  ncnfl = p * u_conv_l
-
-  ! right element
-  call get_uprim_mm6eq(ur, uprim)
-  u_conv_r = uprim(4)
-  p = ur(1)*uprim(2) + (1.0-ur(1))*uprim(3)
-  ncnfr = p * u_conv_r
-
-  uf = lmag*(lplus+lminu)
-
-  ncnflux(1,1) = - uavgl(1) * uf
-  ncnflux(5,1) = - (alp1f-uavgl(1)) * ncnfl
-  ncnflux(6,1) = - (alp2f-(1.0-uavgl(1))) * ncnfl
-
-  ncnflux(1,2) = - uavgr(1) * uf
-  ncnflux(5,2) = - (alp1f-uavgr(1)) * ncnfr
-  ncnflux(6,2) = - (alp2f-(1.0-uavgr(1))) * ncnfr
-
-end subroutine ausmplus_nonconserv_p1
-
-!-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:
 !-------------------------------------------------------------------------------
 subroutine splitmach_as(fa, mach, msplus, msminu, psplus, psminu)
@@ -1148,9 +1090,9 @@ end subroutine get_bc_mm6eq
 
 !-------------------------------------------------------------------------------
 
-subroutine relaxpressure_p0(ulim, rhsel)
+subroutine relaxpressure_p0(ucons, rhsel)
 
-real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ie, imat
 real*8  :: dx, p_star, rel_time, &
@@ -1164,7 +1106,7 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     dx = coord(ie+1)-coord(ie)
-    u(:) = ulim(1,:,ie)
+    u(:) = ucons(1,:,ie)
 
     call get_uprim_mm6eq(u, up)
 
@@ -1206,9 +1148,9 @@ end subroutine relaxpressure_p0
 
 !-------------------------------------------------------------------------------
 
-subroutine relaxpressure_p1(ulim, rhsel)
+subroutine relaxpressure_p1(ucons, rhsel)
 
-real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
@@ -1232,7 +1174,7 @@ associate (nummat=>g_mmi%nummat)
     ! basis function
 
     do ieqn = 1,g_neqns
-      u(ieqn) = ulim(1,ieqn,ie) + carea(ig) * ulim(2,ieqn,ie)
+      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
     end do !ieqn
 
     call get_uprim_mm6eq(u, up)
@@ -1279,9 +1221,9 @@ end subroutine relaxpressure_p1
 
 !-------------------------------------------------------------------------------
 
-subroutine relaxpressure_p1p2(ulim, rhsel)
+subroutine relaxpressure_p1p2(ucons, rhsel)
 
-real*8, intent(in) :: ulim(g_tdof,g_neqns,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
@@ -1306,7 +1248,7 @@ associate (nummat=>g_mmi%nummat)
 
     b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
     do ieqn = 1,g_neqns
-      u(ieqn) = ulim(1,ieqn,ie) + carea(ig) * ulim(2,ieqn,ie) + b3 * ulim(3,ieqn,ie)
+      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
     end do !ieqn
 
     call get_uprim_mm6eq(u, up)
@@ -1506,6 +1448,47 @@ end function al_star
 !  end do !ie
 !
 !end subroutine volumeint_p1
+!
+!!-------------------------------------------------------------------------------
+!
+!subroutine ausmplus_nonconserv_p1(ul, ur, uavgl, uavgr, lplus, lminu, lmag, &
+!                                  ncnflux)
+!
+!real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+!                      uavgl(g_neqns), uavgr(g_neqns), &
+!                      lplus, lminu, lmag
+!
+!real*8  :: ncnflux(g_neqns,2), &
+!           uprim(g_neqns), &
+!           u_conv_l, u_conv_r, uf, p, &
+!           alp1f, alp2f, ncnfl, ncnfr
+!
+!  alp1f = dabs(lplus)*ul(1) + dabs(lminu)*ur(1)
+!  alp2f = dabs(lplus)*(1.0-ul(1)) + dabs(lminu)*(1.0-ur(1))
+!
+!  ! left element
+!  call get_uprim_mm6eq(ul, uprim)
+!  u_conv_l = uprim(4)
+!  p = ul(1)*uprim(2) + (1.0-ul(1))*uprim(3)
+!  ncnfl = p * u_conv_l
+!
+!  ! right element
+!  call get_uprim_mm6eq(ur, uprim)
+!  u_conv_r = uprim(4)
+!  p = ur(1)*uprim(2) + (1.0-ur(1))*uprim(3)
+!  ncnfr = p * u_conv_r
+!
+!  uf = lmag*(lplus+lminu)
+!
+!  ncnflux(1,1) = - uavgl(1) * uf
+!  ncnflux(5,1) = - (alp1f-uavgl(1)) * ncnfl
+!  ncnflux(6,1) = - (alp2f-(1.0-uavgl(1))) * ncnfl
+!
+!  ncnflux(1,2) = - uavgr(1) * uf
+!  ncnflux(5,2) = - (alp1f-uavgr(1)) * ncnfr
+!  ncnflux(6,2) = - (alp2f-(1.0-uavgr(1))) * ncnfr
+!
+!end subroutine ausmplus_nonconserv_p1
 
 !-------------------------------------------------------------------------------
 
