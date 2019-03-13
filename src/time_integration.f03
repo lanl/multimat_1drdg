@@ -16,7 +16,7 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
+subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons)
 
 procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
@@ -38,6 +38,9 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   call meconservation_mm6eq(0,ucons,cons_err)
 
   do itstep = 1,ntstep
+
+     !--- solution update
+     uconsn(:,:,:) = ucons(:,:,:)
 
      !---------------------------------------------------------
      !--- RK stages
@@ -89,9 +92,6 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
      write(*,*) "--------------------------------------------"
      write(*,*) " "
      end if
-
-     !--- solution update
-     uconsn(:,:,:) = ucons(:,:,:)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then

@@ -18,7 +18,7 @@ USE time_integration
 implicit none
 
 !----- Local variable definitions:
-real*8, allocatable :: ucons(:,:,:), uconsn(:,:,:), err_log(:)
+real*8, allocatable :: ucons(:,:,:), err_log(:)
 
 procedure(rhs_p0p1_mm6eq), pointer :: rhs_mm6eq => NULL()
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
@@ -63,7 +63,7 @@ else
 end if
 
 !----- Allocation:
-allocate(ucons(g_tdof,g_neqns,0:imax+1), uconsn(g_tdof,g_neqns,0:imax+1), &
+allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          err_log(g_neqns))
 
 allocate(coord(0:imax+2))
@@ -78,7 +78,7 @@ call screen_output()
 if (i_system .eq. -1) then
    call init_soln_kex(ucons)
 else if (i_system .eq. 1) then
-   call init_soln_mm6eq(ucons, uconsn)
+   call init_soln_mm6eq(ucons)
 end if
 
 !----- Time-stepping:
@@ -145,14 +145,14 @@ else if (i_system .eq. 1) then
   end select
 
   call reconst_mm6eq(ucons)
-  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons, uconsn)
+  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons)
 
 end if
 
 close(33)
 
 !----- Cleanup:
-deallocate(ucons, uconsn, &
+deallocate(ucons, &
            err_log)
 
 deallocate(g_gam, g_cp, g_pc, &
