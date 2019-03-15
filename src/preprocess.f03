@@ -462,7 +462,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   !----------
   else if (iprob .eq. 2) then
 
-     g_alphamin = 1.d-10
+     g_alphamin = 1.d-12
 
      alpha_fs(1) = g_alphamin
      alpha_fs(2) = 1.0-alpha_fs(1)
@@ -710,8 +710,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( (uprimi(1) .gt. 10.0*g_alphamin) &
-         .and. (uprimi(1) .lt. 1.0-10.0*g_alphamin) ) then
+     if ( interface_cell(uprimi(1)) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -821,8 +820,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( (uconsi(1) .gt. 10.0*g_alphamin) &
-         .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
+     if ( interface_cell(uconsi(1)) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -881,8 +879,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( (uconsi(1) .gt. 10.0*g_alphamin) &
-         .and. (uconsi(1) .lt. 1.0-10.0*g_alphamin) ) then
+     if ( interface_cell(uconsi(1)) ) then
        trcell = 1.0
      else
        trcell = 0.0

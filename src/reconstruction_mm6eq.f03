@@ -294,8 +294,7 @@ associate (nummat=>g_mmi%nummat)
 
   if ( (g_nmatint .eq. 1) .and. &
        (minval(thal) .lt. 1.0) .and. &
-       (ucons(1,iamax,ie) .gt. 10.0*g_alphamin) .and. &
-       (ucons(1,iamax,ie) .lt. 1.0-10.0*g_alphamin) ) then
+       interface_cell(ucons(1,iamax,ie)) ) then
 
     do imat = 1,nummat
       ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
@@ -407,8 +406,7 @@ associate (nummat=>g_mmi%nummat)
 
   if ( (g_nmatint .eq. 1) .and. &
        (minval(thal) .lt. 1.0) .and. &
-       (ucons(1,iamax,ie) .gt. 10.0*g_alphamin) .and. &
-       (ucons(1,iamax,ie) .lt. 1.0-10.0*g_alphamin) ) then
+       interface_cell(ucons(1,iamax,ie)) ) then
 
     do imat = 1,nummat
       ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
@@ -483,7 +481,7 @@ associate (nummat=>g_mmi%nummat)
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
+         interface_cell(almax) ) then
 
       call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(iamax))
 
@@ -551,7 +549,7 @@ associate (nummat=>g_mmi%nummat)
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
+         interface_cell(almax) ) then
 
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
 
@@ -603,7 +601,7 @@ associate (nummat=>g_mmi%nummat)
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
+         interface_cell(almax) ) then
 
 !      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
 !      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
@@ -955,7 +953,7 @@ associate (nummat=>g_mmi%nummat)
     ! Obtain consistent limiter functions for the equation system
     ! Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         (almax .gt. 10.0*g_alphamin) .and. (almax .lt. 1.0-10.0*g_alphamin) ) then
+         interface_cell(almax) ) then
 
       dxalp = ucons(2,iamax,ie)
       theta_al = gradu(iamax,ie)/( dxalp + dsign(1.0d-12,dxalp) )
@@ -975,6 +973,27 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine weno_p1
+
+!-------------------------------------------------------------------------------
+!----- Interface-cell / mixed-cell indicator
+!-------------------------------------------------------------------------------
+
+logical function interface_cell(alcell)
+
+real*8, intent(in) :: alcell
+real*8  :: scale_al
+
+  scale_al = 10.0*g_alphamin
+
+  if ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) ) then
+    interface_cell = .true.
+
+  else
+    interface_cell = .false.
+
+  end if
+
+end function interface_cell
 
 !-------------------------------------------------------------------------------
 
