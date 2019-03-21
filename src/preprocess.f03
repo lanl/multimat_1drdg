@@ -71,12 +71,31 @@ if (i_system > -1) then
     stop
   end if
 
+  if (g_nsdiscr > 0) then
   write(*,*) " "
   write(*,*) " Material interface detection: "
   if (g_nmatint .eq. 1) then
     write(*,*) "   ON"
   else
     write(*,*) "   OFF"
+  end if
+
+  write(*,*) " "
+  write(*,*) " Limiter: "
+  if (g_nlim .eq. 0) then
+    write(*,*) "   None."
+  else if (g_nlim .eq. 1) then
+    write(*,*) "   Min: Superbee."
+  else if (g_nlim .eq. 2) then
+    write(*,*) "   Superbee."
+  else if (g_nlim .eq. 3) then
+    write(*,*) "   Overbee+Superbee."
+  else if (g_nlim .eq. 4) then
+    write(*,*) "   WENO."
+  else
+    write(*,*) "Invalid limiter."
+    stop
+  end if
   end if
 end if
 
@@ -710,7 +729,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( interface_cell(uprimi(1)) ) then
+     if ( interface_cell(uprimi(1), 0.0) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -820,7 +839,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( interface_cell(uconsi(1)) ) then
+     if ( interface_cell(uconsi(1), 0.0) ) then
        trcell = 1.0
      else
        trcell = 0.0
@@ -879,7 +898,7 @@ associate (nummat=>g_mmi%nummat)
      end do !imat
      emix = emix/rhomix
 
-     if ( interface_cell(uconsi(1)) ) then
+     if ( interface_cell(uconsi(1), 0.0) ) then
        trcell = 1.0
      else
        trcell = 0.0

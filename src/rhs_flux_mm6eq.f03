@@ -258,8 +258,9 @@ real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            lplus, lminu, lmag, &
            alpha_star, u_star
 
-real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -282,6 +283,8 @@ associate (nummat=>g_mmi%nummat)
 
   if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+  else if (i_flux .eq. 3) then
+     call hllc_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -428,8 +431,9 @@ real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            lplus, lminu, lmag, &
            alpha_star, u_star
 
-real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -452,6 +456,8 @@ associate (nummat=>g_mmi%nummat)
 
   if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+  else if (i_flux .eq. 3) then
+     call hllc_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -771,8 +777,8 @@ real*8 :: k_p, k_u
 
 associate (nummat=>g_mmi%nummat)
 
-  k_p = 1.0;
-  k_u = 0.1;
+  k_p = 0.5;
+  k_u = 0.5;
 
   flux(:) = 0.0
 
@@ -857,7 +863,7 @@ associate (nummat=>g_mmi%nummat)
   ! flux vector splitting
   lambda_plus = 0.5 * (lambda + dabs(lambda))
   lambda_minu = 0.5 * (lambda - dabs(lambda))
-  
+
   do imat = 1,nummat
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
     flux(g_mmi%irmin+imat-1) = lambda_plus*arhom_l(imat) + lambda_minu*arhom_r(imat)
@@ -867,7 +873,7 @@ associate (nummat=>g_mmi%nummat)
 
   lambda_mag = dabs(lambda) + 1.d-16
 
-  lambda_plus = lambda_plus/(lambda_mag) 
+  lambda_plus = lambda_plus/(lambda_mag)
   lambda_minu = lambda_minu/(lambda_mag)
 
 end associate
@@ -926,6 +932,177 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine ausmplus_nonconserv
+
+!------------------------------------------------------------------------------
+!----- Numerical flux by HLLC:
+!------------------------------------------------------------------------------
+
+subroutine hllc_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
+
+integer :: imat
+real*8 :: flux(g_neqns)
+real*8 :: up_l(g_neqns), up_r(g_neqns)
+real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
+                                   arhom_l,rhom_l,em_l,am_l,hm_l, &
+                                   arhom_r,rhom_r,em_r,am_r,hm_r
+
+real*8 :: rhou_l, u_l, rho_l, pi_l, p_l, ac_l, &
+          rhou_r, u_r, rho_r, pi_r, p_r, ac_r
+
+real*8  :: rij, rij1, vroe, croe, &
+           si,sj,sm,pstar, &
+           frac,UstarI(g_neqns),UstarJ(g_neqns), &
+           tmp1,tmp2
+
+real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
+
+associate (nummat=>g_mmi%nummat)
+
+  flux(:) = 0.0
+
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
+  ! material states and bulk pressure
+  p_l = 0.0
+  p_r = 0.0
+  do imat = 1,nummat
+  ! ul
+    al_l(imat)    = ul(imat)
+    arhom_l(imat) = ul(g_mmi%irmin+imat-1)
+    em_l(imat)    = ul(g_mmi%iemin+imat-1)
+
+    rhom_l(imat) = arhom_l(imat) / al_l(imat)
+    pi_l         = up_l(g_mmi%irmin+imat-1)
+    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), pi_l)
+    hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    p_l = p_l + al_l(imat)*pi_l
+
+  ! ur
+    al_r(imat)    = ur(imat)
+    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
+    em_r(imat)    = ur(g_mmi%iemin+imat-1)
+
+    rhom_r(imat) = arhom_r(imat) / al_r(imat)
+    pi_r         = up_r(g_mmi%irmin+imat-1)
+    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), pi_r)
+    hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    p_r = p_r + al_r(imat)*pi_r
+  end do !imat
+
+  ! bulk state
+  rhou_l  = ul(g_mmi%imome)
+  rhou_r  = ur(g_mmi%imome)
+
+  rho_l = sum(arhom_l)
+  rho_r = sum(arhom_r)
+  u_l    = rhou_l / rho_l
+  u_r    = rhou_r / rho_r
+
+  ! numerical speed of sound choice:
+  ac_l = 0.0
+  ac_r = 0.0
+  do imat = 1,nummat
+    ac_l = ac_l + ( al_l(imat)*rhom_l(imat)*am_l(imat)*am_l(imat) )
+    ac_r = ac_r + ( al_r(imat)*rhom_r(imat)*am_r(imat)*am_r(imat) )
+  end do !imat
+  ac_l = dsqrt( ac_l / rho_l )
+  ac_r = dsqrt( ac_r / rho_r )
+
+  ! Roe-averaged variables
+  rij = dsqrt(rho_r/rho_l)
+  rij1 = rij + 1.d0
+  vroe = (rij*u_r + u_l)/rij1
+  croe = (rij*ac_r + ac_l)/rij1
+
+  ! signal velocities
+  si = min((u_l - ac_l), (vroe - croe))
+  sj = max((u_r + ac_r), (vroe + croe))
+  tmp1 = rho_r*u_r*(sj-u_r) - rho_l*u_l*(si-u_l) + p_l - p_r
+  tmp2 = rho_r*(sj-u_r) - rho_l*(si-u_l)
+  sm = tmp1/tmp2
+  pstar = rho_l*(u_l-si)*(u_l-sm) + p_l
+
+  ! UstarI
+  frac = 1.d0 / (si - sm)
+  do imat = 1,nummat
+  UstarI(imat)               = frac* (si-u_l) * al_l(imat)
+  UstarI(g_mmi%irmin+imat-1) = frac* (si-u_l) * arhom_l(imat)
+  UstarI(g_mmi%iemin+imat-1) = frac* ((si-u_l) * em_l(imat) &
+                                      - al_l(imat)*up_l(g_mmi%irmin+imat-1)*u_l &
+                                      + al_l(imat)*pstar*sm )
+  end do !imat
+  UstarI(g_mmi%imome) = frac* ((si-u_l)* (rhou_l) + (pstar - p_l))
+
+  ! UstarJ
+  frac = 1.d0 / (sj - sm)
+  do imat = 1,nummat
+  UstarJ(imat)               = frac* (sj-u_r) * al_r(imat)
+  UstarJ(g_mmi%irmin+imat-1) = frac* (sj-u_r) * arhom_r(imat)
+  UstarJ(g_mmi%iemin+imat-1) = frac* ((sj-u_r) * em_r(imat) &
+                                      - al_r(imat)*up_r(g_mmi%irmin+imat-1)*u_r &
+                                      + al_r(imat)*pstar*sm )
+  end do !imat
+  UstarJ(g_mmi%imome) = frac* ((sj-u_r)* (rhou_r) + (pstar - p_r))
+
+  ! Flux
+  if (si > 0.d0) then
+    do imat = 1,nummat
+    flux(imat)               = u_l * al_l(imat)
+    flux(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
+    flux(g_mmi%iemin+imat-1) = u_l * hm_l(imat)
+    end do !imat
+    flux(g_mmi%imome) = u_l * rhou_l + p_l
+
+    lambda = u_l
+
+  else if ( (si <= 0.d0) .and. (sm > 0.d0)) then
+    do imat = 1,nummat
+    flux(imat)               = sm * UstarI(imat)
+    flux(g_mmi%irmin+imat-1) = sm * UstarI(g_mmi%irmin+imat-1)
+    flux(g_mmi%iemin+imat-1) = sm * UstarI(g_mmi%iemin+imat-1) + sm*pstar
+    end do !imat
+    flux(g_mmi%imome) = sm * UstarI(g_mmi%imome) + pstar
+
+    lambda = sm
+
+  else if ((sm <= 0.d0) .and. (sj >= 0.d0)) then
+    do imat = 1,nummat
+    flux(imat)               = sm * UstarJ(imat)
+    flux(g_mmi%irmin+imat-1) = sm * UstarJ(g_mmi%irmin+imat-1)
+    flux(g_mmi%iemin+imat-1) = sm * UstarJ(g_mmi%iemin+imat-1) + sm*pstar
+    end do !imat
+    flux(g_mmi%imome) = sm * UstarJ(g_mmi%imome) + pstar
+
+    lambda = sm
+
+  else ! sj.lt.0.d0
+    do imat = 1,nummat
+    flux(imat)               = u_r * al_r(imat)
+    flux(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
+    flux(g_mmi%iemin+imat-1) = u_r * hm_r(imat)
+    end do !imat
+    flux(g_mmi%imome) = u_r * rhou_r + p_r
+
+    lambda = u_r
+
+  end if
+
+  !--- these Riemann velocity estimates need to be improved so that
+  !    well-balancedness is maintained
+  lambda_plus = 0.5 * (lambda + dabs(lambda))
+  lambda_minu = 0.5 * (lambda - dabs(lambda))
+
+  lambda_mag = dabs(lambda) + 1.d-16
+
+  lambda_plus = lambda_plus/(lambda_mag)
+  lambda_minu = lambda_minu/(lambda_mag)
+
+end associate
+
+end subroutine hllc_mm6eq
 
 !-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:

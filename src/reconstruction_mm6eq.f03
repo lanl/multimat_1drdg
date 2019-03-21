@@ -20,10 +20,7 @@ CONTAINS
 
 subroutine reconstruction_p0(ucons)
 
-integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
-
-  ie = 0
 
 end subroutine reconstruction_p0
 
@@ -199,6 +196,9 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(2)
     call sconsistent_superbee_p2(ucons)
 
+  case(4)
+    call sconsistent_weno_p2(ucons)
+
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
     call exit
@@ -292,16 +292,16 @@ associate (nummat=>g_mmi%nummat)
 
   ucons(2,1:nummat,ie) = thal(1:nummat) * ucons(2,1:nummat,ie)
 
-  if ( (g_nmatint .eq. 1) .and. &
-       (minval(thal) .lt. 1.0) .and. &
-       interface_cell(ucons(1,iamax,ie)) ) then
+  !if ( (g_nmatint .eq. 1) .and. &
+  !     (minval(thal) .lt. 1.0) .and. &
+  !     interface_cell(ucons(1,iamax,ie)) ) then
 
-    do imat = 1,nummat
-      ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
-      ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
-    end do !imat
+  !  do imat = 1,nummat
+  !    ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
+  !    ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
+  !  end do !imat
 
-  end if
+  !end if
 
   end do !ie
 
@@ -404,16 +404,16 @@ associate (nummat=>g_mmi%nummat)
     ucons(2:3,imat,ie) = thal(imat) * ucons(2:3,imat,ie)
   end do !imat
 
-  if ( (g_nmatint .eq. 1) .and. &
-       (minval(thal) .lt. 1.0) .and. &
-       interface_cell(ucons(1,iamax,ie)) ) then
+  !if ( (g_nmatint .eq. 1) .and. &
+  !     (minval(thal) .lt. 1.0) .and. &
+  !     interface_cell(ucons(1,iamax,ie)) ) then
 
-    do imat = 1,nummat
-      ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
-      ucons(2:3,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%iemin+imat-1,ie)
-    end do !imat
+  !  do imat = 1,nummat
+  !    ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
+  !    ucons(2:3,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%iemin+imat-1,ie)
+  !  end do !imat
 
-  end if
+  !end if
 
   end do !ie
 
@@ -460,7 +460,7 @@ end subroutine min_superbee
 subroutine sconsistent_superbee_p1(ucons)
 
 integer :: ie, ieqn, iamax
-real*8  :: almax, theta(g_neqns)
+real*8  :: almax, dalmax, theta(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -474,14 +474,17 @@ associate (nummat=>g_mmi%nummat)
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
+    ! use common limiter function for all volume-fractions
+    theta(1:nummat) = minval(theta(1:nummat))
+
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    theta(1:nummat) = theta(iamax)
     almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax) ) then
+         interface_cell(almax, dalmax) ) then
 
       call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(iamax))
 
@@ -508,14 +511,12 @@ end subroutine sconsistent_superbee_p1
 
 subroutine sconsistent_superbee_p2(ucons)
 
-integer :: ie, ieqn, iamax
-real*8  :: dx2, almax, theta2(g_neqns), theta1(g_neqns)
-real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
-real*8  :: al_eps
+integer :: ie, ieqn, iamax, imat
+real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
-
-  al_eps = 0.01*g_alphamin
 
   do ie = 1,imax
 
@@ -530,7 +531,6 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
 
-    ! compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
 
     !--- 2. P1 derivative limiting
@@ -538,18 +538,20 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    theta1(1:nummat) = theta1(iamax)
-    theta2(1:nummat) = theta2(iamax)
-    almax = ucons(1,iamax,ie)
+    ! use common limiter function for all volume-fractions
+    theta1(1:nummat) = minval(theta1(1:nummat))
+    theta2(1:nummat) = minval(theta2(1:nummat))
 
-    ! 2. Obtain consistent limiter functions for the equation system
-    !    Interface detection
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    !--- 3. Obtain consistent limiter functions for the equation system
+    !       with interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax) ) then
+         interface_cell(almax, dalmax) ) then
 
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
 
@@ -572,6 +574,84 @@ end associate
 end subroutine sconsistent_superbee_p2
 
 !-------------------------------------------------------------------------------
+!----- system-consistent weno limiter for P2:
+!-------------------------------------------------------------------------------
+
+subroutine sconsistent_weno_p2(ucons)
+
+integer :: ie, ieqn, iamax, imat
+real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           uxxlim(g_neqns,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  uxxlim = 0.0
+  theta2 = 1.0
+
+  do ie = 1,imax
+
+    !--- 1. P2 derivative limiting
+
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / (dx2*dx2)
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
+
+    call weno_fn(g_neqns, uneigh)
+    uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
+
+  end do !ie
+
+  ucons(3,:,:) = uxxlim(:,:)
+
+  do ie = 1,imax
+
+    !--- 2. P1 derivative limiting
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    ! use common limiter function for all volume-fractions
+    theta1(1:nummat) = minval(theta1(1:nummat))
+
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    !--- 3. Obtain consistent limiter functions for the equation system
+    !       with interface detection
+    if ( (g_nmatint .eq. 1) .and. &
+         interface_cell(almax, dalmax) ) then
+
+      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+
+    else
+
+      do ieqn = 1,g_neqns
+        ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
+        ucons(2,ieqn,ie) = theta1(ieqn) * ucons(2,ieqn,ie)
+      end do !ieqn
+
+    end if
+
+    !if ( dabs(sum(ucons(2,1:nummat,ie))) .gt. 1.0d-12 ) &
+    !  print*, ie, " : ", sum(ucons(2,1:nummat,ie)), minval(ucons(1,1:nummat,ie))
+
+  end do !ie
+
+end associate
+
+end subroutine sconsistent_weno_p2
+
+!-------------------------------------------------------------------------------
 !----- system-consistent overbee+superbee limiter:
 !-------------------------------------------------------------------------------
 
@@ -579,7 +659,7 @@ subroutine sconsistent_oversuperbee(ucons)
 
 integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
-real*8  :: almax, rho1, rho2, vel, rhoe1, rhoe2
+real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: rhoneigh(2,2,-1:1), &
            uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -597,11 +677,12 @@ associate (nummat=>g_mmi%nummat)
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(iamax)
     almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax) ) then
+         interface_cell(almax, dalmax) ) then
 
 !      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
 !      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
@@ -678,10 +759,10 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
       ! bounds
       diff = ug-ui
       if (diff > 1.0d-16) then
-        phi = (umax-ui)/(2.0*diff)
+        phi = min(1.0, (umax-ui)/(2.0*diff))
 
       else if (diff < -1.0d-16) then
-        phi = (umin-ui)/(2.0*diff)
+        phi = min(1.0, (umin-ui)/(2.0*diff))
 
       else
         phi = 1.0
@@ -698,6 +779,116 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
   end do !ieqn
 
 end subroutine superbee_fn
+
+!-------------------------------------------------------------------------------
+!----- WENO limiter function
+!-------------------------------------------------------------------------------
+
+subroutine weno_fn(neq,ucons)
+
+integer, intent(in) :: neq
+
+integer :: ieqn, is, nsten
+real*8  :: wi,epsweno,wenocp1,wt, &
+           weight(3), &
+           gradv(3),osc(3),gradu, &
+           ucons(2,neq,-1:1)
+
+associate (nummat=>g_mmi%nummat)
+
+  epsweno = 1.d-8
+  wenocp1 = 500.0
+  nsten = 3
+
+  do ieqn = 1,neq
+
+    !--- the nsten stencils
+    gradv(1) = ucons(2,ieqn,0)
+    gradv(2) = ucons(2,ieqn,-1)
+    gradv(3) = ucons(2,ieqn,1)
+
+    !--- oscillation indicators
+    do is = 1,nsten
+      osc(is) = dsqrt(gradv(is)*gradv(is))
+    end do !is
+
+    !--- weight functions
+    wt = 0.d0
+
+    do is = 1,nsten
+      if (is.eq.1) then
+        wi = wenocp1
+      else
+        wi = 1.d0
+      end if !is
+      weight(is) = wi* (epsweno + osc(is))**(-8.d0)
+      wt = wt + weight(is)
+    end do !is
+
+    !--- normalize the weight function
+    do is = 1,nsten
+      weight(is) = weight(is)/wt
+    end do !is
+
+    !--- reconstruct the limited gradient
+    gradu = 0.d0
+
+    do is = 1,nsten
+      gradu = gradu + weight(is)*gradv(is)
+    end do !is
+
+    ucons(2,ieqn,0) = gradu
+
+  end do !ieqn
+
+end associate
+
+end subroutine weno_fn
+
+!-------------------------------------------------------------------------------
+!----- Overbee limiter for n equations individually
+!----- this sub actually calculates the limiter function according to overbee
+!-------------------------------------------------------------------------------
+
+subroutine overbee_fn(ucons,theta)
+
+real*8,  intent(in) :: ucons(g_tdof,1,-1:1)
+
+integer :: ifc
+real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
+
+  theta = 2.0
+
+  ui = ucons(1,1,0)
+
+  ! find min and max in neighborhood
+  umax = max( max(ucons(1,1,-1), ui), ucons(1,1,1) )
+  umin = min( min(ucons(1,1,-1), ui), ucons(1,1,1) )
+
+  do ifc = 1,2
+    ! unlimited 2nd order solution
+    ug = ucons(1,1,0) + ((-1.0)**ifc) * ucons(2,1,0)
+
+    ! bounds
+    diff = ug-ui
+    if (diff > 1.0d-16) then
+      phi = (umax-ui)/(2.0*diff)
+
+    else if (diff < -1.0d-16) then
+      phi = (umin-ui)/(2.0*diff)
+
+    else
+      phi = 1.0
+
+    end if
+
+    ! limiter function
+    thetal = max( 0.0, min(2.0*phi, 2.0) )
+    theta = min(thetal, theta)
+
+  end do !ifc
+
+end subroutine overbee_fn
 
 !-------------------------------------------------------------------------------
 !----- Function that consistently applies limiter for near-interface cell
@@ -813,58 +1004,13 @@ real*8  :: ucons(g_tdof,g_neqns,1)
 end subroutine intfac_limiting_onlyp2
 
 !-------------------------------------------------------------------------------
-!----- Overbee limiter for n equations individually
-!----- this sub actually calculates the limiter function according to overbee
-!-------------------------------------------------------------------------------
-
-subroutine overbee_fn(ucons,theta)
-
-real*8,  intent(in) :: ucons(g_tdof,1,-1:1)
-
-integer :: ifc
-real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
-
-  theta = 2.0
-
-  ui = ucons(1,1,0)
-
-  ! find min and max in neighborhood
-  umax = max( max(ucons(1,1,-1), ui), ucons(1,1,1) )
-  umin = min( min(ucons(1,1,-1), ui), ucons(1,1,1) )
-
-  do ifc = 1,2
-    ! unlimited 2nd order solution
-    ug = ucons(1,1,0) + ((-1.0)**ifc) * ucons(2,1,0)
-
-    ! bounds
-    diff = ug-ui
-    if (diff > 1.0d-16) then
-      phi = (umax-ui)/(2.0*diff)
-
-    else if (diff < -1.0d-16) then
-      phi = (umin-ui)/(2.0*diff)
-
-    else
-      phi = 1.0
-
-    end if
-
-    ! limiter function
-    thetal = max( 0.0, min(2.0*phi, 2.0) )
-    theta = min(thetal, theta)
-
-  end do !ifc
-
-end subroutine overbee_fn
-
-!-------------------------------------------------------------------------------
 !----- WENO limiter for P1
 !-------------------------------------------------------------------------------
 
 subroutine weno_p1(ucons)
 
 integer :: ie,iel,ier,nsten,is,ieqn,iamax
-real*8  :: theta(g_neqns), theta_al, almax, dxalp
+real*8  :: theta(g_neqns), theta_al, almax, dalmax, dxalp
 real*8  :: wi,epsweno,wenocp1,wt, &
            dx,dxl,dxr,weight(3), &
            gradv(3),osc(3),gradu(g_neqns,imax), &
@@ -949,11 +1095,12 @@ associate (nummat=>g_mmi%nummat)
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(iamax)
     almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
 
     ! Obtain consistent limiter functions for the equation system
     ! Interface detection
     if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax) ) then
+         interface_cell(almax, dalmax) ) then
 
       dxalp = ucons(2,iamax,ie)
       theta_al = gradu(iamax,ie)/( dxalp + dsign(1.0d-12,dxalp) )
@@ -975,17 +1122,23 @@ end associate
 end subroutine weno_p1
 
 !-------------------------------------------------------------------------------
-!----- Interface-cell / mixed-cell indicator
+!----- Interface-cell / mixed-cell indicator based on vol-frac gradient
 !-------------------------------------------------------------------------------
 
-logical function interface_cell(alcell)
+logical function interface_cell(alcell, dalcell)
 
-real*8, intent(in) :: alcell
+real*8, intent(in) :: alcell, dalcell
 real*8  :: scale_al
 
-  scale_al = 10.0*g_alphamin
+logical :: al, dal
 
-  if ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) ) then
+  scale_al = 1.0d-2
+  dal = dabs(dalcell) .gt. scale_al
+
+  scale_al = 10000.0*g_alphamin
+  al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
+
+  if (al) then
     interface_cell = .true.
 
   else
