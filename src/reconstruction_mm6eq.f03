@@ -168,9 +168,6 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(3)
     call sconsistent_oversuperbee(ucons)
 
-  case(4)
-    call weno_p1(ucons)
-
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
     call exit
@@ -603,7 +600,7 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
 
-    call weno_fn(g_neqns, uneigh)
+    call weno_fn(uneigh)
     uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
 
   end do !ie
@@ -784,23 +781,22 @@ end subroutine superbee_fn
 !----- WENO limiter function
 !-------------------------------------------------------------------------------
 
-subroutine weno_fn(neq,ucons)
+subroutine weno_fn(ucons)
 
-integer, intent(in) :: neq
-
-integer :: ieqn, is, nsten
+integer :: ieqn, is, nsten, imat, min_cw
 real*8  :: wi,epsweno,wenocp1,wt, &
-           weight(3), &
+           weight(3), al_weight(g_mmi%nummat,3), &
            gradv(3),osc(3),gradu, &
-           ucons(2,neq,-1:1)
+           ulim(2,g_neqns), &
+           ucons(2,g_neqns,-1:1)
 
 associate (nummat=>g_mmi%nummat)
 
   epsweno = 1.d-8
-  wenocp1 = 500.0
+  wenocp1 = 200.0
   nsten = 3
 
-  do ieqn = 1,neq
+  do ieqn = 1,g_neqns
 
     !--- the nsten stencils
     gradv(1) = ucons(2,ieqn,0)
@@ -837,9 +833,24 @@ associate (nummat=>g_mmi%nummat)
       gradu = gradu + weight(is)*gradv(is)
     end do !is
 
-    ucons(2,ieqn,0) = gradu
+    if (ieqn .lt. g_mmi%irmin) al_weight(ieqn,:) = weight(:)
+
+    ulim(2,ieqn) = gradu
 
   end do !ieqn
+
+  min_cw = minloc(al_weight(:,1), 1)
+  al_weight(:,1) = al_weight(min_cw,1)
+  al_weight(:,2) = al_weight(min_cw,2)
+  al_weight(:,3) = al_weight(min_cw,3)
+
+  do imat = 1,nummat
+    ucons(2,imat,0) =   al_weight(imat,1) * ucons(2,imat,0) &
+                      + al_weight(imat,2) * ucons(2,imat,-1) &
+                      + al_weight(imat,3) * ucons(2,imat,1)
+  end do !imat
+
+  ucons(2,g_mmi%irmin:g_neqns,0) = ulim(2,g_mmi%irmin:g_neqns)
 
 end associate
 
@@ -970,156 +981,6 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine intfac_limiting_p2
-
-!-------------------------------------------------------------------------------
-!----- Function that consistently applies limiter to only P2 dofs for
-!----- near-interface cell
-!-------------------------------------------------------------------------------
-
-subroutine intfac_limiting_onlyp2(ucons, theta2_al)
-
-real*8,  intent(in) :: theta2_al
-real*8  :: al1, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: ucons(g_tdof,g_neqns,1)
-
-  !        get primitive variables
-  al1 = ucons(1,1,1)
-  rho1 = ucons(1,2,1)/al1
-  rho2 = ucons(1,3,1)/(1.0-al1)
-  vel  = ucons(1,4,1)/( ucons(1,2,1) + ucons(1,3,1) )
-  rhoe1 = ucons(1,5,1)/al1
-  rhoe2 = ucons(1,6,1)/(1.0-al1)
-
-  !   i.   Volume fraction: Keep limiter function the same
-  ucons(3,1,1) = theta2_al * ucons(3,1,1)
-  !   ii.  Continuity:
-  ucons(3,2,1) = rho1 * ucons(3,1,1)
-  ucons(3,3,1) = - rho2 * ucons(3,1,1)
-  !   iii. Momentum:
-  ucons(3,4,1) = vel * (ucons(3,2,1) + ucons(3,3,1))
-  !   iv.  Energy:
-  ucons(3,5,1) = rhoe1 * ucons(3,1,1)
-  ucons(3,6,1) = - rhoe2 * ucons(3,1,1)
-
-end subroutine intfac_limiting_onlyp2
-
-!-------------------------------------------------------------------------------
-!----- WENO limiter for P1
-!-------------------------------------------------------------------------------
-
-subroutine weno_p1(ucons)
-
-integer :: ie,iel,ier,nsten,is,ieqn,iamax
-real*8  :: theta(g_neqns), theta_al, almax, dalmax, dxalp
-real*8  :: wi,epsweno,wenocp1,wt, &
-           dx,dxl,dxr,weight(3), &
-           gradv(3),osc(3),gradu(g_neqns,imax), &
-           ucons(g_tdof,g_neqns,0:imax+1)
-
-associate (nummat=>g_mmi%nummat)
-
-  epsweno = 1.d-8
-  wenocp1 = 10.0
-
-  do ieqn = 1,g_neqns
-
-    !--- determine WENO-limited first derivatives
-    do ie = 1,imax
-
-      iel = ie - 1
-      ier = ie + 1
-
-      dxl = 0.5 * (coord(ie)-coord(ie-1))
-      dx  = 0.5 * (coord(ie+1)-coord(ie))
-      dxr = 0.5 * (coord(ie+2)-coord(ie+1))
-
-      !--- the nsten stencils
-      gradv(1) = ucons(2,ieqn,ie)/dx
-
-      if (ie == imax) then
-        nsten = 2
-        gradv(2) = ucons(2,ieqn,iel)/dxl
-
-      elseif (ie == 1) then
-        nsten = 2
-        gradv(2) = ucons(2,ieqn,ier)/dxr
-
-      else
-        nsten = 3
-        gradv(2) = ucons(2,ieqn,iel)/dxl
-        gradv(3) = ucons(2,ieqn,ier)/dxr
-
-      end if
-
-      !--- oscillation indicators
-
-      do is = 1,nsten
-        osc(is) = dsqrt(gradv(is)*gradv(is))
-      end do !is
-
-      wt = 0.d0
-
-      do is = 1,nsten
-        if (is.eq.1) then
-          wi = wenocp1
-        else
-          wi = 1.d0
-        end if !is
-        weight(is) = wi* (epsweno + osc(is))**(-2.d0)
-        wt = wt + weight(is)
-      end do !is
-
-      !--- normalize the weight function
-      do is = 1,nsten
-        weight(is) = weight(is)/wt
-      end do !is
-
-      !--- reconstruct the limited gradient
-
-      gradu(ieqn,ie) = 0.d0
-
-      do is = 1,nsten
-        gradu(ieqn,ie) = gradu(ieqn,ie) + weight(is)*gradv(is)
-      end do !is
-
-    end do !ie
-
-  end do !ieqn
-
-  !--- modify the first derivatives
-  do ie = 1,imax
-
-    dx = 0.5 * (coord(ie+1)-coord(ie))
-    gradu(:,ie) = dx * gradu(:,ie)
-
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    theta(1:nummat) = theta(iamax)
-    almax = ucons(1,iamax,ie)
-    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
-
-    ! Obtain consistent limiter functions for the equation system
-    ! Interface detection
-    if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax, dalmax) ) then
-
-      dxalp = ucons(2,iamax,ie)
-      theta_al = gradu(iamax,ie)/( dxalp + dsign(1.0d-12,dxalp) )
-      theta = 0.0
-      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta_al)
-
-    else
-
-      do ieqn = 1,g_neqns
-        ucons(2,ieqn,ie) = gradu(ieqn,ie)
-      end do !ieqn
-
-    end if
-
-  end do !ie
-
-end associate
-
-end subroutine weno_p1
 
 !-------------------------------------------------------------------------------
 !----- Interface-cell / mixed-cell indicator based on vol-frac gradient
