@@ -196,6 +196,9 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(4)
     call sconsistent_weno_p2(ucons)
 
+  case(5)
+    call sconsistent_superbeeweno_p2(ucons)
+
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
     call exit
@@ -456,8 +459,8 @@ end subroutine min_superbee
 
 subroutine sconsistent_superbee_p1(ucons)
 
-integer :: ie, ieqn, iamax
-real*8  :: almax, dalmax, theta(g_neqns)
+integer :: ie, ieqn, iamax, imat
+real*8  :: almax, dalmax, theta(g_neqns), thetap(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -470,6 +473,13 @@ associate (nummat=>g_mmi%nummat)
 
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+
+    !! internal energy monotonicity
+    !call intenergy_lim(uneigh, thetap)
+    !do imat = 1,nummat
+    !  theta(g_mmi%iemin+imat-1) = min( theta(g_mmi%iemin+imat-1), thetap(imat) )
+    !end do !imat
+    !theta(g_mmi%imome) = min( theta(g_mmi%imome), thetap(nummat+1) )
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = minval(theta(1:nummat))
@@ -509,7 +519,8 @@ end subroutine sconsistent_superbee_p1
 subroutine sconsistent_superbee_p2(ucons)
 
 integer :: ie, ieqn, iamax, imat
-real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
+           thetap(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -540,6 +551,13 @@ associate (nummat=>g_mmi%nummat)
     ! use common limiter function for all volume-fractions
     theta1(1:nummat) = minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
+
+    !! internal energy monotonicity
+    !call intenergy_lim(uneigh, thetap)
+    !do imat = 1,nummat
+    !  theta1(g_mmi%iemin+imat-1) = min( theta1(g_mmi%iemin+imat-1), thetap(imat) )
+    !end do !imat
+    !theta1(g_mmi%imome) = min( theta1(g_mmi%imome), thetap(nummat+1) )
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
@@ -577,7 +595,8 @@ end subroutine sconsistent_superbee_p2
 subroutine sconsistent_weno_p2(ucons)
 
 integer :: ie, ieqn, iamax, imat
-real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
+           thetap(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1)
@@ -586,10 +605,89 @@ associate (nummat=>g_mmi%nummat)
 
   uxxlim = 0.0
   theta2 = 1.0
+  theta1 = 1.0
+
+  !--- 1. P2 derivative limiting
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / (dx2*dx2)
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
+
+    call weno_fn(uneigh)
+    uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
+
+  end do !ie
+
+  ucons(3,:,:) = uxxlim(:,:)
+
+  uxxlim = 0.0
+
+  !--- 2. P1 derivative limiting
+  do ie = 1,imax
+
+    uneigh(1,:,-1) = ucons(1,:,ie-1)
+    uneigh(1,:,0)  = ucons(1,:,ie)
+    uneigh(1,:,1)  = ucons(1,:,ie+1)
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(2,:,-1) = (ucons(2,:,ie-1) + 2.0*ucons(3,:,ie-1)) / dx2
+    uneigh(2,:,0)  = ucons(2,:,ie) / dx2
+    uneigh(2,:,1)  = (ucons(2,:,ie+1) - 2.0*ucons(3,:,ie+1)) / dx2
+
+    call weno_fn(uneigh)
+    uxxlim(:,ie) = uneigh(2,:,0) * dx2
+
+  end do !ie
+
+  ucons(2,:,:) = uxxlim(:,:)
 
   do ie = 1,imax
 
-    !--- 1. P2 derivative limiting
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    !--- 3. Obtain consistent limiter functions for the equation system
+    !       with interface detection
+    if ( (g_nmatint .eq. 1) .and. &
+         interface_cell(almax, dalmax) ) then
+
+      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+
+    end if
+
+  end do !ie
+
+end associate
+
+end subroutine sconsistent_weno_p2
+
+!-------------------------------------------------------------------------------
+!----- system-consistent superbee+weno limiter for P1P2:
+!-------------------------------------------------------------------------------
+
+subroutine sconsistent_superbeeweno_p2(ucons)
+
+integer :: ie, ieqn, iamax, imat
+real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           uxxlim(g_neqns,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  uxxlim = 0.0
+  theta2 = 0.0
+
+  !--- 1. P2 derivative limiting
+  do ie = 1,imax
 
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
@@ -646,7 +744,7 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_weno_p2
+end subroutine sconsistent_superbeeweno_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent overbee+superbee limiter:
@@ -719,6 +817,79 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine sconsistent_oversuperbee
+
+!-------------------------------------------------------------------------------
+!----- ensure internal energies are "monotone"
+!-------------------------------------------------------------------------------
+
+subroutine intenergy_lim(ucons, thetap)
+
+real*8,  intent(in) :: ucons(2,g_neqns,-1:1)
+
+integer :: imat
+real*8  :: rhoep, rhoup, arhop, rhop, alphp, &
+           uneigh(2,1,-1:1), thetap(g_mmi%nummat+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  thetap = 1.0
+
+  ! material internal energy
+  do imat = 1,nummat
+
+    uneigh = 0.0
+
+    uneigh(1,1,-1) =  ucons(1,g_mmi%iemin+imat-1,-1) &
+                    - ( ucons(1,g_mmi%irmin+imat-1,-1) &
+                       * ( ucons(1,g_mmi%imome,-1) &
+                          / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,-1)) )**2.0 ) / 2.0
+    uneigh(1,1,-1) = uneigh(1,1,-1) / ucons(1,imat,-1)
+
+    uneigh(1,1,0) =  ucons(1,g_mmi%iemin+imat-1,0) &
+                   - ( ucons(1,g_mmi%irmin+imat-1,0) &
+                      * ( ucons(1,g_mmi%imome,0) &
+                         / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) )**2.0 ) / 2.0
+    uneigh(1,1,0) = uneigh(1,1,0) / ucons(1,imat,0)
+
+    uneigh(1,1,1) =  ucons(1,g_mmi%iemin+imat-1,1) &
+                   - ( ucons(1,g_mmi%irmin+imat-1,1) &
+                      * ( ucons(1,g_mmi%imome,1) &
+                         / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,1)) )**2.0 ) / 2.0
+    uneigh(1,1,1) = uneigh(1,1,1) / ucons(1,imat,1)
+
+    rhoep = ucons(1,g_mmi%iemin+imat-1,0) + ucons(2,g_mmi%iemin+imat-1,0)
+    rhoup = ucons(1,g_mmi%imome,0) + ucons(2,g_mmi%imome,0)
+    arhop = ucons(1,g_mmi%irmin+imat-1,0) + ucons(2,g_mmi%irmin+imat-1,0)
+    rhop  = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)+ucons(2,g_mmi%irmin:g_mmi%irmax,0))
+    alphp = ucons(1,imat,0) + ucons(2,imat,0)
+
+    uneigh(2,1,0) = ( rhoep - ( arhop * (rhoup/rhop)**2.0 ) / 2.0 ) / alphp
+    uneigh(2,1,0) = uneigh(2,1,0) - uneigh(1,1,0)
+
+    call superbee_fn(1, 2.0, 1.0, uneigh(:,1,:), thetap(imat))
+
+  end do !imat
+
+  ! velocity
+  uneigh = 0.0
+  uneigh(1,1,-1) =  ucons(1,g_mmi%imome,-1) &
+                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,-1))
+  uneigh(1,1,0)  =  ucons(1,g_mmi%imome,0) &
+                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0))
+  uneigh(1,1,1)  =  ucons(1,g_mmi%imome,1) &
+                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,1))
+
+  rhoup = ucons(1,g_mmi%imome,0) + ucons(2,g_mmi%imome,0)
+  rhop  = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)+ucons(2,g_mmi%irmin:g_mmi%irmax,0))
+
+  uneigh(2,1,0) = rhoup/rhop
+  uneigh(2,1,0) = uneigh(2,1,0) - uneigh(1,1,0)
+
+  call superbee_fn(1, 2.0, 1.0, uneigh(:,1,:), thetap(nummat+1))
+
+end associate
+
+end subroutine intenergy_lim
 
 !-------------------------------------------------------------------------------
 !----- Superbee limiter for n equations individually
@@ -817,7 +988,7 @@ associate (nummat=>g_mmi%nummat)
       else
         wi = 1.d0
       end if !is
-      weight(is) = wi* (epsweno + osc(is))**(-8.d0)
+      weight(is) = wi* (epsweno + osc(is))**(-4.d0)
       wt = wt + weight(is)
     end do !is
 
@@ -996,10 +1167,10 @@ logical :: al, dal
   scale_al = 1.0d-2
   dal = dabs(dalcell) .gt. scale_al
 
-  scale_al = 10000.0*g_alphamin
+  scale_al = 1.0d-4 !10000.0*g_alphamin
   al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
 
-  if (al) then
+  if (al .or. dal) then
     interface_cell = .true.
 
   else

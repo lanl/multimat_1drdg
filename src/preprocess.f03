@@ -92,6 +92,8 @@ if (i_system > -1) then
     write(*,*) "   Overbee+Superbee."
   else if (g_nlim .eq. 4) then
     write(*,*) "   WENO."
+  else if (g_nlim .eq. 5) then
+    write(*,*) "   Superbee+WENO."
   else
     write(*,*) "Invalid limiter."
     stop
