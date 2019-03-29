@@ -254,6 +254,7 @@ subroutine surfaceint_p1(ucons, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+           up_l(g_neqns), up_r(g_neqns), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag, &
            alpha_star, u_star
@@ -297,6 +298,9 @@ associate (nummat=>g_mmi%nummat)
   u_star = lmag*(lplus+lminu)
   vriem(nummat+1,ifc) = u_star
 
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
@@ -306,7 +310,9 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
+      alpha_star = al_star(lplus, lminu, &
+                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                           ur(imat)*up_r(g_mmi%irmin+imat-1))
       rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
@@ -322,7 +328,9 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
+      alpha_star = al_star(lplus, lminu, &
+                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                           ur(imat)*up_r(g_mmi%irmin+imat-1))
       rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
@@ -341,11 +349,12 @@ end subroutine surfaceint_p1
 
 subroutine volumeint_p1(ucons, rgrad, vriem, rhsel)
 
-integer :: ig, ie, ieqn, ngauss, imat
+integer :: ig, ie, ieqn, ngauss, imat, jmat
 data       ngauss/2/
 
 real*8  :: dx2, p, hmat, viriem, &
            u(g_neqns), up(g_neqns), &
+           rhob, y(g_mmi%nummat), dapdx, yk, &
            carea(2), weight(2), &
            cflux(g_neqns), &
            nflux(g_gdof,g_neqns), &
@@ -382,6 +391,12 @@ associate (nummat=>g_mmi%nummat)
     p = p + u(imat)*up(g_mmi%irmin+imat-1)
     end do !imat
 
+    ! mass-fractions
+    rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
+    do imat = 1,nummat
+      y(imat) = u(g_mmi%irmin+imat-1) / rhob
+    end do !imat
+
     !--- flux terms
     ! momentum flux
     cflux(g_mmi%imome) = up(g_mmi%imome) * u(g_mmi%imome) + p
@@ -393,14 +408,28 @@ associate (nummat=>g_mmi%nummat)
       cflux(imat) = 0.0
       cflux(g_mmi%irmin+imat-1) = up(g_mmi%imome) * u(g_mmi%irmin+imat-1)
       cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat!(u(g_mmi%iemin+imat-1) )
+
       ! non-conservative fluxes
+      dapdx = 0.0
+      yk = 0.0
+      do jmat = 1,nummat
+        !--- no contribution from the current element
+        if (jmat .eq. imat) cycle
+
+        !--- for first non-conservative term
+        dapdx = dapdx + rgrad(jmat,ie)
+
+        !--- for second non-conservative term
+        yk = yk + y(jmat)
+      end do !jmat
+
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
-      nflux(1,g_mmi%iemin+imat-1) = p * up(g_mmi%imome) * rgrad(imat,ie)
+      nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
+                                                         -yk * rgrad(imat,ie) )
       nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
       nflux(2,g_mmi%irmin+imat-1) = 0.0
-      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)! &
-                                    !+ p * up(g_mmi%imome) * u(imat) * 2.0
+      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
     end do !imat
 
     do ieqn = 1,g_neqns
@@ -427,6 +456,7 @@ subroutine surfaceint_p1p2(ucons, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+           up_l(g_neqns), up_r(g_neqns), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag, &
            alpha_star, u_star
@@ -470,6 +500,9 @@ associate (nummat=>g_mmi%nummat)
   u_star = lmag*(lplus+lminu)
   vriem(nummat+1,ifc) = u_star
 
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
@@ -479,7 +512,9 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
+      alpha_star = al_star(lplus, lminu, &
+                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                           ur(imat)*up_r(g_mmi%irmin+imat-1))
       rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
@@ -495,7 +530,9 @@ associate (nummat=>g_mmi%nummat)
     !--- compute gradients of volume fractions and velocity for the
     !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
+      alpha_star = al_star(lplus, lminu, &
+                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                           ur(imat)*up_r(g_mmi%irmin+imat-1))
       rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
@@ -514,11 +551,12 @@ end subroutine surfaceint_p1p2
 
 subroutine volumeint_p1p2(ucons, rgrad, vriem, rhsel)
 
-integer :: ig, ie, ieqn, ngauss, imat
+integer :: ig, ie, ieqn, ngauss, imat, jmat
 data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
            u(g_neqns), up(g_neqns), &
+           rhob, y(g_mmi%nummat), dapdx, yk, &
            carea(2), weight(2), &
            cflux(g_neqns), &
            nflux(g_gdof,g_neqns), &
@@ -554,6 +592,12 @@ associate (nummat=>g_mmi%nummat)
     p = p + u(imat)*up(g_mmi%irmin+imat-1)
     end do !imat
 
+    ! mass-fractions
+    rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
+    do imat = 1,nummat
+      y(imat) = u(g_mmi%irmin+imat-1) / rhob
+    end do !imat
+
     !--- flux terms
     ! momentum flux
     cflux(g_mmi%imome) = up(g_mmi%imome) * u(g_mmi%imome) + p
@@ -565,14 +609,28 @@ associate (nummat=>g_mmi%nummat)
       cflux(imat) = 0.0
       cflux(g_mmi%irmin+imat-1) = up(g_mmi%imome) * u(g_mmi%irmin+imat-1)
       cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat!(u(g_mmi%iemin+imat-1) )
+
       ! non-conservative fluxes
+      dapdx = 0.0
+      yk = 0.0
+      do jmat = 1,nummat
+        !--- no contribution from the current element
+        if (jmat .eq. imat) cycle
+
+        !--- for first non-conservative term
+        dapdx = dapdx + rgrad(jmat,ie)
+
+        !--- for second non-conservative term
+        yk = yk + y(jmat)
+      end do !jmat
+
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
-      nflux(1,g_mmi%iemin+imat-1) = p * up(g_mmi%imome) * rgrad(imat,ie)
+      nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
+                                                         -yk * rgrad(imat,ie) )
       nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
       nflux(2,g_mmi%irmin+imat-1) = 0.0
-      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)! &
-                                    !+ p * up(g_mmi%imome) * u(imat) * 2.0
+      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
     end do !imat
 
     do ieqn = 1,g_neqns

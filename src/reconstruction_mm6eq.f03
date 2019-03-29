@@ -326,7 +326,7 @@ real*8  :: b3, &
 associate (nummat=>g_mmi%nummat)
 
   eps = 1.0d-16
-  al_eps = 0.01*g_alphamin
+  al_eps = 0.01*dble(nummat)*g_alphamin
 
   ngauss = 2
   call rutope(1, ngauss, carea, weight)
@@ -337,6 +337,8 @@ associate (nummat=>g_mmi%nummat)
   careap(4) = 1.0
 
   do ie = 1,imax
+  thal = 1.0
+
   do imat = 1,nummat
 
     alm_min   = 10.0
@@ -965,7 +967,7 @@ real*8  :: wi,epsweno,wenocp1,wt, &
 associate (nummat=>g_mmi%nummat)
 
   epsweno = 1.d-10
-  wenocp1 = 100.0
+  wenocp1 = 200.0
   nsten = 3
 
   do ieqn = 1,g_neqns
