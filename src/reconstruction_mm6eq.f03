@@ -163,10 +163,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     call min_superbee(ucons)
 
   case(2)
-    call sconsistent_superbee_p1(ucons)
+    call superbee_p1(ucons)
 
   case(3)
-    call sconsistent_oversuperbee(ucons)
+    call oversuperbee(ucons)
 
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
@@ -191,13 +191,13 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   case(0)
 
   case(2)
-    call sconsistent_superbee_p2(ucons)
+    call superbee_p2(ucons)
 
   case(4)
-    call sconsistent_weno_p2(ucons)
+    call weno_p2(ucons)
 
   case(5)
-    call sconsistent_superbeeweno_p2(ucons)
+    call superbeeweno_p2(ucons)
 
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
@@ -296,10 +296,10 @@ associate (nummat=>g_mmi%nummat)
   !     (minval(thal) .lt. 1.0) .and. &
   !     interface_cell(ucons(1,iamax,ie)) ) then
 
-  !  do imat = 1,nummat
-  !    ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
-  !    ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
-  !  end do !imat
+    do imat = 1,nummat
+      ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
+      ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
+    end do !imat
 
   !end if
 
@@ -408,10 +408,10 @@ associate (nummat=>g_mmi%nummat)
   !     (minval(thal) .lt. 1.0) .and. &
   !     interface_cell(ucons(1,iamax,ie)) ) then
 
-  !  do imat = 1,nummat
-  !    ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
-  !    ucons(2:3,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%iemin+imat-1,ie)
-  !  end do !imat
+    do imat = 1,nummat
+      ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
+      ucons(2:3,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%iemin+imat-1,ie)
+    end do !imat
 
   !end if
 
@@ -457,7 +457,7 @@ end subroutine min_superbee
 !----- system-consistent superbee limiter for P1 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_superbee_p1(ucons)
+subroutine superbee_p1(ucons)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_mmi%nummat+1)
@@ -481,12 +481,12 @@ associate (nummat=>g_mmi%nummat)
     !end do !imat
     !theta(g_mmi%imome) = min( theta(g_mmi%imome), thetap(nummat+1) )
 
-    ! use common limiter function for all volume-fractions
-    theta(1:nummat) = minval(theta(1:nummat))
-
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
+
+    ! use common limiter function for all volume-fractions
+    theta(1:nummat) = theta(iamax)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
@@ -510,13 +510,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_superbee_p1
+end subroutine superbee_p1
 
 !-------------------------------------------------------------------------------
 !----- system-consistent superbee limiter for P2 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_superbee_p2(ucons)
+subroutine superbee_p2(ucons)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
@@ -548,10 +548,6 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
-    ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = minval(theta1(1:nummat))
-    theta2(1:nummat) = minval(theta2(1:nummat))
-
     !! internal energy monotonicity
     !call intenergy_lim(uneigh, thetap)
     !do imat = 1,nummat
@@ -562,6 +558,10 @@ associate (nummat=>g_mmi%nummat)
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    ! use common limiter function for all volume-fractions
+    theta1(1:nummat) = theta1(iamax)
+    theta2(1:nummat) = minval(theta2(1:nummat))
 
     !--- 3. Obtain consistent limiter functions for the equation system
     !       with interface detection
@@ -586,13 +586,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_superbee_p2
+end subroutine superbee_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent weno limiter for P2:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_weno_p2(ucons)
+subroutine weno_p2(ucons)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
@@ -667,16 +667,16 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_weno_p2
+end subroutine weno_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent superbee+weno limiter for P1P2:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_superbeeweno_p2(ucons)
+subroutine superbeeweno_p2(ucons)
 
 integer :: ie, ieqn, iamax, imat
-real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns)
+real*8  :: dx2, almax, dalmax, theta1(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1)
@@ -684,7 +684,6 @@ real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
 associate (nummat=>g_mmi%nummat)
 
   uxxlim = 0.0
-  theta2 = 0.0
 
   !--- 1. P2 derivative limiting
   do ie = 1,imax
@@ -714,24 +713,23 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
-    ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = minval(theta1(1:nummat))
-
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    ! use common limiter function for all volume-fractions
+    theta1(1:nummat) = theta1(iamax)
 
     !--- 3. Obtain consistent limiter functions for the equation system
     !       with interface detection
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), 1.0)
 
     else
 
       do ieqn = 1,g_neqns
-        ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
         ucons(2,ieqn,ie) = theta1(ieqn) * ucons(2,ieqn,ie)
       end do !ieqn
 
@@ -744,13 +742,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_superbeeweno_p2
+end subroutine superbeeweno_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent overbee+superbee limiter:
 !-------------------------------------------------------------------------------
 
-subroutine sconsistent_oversuperbee(ucons)
+subroutine oversuperbee(ucons)
 
 integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
@@ -816,7 +814,7 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine sconsistent_oversuperbee
+end subroutine oversuperbee
 
 !-------------------------------------------------------------------------------
 !----- ensure internal energies are "monotone"
@@ -880,7 +878,10 @@ associate (nummat=>g_mmi%nummat)
                    / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,1))
 
   rhoup = ucons(1,g_mmi%imome,0) + ucons(2,g_mmi%imome,0)
-  rhop  = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)+ucons(2,g_mmi%irmin:g_mmi%irmax,0))
+  rhop  = 0.0
+  do imat = 1,nummat
+    rhop = rhop + ucons(1,g_mmi%irmin+imat-1,0)+ucons(2,g_mmi%irmin+imat-1,0)
+  end do !imat
 
   uneigh(2,1,0) = rhoup/rhop
   uneigh(2,1,0) = uneigh(2,1,0) - uneigh(1,1,0)
@@ -895,7 +896,7 @@ end subroutine intenergy_lim
 !----- Superbee limiter for n equations individually
 !----- this sub actually calculates the limiter function according to superbee.
 !----- the input to this function can be modified to limit P1 or P2 dofs, refer
-!----- to sconsistent_superbee_p1 and sconsistent_superbee_p2 respectively
+!----- to superbee_p1 and superbee_p2 respectively
 !-------------------------------------------------------------------------------
 
 subroutine superbee_fn(neq,beta_lim,ascale,ucons,theta)
@@ -963,8 +964,8 @@ real*8  :: wi,epsweno,wenocp1,wt, &
 
 associate (nummat=>g_mmi%nummat)
 
-  epsweno = 1.d-8
-  wenocp1 = 200.0
+  epsweno = 1.d-10
+  wenocp1 = 100.0
   nsten = 3
 
   do ieqn = 1,g_neqns
@@ -1137,7 +1138,7 @@ associate (nummat=>g_mmi%nummat)
 
   do imat = 1,nummat
   !        Volume fraction: Keep limiter function the same
-    ucons(2,imat,1) = max(theta1_al, theta2_al) * ucons(2,imat,1)
+    ucons(2,imat,1) = theta1_al * ucons(2,imat,1)
     ucons(3,imat,1) = theta2_al * ucons(3,imat,1)
   !        Continuity:
     ucons(2:3,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2:3,imat,1)
@@ -1167,10 +1168,10 @@ logical :: al, dal
   scale_al = 1.0d-2
   dal = dabs(dalcell) .gt. scale_al
 
-  scale_al = 1.0d-4 !10000.0*g_alphamin
+  scale_al = 10000.0*g_alphamin
   al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
 
-  if (al .or. dal) then
+  if (al) then
     interface_cell = .true.
 
   else
