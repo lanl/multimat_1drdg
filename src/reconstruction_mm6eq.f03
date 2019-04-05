@@ -153,8 +153,6 @@ subroutine limiting_p1(ucons)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  call boundpreserve_alpha_p1(ucons)
-
   select case (g_nlim)
 
   case(0)
@@ -174,6 +172,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   end select
 
+  call boundpreserve_alpha_p1(ucons)
+
 end subroutine limiting_p1
 
 !-------------------------------------------------------------------------------
@@ -183,8 +183,6 @@ end subroutine limiting_p1
 subroutine limiting_p2(ucons)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
-
-  call boundpreserve_alpha_p2(ucons)
 
   select case (g_nlim)
 
@@ -205,6 +203,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   end select
 
+  call boundpreserve_alpha_p2(ucons)
+
 end subroutine limiting_p2
 
 !-------------------------------------------------------------------------------
@@ -214,11 +214,10 @@ end subroutine limiting_p2
 subroutine boundpreserve_alpha_p1(ucons)
 
 integer :: ie, ig, ngauss, imat, iamax
-real*8  :: careap(4), &
+real*8  :: careap(2), &
            alm, thal(g_mmi%nummat), thal1, thal2, &
            alm_min, alm_max, eps, al_eps, diff, &
            !arhom, arhom_min, &
-           theta(g_neqns), &
            ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -229,8 +228,6 @@ associate (nummat=>g_mmi%nummat)
   ngauss = 2
   careap(1) = -1.0
   careap(2) = 1.0
-
-  theta = 1.0
 
   do ie = 1,imax
   do imat = 1,nummat
@@ -326,7 +323,7 @@ real*8  :: b3, &
 associate (nummat=>g_mmi%nummat)
 
   eps = 1.0d-16
-  al_eps = 0.01*dble(nummat)*g_alphamin
+  al_eps = 0.01*g_alphamin
 
   ngauss = 2
   call rutope(1, ngauss, carea, weight)
@@ -495,7 +492,7 @@ associate (nummat=>g_mmi%nummat)
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting(ucons(:,:,ie), 0.0, 0.0, theta, theta(iamax))
+      call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
 
     else
 
@@ -755,8 +752,7 @@ subroutine oversuperbee(ucons)
 integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
 real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: rhoneigh(2,2,-1:1), &
-           uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -779,30 +775,9 @@ associate (nummat=>g_mmi%nummat)
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-!      rhoneigh(1,1,-1) = ucons(1,2,ie-1)/ucons(1,1,ie-1)
-!      rhoneigh(1,1,0)  = ucons(1,2,ie)/ucons(1,1,ie)
-!      rhoneigh(1,1,1)  = ucons(1,2,ie+1)/ucons(1,1,ie+1)
-!
-!      rhoneigh(1,2,-1) = ucons(1,3,ie-1)/(1.0-ucons(1,1,ie-1))
-!      rhoneigh(1,2,0)  = ucons(1,3,ie)/(1.0-ucons(1,1,ie))
-!      rhoneigh(1,2,1)  = ucons(1,3,ie+1)/(1.0-ucons(1,1,ie+1))
-!
-!      rhoneigh(2,1,0) = ( theta(2)*ucons(2,2,ie) &
-!                        - rhoneigh(1,1,0)*theta(1)*ucons(2,1,ie) ) / al1
-!      rhoneigh(2,2,0) = ( theta(3)*ucons(2,3,ie) &
-!                        + rhoneigh(1,2,0)*theta(1)*ucons(2,1,ie) ) / (1.0-al1)
-!
-!      call superbee_fn(2, 1.0, 1.0, rhoneigh, thrho)
-!
-!      rhoneigh(2,1,0) = thrho(1) * rhoneigh(2,1,0)
-!      rhoneigh(2,2,0) = thrho(2) * rhoneigh(2,2,0)
-!
-      rhoneigh(2,1,0) = 0.0
-      rhoneigh(2,2,0) = 0.0
-
       !   compressive limiting for volume fraction
       call overbee_fn(uneigh(:,iamax,:), theta_al)
-      call intfac_limiting(ucons(:,:,ie), rhoneigh(2,1,0), rhoneigh(2,2,0), theta, theta_al)
+      call intfac_limiting(ucons(:,:,ie), theta, theta_al)
 
     else
 
@@ -1079,9 +1054,9 @@ end subroutine overbee_fn
 !----- Function that consistently applies limiter for near-interface cell
 !-------------------------------------------------------------------------------
 
-subroutine intfac_limiting(ucons, drho1dx, drho2dx, theta, theta_al)
+subroutine intfac_limiting(ucons, theta, theta_al)
 
-real*8,  intent(in) :: theta(g_neqns), theta_al, drho1dx, drho2dx
+real*8,  intent(in) :: theta(g_neqns), theta_al
 
 integer :: imat
 real*8, dimension(g_mmi%nummat) :: rhom, rhoem
@@ -1102,10 +1077,8 @@ associate (nummat=>g_mmi%nummat)
     ucons(2,imat,1) = theta_al * ucons(2,imat,1)
   !        Continuity:
     ucons(2,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2,imat,1)! &
-                  !+ al(imat)  * drho1dx
   !        Energy:
     ucons(2,g_mmi%iemin+imat-1,1) = rhoem(imat) * ucons(2,imat,1)! &
-                  !+ al(imat) * 0.5*vel*vel * drho1dx
   end do !imat
 
   !        Momentum:
@@ -1140,7 +1113,7 @@ associate (nummat=>g_mmi%nummat)
 
   do imat = 1,nummat
   !        Volume fraction: Keep limiter function the same
-    ucons(2,imat,1) = theta1_al * ucons(2,imat,1)
+    ucons(2,imat,1) = max(theta1_al, theta2_al) * ucons(2,imat,1)
     ucons(3,imat,1) = theta2_al * ucons(3,imat,1)
   !        Continuity:
     ucons(2:3,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2:3,imat,1)
@@ -1170,10 +1143,10 @@ logical :: al, dal
   scale_al = 1.0d-2
   dal = dabs(dalcell) .gt. scale_al
 
-  scale_al = 10000.0*g_alphamin
+  scale_al = 1.0d-4 !10000.0*g_alphamin
   al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
 
-  if (al) then
+  if (al .or. dal) then
     interface_cell = .true.
 
   else

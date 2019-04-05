@@ -354,7 +354,7 @@ data       ngauss/2/
 
 real*8  :: dx2, p, hmat, viriem, &
            u(g_neqns), up(g_neqns), &
-           rhob, y(g_mmi%nummat), dapdx, yk, &
+           rhob, y(g_mmi%nummat), dapdx, &
            carea(2), weight(2), &
            cflux(g_neqns), &
            nflux(g_gdof,g_neqns), &
@@ -364,8 +364,6 @@ real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), 
                       ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
-
-  ngauss = 2
 
   call rutope(1, ngauss, carea, weight)
 
@@ -411,22 +409,14 @@ associate (nummat=>g_mmi%nummat)
 
       ! non-conservative fluxes
       dapdx = 0.0
-      yk = 0.0
       do jmat = 1,nummat
-        !--- no contribution from the current element
-        if (jmat .eq. imat) cycle
-
-        !--- for first non-conservative term
         dapdx = dapdx + rgrad(jmat,ie)
-
-        !--- for second non-conservative term
-        yk = yk + y(jmat)
       end do !jmat
 
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
-                                                         -yk * rgrad(imat,ie) )
+                                                         - rgrad(imat,ie) )
       nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
       nflux(2,g_mmi%irmin+imat-1) = 0.0
       nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
@@ -556,7 +546,7 @@ data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
            u(g_neqns), up(g_neqns), &
-           rhob, y(g_mmi%nummat), dapdx, yk, &
+           rhob, y(g_mmi%nummat), dapdx, &
            carea(2), weight(2), &
            cflux(g_neqns), &
            nflux(g_gdof,g_neqns), &
@@ -612,22 +602,14 @@ associate (nummat=>g_mmi%nummat)
 
       ! non-conservative fluxes
       dapdx = 0.0
-      yk = 0.0
       do jmat = 1,nummat
-        !--- no contribution from the current element
-        if (jmat .eq. imat) cycle
-
-        !--- for first non-conservative term
         dapdx = dapdx + rgrad(jmat,ie)
-
-        !--- for second non-conservative term
-        yk = yk + y(jmat)
       end do !jmat
 
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
-                                                         -yk * rgrad(imat,ie) )
+                                                         - rgrad(imat,ie) )
       nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
       nflux(2,g_mmi%irmin+imat-1) = 0.0
       nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
