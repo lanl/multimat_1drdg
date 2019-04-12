@@ -61,7 +61,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
   call flux_p1_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p1(ucons, rhsel)
+    call relaxpressure_dg(ucons, rhsel)
   end if
 
 end subroutine rhs_p1_mm6eq
@@ -79,7 +79,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
   call flux_p1p2_mm6eq(ucons, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_p1p2(ucons, rhsel)
+    call relaxpressure_dg(ucons, rhsel)
   end if
 
 end subroutine rhs_p1p2_mm6eq
@@ -92,6 +92,7 @@ subroutine flux_p0_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
+           up_l(g_neqns), up_r(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), lplus, lminu, lmag, &
            rhsel(g_gdof,g_neqns,imax)
 
@@ -108,13 +109,16 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
   ul(:) = ucons(1,:,iel)
   ur(:) = ucons(1,:,ier)
 
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
   !--- fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call llf_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
      call llf_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
      call ausmplus_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
      write(*,*) "Invalid flux scheme."
@@ -147,6 +151,7 @@ subroutine flux_p0p1_mm6eq(ucons, rhsel)
 
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+           up_l(g_neqns), up_r(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag
 
@@ -168,14 +173,17 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
     uavgr(ieqn) = ucons(1,ieqn,ier)
   end do !ieqn
 
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
+
   !--- fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call llf_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
      call llf_nonconserv(ul, ur, uavgl, uavgr, &
                          lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
      call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
                               lplus, lminu, lmag, ncnflux)
   else
@@ -218,9 +226,9 @@ real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
   vriemann = 0.0
 
   !--- surface integration
-  call surfaceint_p1(ucons, riemanngrad, vriemann, rhsel)
+  call surfaceint_dg(ucons, riemanngrad, vriemann, rhsel)
   !--- volume integration
-  call volumeint_p1(ucons, riemanngrad, vriemann, rhsel)
+  call volumeint_dg(ucons, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_p1_mm6eq
 
@@ -240,26 +248,26 @@ real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
   vriemann = 0.0
 
   !--- surface integration
-  call surfaceint_p1p2(ucons, riemanngrad, vriemann, rhsel)
+  call surfaceint_dg(ucons, riemanngrad, vriemann, rhsel)
   !--- volume integration
-  call volumeint_p1p2(ucons, riemanngrad, vriemann, rhsel)
+  call volumeint_dg(ucons, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_p1p2_mm6eq
 
 !-------------------------------------------------------------------------------
-!----- P1 surface contribution to RHS:
+!----- DG surface contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine surfaceint_p1(ucons, rgrad, vriem, rhsel)
+subroutine surfaceint_dg(ucons, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag, &
-           alpha_star, u_star
+           lplus, lminu, lmag
 
-real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
+real*8  :: rgrad_f(g_mmi%nummat+1), &
+           rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -272,34 +280,51 @@ associate (nummat=>g_mmi%nummat)
   iel = ifc - 1
   ier = ifc
 
-  do ieqn = 1,g_neqns
-    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
-    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
+  !--- dgp1
+  if (g_nsdiscr .eq. 11) then
+    do ieqn = 1,g_neqns
+      ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
+      ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
+    end do !ieqn
 
-    uavgl(ieqn) = ucons(1,ieqn,iel)
-    uavgr(ieqn) = ucons(1,ieqn,ier)
-  end do !ieqn
+  !--- rdgp1p2
+  elseif (g_nsdiscr .eq. 12) then
+    do ieqn = 1,g_neqns
+      ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel) + 1.0/3.0*ucons(3,ieqn,iel)
+      ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
+    end do !ieqn
+
+  end if
+
+  uavgl(:) = ucons(1,:,iel)
+  uavgr(:) = ucons(1,:,ier)
+
+  call get_uprim_mm6eq(ul, up_l)
+  call get_uprim_mm6eq(ur, up_r)
 
   !--- fluxes
 
   if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
   else if (i_flux .eq. 3) then
-     call hllc_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
+     call hllc_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
   else
      write(*,*) "Invalid flux scheme."
      stop
   endif
 
   do imat = 1,nummat
-    alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
-    vriem(imat,ifc) = alpha_star
+    vriem(imat,ifc) = al_star(lplus, lminu, ul(imat), ur(imat))
   end do !imat
-  u_star = lmag*(lplus+lminu)
-  vriem(nummat+1,ifc) = u_star
+  vriem(nummat+1,ifc) = lmag*(lplus+lminu)
 
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
+  !--- compute gradients of volume fractions and velocity for the
+  !--- non-conservative terms from Riemann reconstructed values
+  do imat = 1,nummat
+    rgrad_f(imat) = al_star(lplus, lminu, &
+                            ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                            ur(imat)*up_r(g_mmi%irmin+imat-1))
+  end do !imat
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
@@ -307,15 +332,10 @@ associate (nummat=>g_mmi%nummat)
           rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
     end do !ieqn
 
-    !--- compute gradients of volume fractions and velocity for the
-    !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, &
-                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
-                           ur(imat)*up_r(g_mmi%irmin+imat-1))
-      rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
+      rgrad(imat,iel) = rgrad(imat,iel) + rgrad_f(imat)
     end do !imat
-    rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
+    rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + vriem(nummat+1,ifc)
 
   end if
 
@@ -325,15 +345,10 @@ associate (nummat=>g_mmi%nummat)
           rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
     end do !ieqn
 
-    !--- compute gradients of volume fractions and velocity for the
-    !--- non-conservative terms from Riemann reconstructed values
     do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, &
-                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
-                           ur(imat)*up_r(g_mmi%irmin+imat-1))
-      rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
+      rgrad(imat,ier) = rgrad(imat,ier) - rgrad_f(imat)
     end do !imat
-    rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
+    rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - vriem(nummat+1,ifc)
 
   end if
 
@@ -341,205 +356,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine surfaceint_p1
+end subroutine surfaceint_dg
 
 !-------------------------------------------------------------------------------
-!----- P1 volume contribution to RHS:
+!----- DG volume contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine volumeint_p1(ucons, rgrad, vriem, rhsel)
-
-integer :: ig, ie, ieqn, ngauss, imat, jmat
-data       ngauss/2/
-
-real*8  :: dx2, p, hmat, viriem, &
-           u(g_neqns), up(g_neqns), &
-           rhob, y(g_mmi%nummat), dapdx, &
-           carea(2), weight(2), &
-           cflux(g_neqns), &
-           nflux(g_gdof,g_neqns), &
-           rhsel(g_gdof,g_neqns,imax)
-
-real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
-                      ucons(g_tdof,g_neqns,0:imax+1)
-
-associate (nummat=>g_mmi%nummat)
-
-  call rutope(1, ngauss, carea, weight)
-
-  do ie = 1,imax
-  cflux = 0.0
-  nflux = 0.0
-  do ig = 1,ngauss
-
-    dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
-
-    ! basis function
-
-    do ieqn = 1,g_neqns
-      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
-    end do !ieqn
-    viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
-
-    call get_uprim_mm6eq(u, up)
-
-    ! bulk pressure
-    p = 0.0
-    do imat = 1,nummat
-    p = p + u(imat)*up(g_mmi%irmin+imat-1)
-    end do !imat
-
-    ! mass-fractions
-    rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
-    do imat = 1,nummat
-      y(imat) = u(g_mmi%irmin+imat-1) / rhob
-    end do !imat
-
-    !--- flux terms
-    ! momentum flux
-    cflux(g_mmi%imome) = up(g_mmi%imome) * u(g_mmi%imome) + p
-    nflux(1,g_mmi%imome) = 0.0
-    nflux(2,g_mmi%imome) = 0.0
-    do imat = 1,nummat
-      hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
-      ! other conservative fluxes
-      cflux(imat) = 0.0
-      cflux(g_mmi%irmin+imat-1) = up(g_mmi%imome) * u(g_mmi%irmin+imat-1)
-      cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat!(u(g_mmi%iemin+imat-1) )
-
-      ! non-conservative fluxes
-      dapdx = 0.0
-      do jmat = 1,nummat
-        dapdx = dapdx + rgrad(jmat,ie)
-      end do !jmat
-
-      nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
-      nflux(1,g_mmi%irmin+imat-1) = 0.0
-      nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
-                                                         - rgrad(imat,ie) )
-      nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
-      nflux(2,g_mmi%irmin+imat-1) = 0.0
-      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
-    end do !imat
-
-    do ieqn = 1,g_neqns
-      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
-    end do !ieqn
-
-    do ieqn = 1,g_neqns
-      rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
-      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
-    end do !ieqn
-
-  end do !ig
-  end do !ie
-
-end associate
-
-end subroutine volumeint_p1
-
-!-------------------------------------------------------------------------------
-!----- P1P2 surface contribution to RHS:
-!-------------------------------------------------------------------------------
-
-subroutine surfaceint_p1p2(ucons, rgrad, vriem, rhsel)
-
-integer :: ifc, iel, ier, ieqn, imat
-real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
-           up_l(g_neqns), up_r(g_neqns), &
-           intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag, &
-           alpha_star, u_star
-
-real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
-
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-
-associate (nummat=>g_mmi%nummat)
-
-  do ifc = 1,imax+1
-
-  intflux = 0.0
-
-  iel = ifc - 1
-  ier = ifc
-
-  do ieqn = 1,g_neqns
-    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel) + 1.0/3.0*ucons(3,ieqn,iel)
-    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
-
-    uavgl(ieqn) = ucons(1,ieqn,iel)
-    uavgr(ieqn) = ucons(1,ieqn,ier)
-  end do !ieqn
-
-  !--- fluxes
-
-  if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-  else if (i_flux .eq. 3) then
-     call hllc_mm6eq(ul, ur, intflux, lplus, lminu, lmag)
-  else
-     write(*,*) "Invalid flux scheme."
-     stop
-  endif
-
-  do imat = 1,nummat
-    alpha_star = al_star(lplus, lminu, ul(imat), ur(imat))
-    vriem(imat,ifc) = alpha_star
-  end do !imat
-  u_star = lmag*(lplus+lminu)
-  vriem(nummat+1,ifc) = u_star
-
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
-
-  if (iel .gt. 0) then
-    do ieqn = 1,g_neqns
-          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
-          rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
-    end do !ieqn
-
-    !--- compute gradients of volume fractions and velocity for the
-    !--- non-conservative terms from Riemann reconstructed values
-    do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, &
-                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
-                           ur(imat)*up_r(g_mmi%irmin+imat-1))
-      rgrad(imat,iel) = rgrad(imat,iel) + alpha_star
-    end do !imat
-    rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + u_star
-
-  end if
-
-  if (ier .lt. (imax+1)) then
-    do ieqn = 1,g_neqns
-          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
-          rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
-    end do !ieqn
-
-    !--- compute gradients of volume fractions and velocity for the
-    !--- non-conservative terms from Riemann reconstructed values
-    do imat = 1,nummat
-      alpha_star = al_star(lplus, lminu, &
-                           ul(imat)*up_l(g_mmi%irmin+imat-1), &
-                           ur(imat)*up_r(g_mmi%irmin+imat-1))
-      rgrad(imat,ier) = rgrad(imat,ier) - alpha_star
-    end do !imat
-    rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - u_star
-
-  end if
-
-  end do !ifc
-
-end associate
-
-end subroutine surfaceint_p1p2
-
-!-------------------------------------------------------------------------------
-!----- P1P2 volume contribution to RHS:
-!-------------------------------------------------------------------------------
-
-subroutine volumeint_p1p2(ucons, rgrad, vriem, rhsel)
+subroutine volumeint_dg(ucons, rgrad, vriem, rhsel)
 
 integer :: ig, ie, ieqn, ngauss, imat, jmat
 data       ngauss/2/
@@ -566,12 +389,21 @@ associate (nummat=>g_mmi%nummat)
 
     dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
 
-    ! basis function
+    !--- dgp1
+    if (g_nsdiscr .eq. 11) then
+      do ieqn = 1,g_neqns
+        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
+      end do !ieqn
 
-    b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
-    do ieqn = 1,g_neqns
-      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
-    end do !ieqn
+    !--- rdgp1p2
+    elseif (g_nsdiscr .eq. 12) then
+      b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
+      do ieqn = 1,g_neqns
+        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
+      end do !ieqn
+
+    end if
+
     viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
 
     call get_uprim_mm6eq(u, up)
@@ -629,19 +461,18 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine volumeint_p1p2
+end subroutine volumeint_dg
 
 !-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------
 
-subroutine llf_mm6eq(ul, ur, flux, lplus, lminu, lmag)
+subroutine llf_mm6eq(ul, ur, up_l, up_r, flux, lplus, lminu, lmag)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns)
 
 integer :: imat
 real*8 :: flux(g_neqns), lplus, lminu, lmag
-real*8 :: up_l(g_neqns), up_r(g_neqns)
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
                                    arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
@@ -670,9 +501,6 @@ associate (nummat=>g_mmi%nummat)
   end do !imat
   rhou_l  = ul(g_mmi%imome)
   rhou_r  = ur(g_mmi%imome)
-
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
 
   rho_l = sum(arhom_l)
   rho_r = sum(arhom_r)
@@ -790,13 +618,12 @@ end subroutine llf_nonconserv
 !----- 2fluid AUSM+UP:
 !-------------------------------------------------------------------------------
 
-subroutine ausmplus_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
+subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, flux, lambda_plus, lambda_minu, lambda_mag)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns)
 
 integer :: imat
 real*8 :: flux(g_neqns)
-real*8 :: up_l(g_neqns), up_r(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
                                    arhom_l,rhom_l,em_l,am_l,hm_l, &
                                    arhom_r,rhom_r,em_r,am_r,hm_r, &
@@ -821,9 +648,6 @@ associate (nummat=>g_mmi%nummat)
   k_u = 0.5;
 
   flux(:) = 0.0
-
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
 
   ! material states and bulk pressure
   p_l = 0.0
@@ -977,13 +801,12 @@ end subroutine ausmplus_nonconserv
 !----- Numerical flux by HLLC:
 !------------------------------------------------------------------------------
 
-subroutine hllc_mm6eq(ul, ur, flux, lambda_plus, lambda_minu, lambda_mag)
+subroutine hllc_mm6eq(ul, ur, up_l, up_r, flux, lambda_plus, lambda_minu, lambda_mag)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns)
 
 integer :: imat
 real*8 :: flux(g_neqns)
-real*8 :: up_l(g_neqns), up_r(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
                                    arhom_l,rhom_l,em_l,am_l,hm_l, &
                                    arhom_r,rhom_r,em_r,am_r,hm_r
@@ -1001,9 +824,6 @@ real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
 associate (nummat=>g_mmi%nummat)
 
   flux(:) = 0.0
-
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
 
   ! material states and bulk pressure
   p_l = 0.0
@@ -1365,80 +1185,7 @@ end subroutine relaxpressure_p0
 
 !-------------------------------------------------------------------------------
 
-subroutine relaxpressure_p1(ucons, rhsel)
-
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-
-integer :: ig, ie, ieqn, ngauss, imat
-data       ngauss/2/
-real*8  :: dx, dx2, p_star, rel_time, &
-           rho, p, aimat, nume, deno, &
-           carea(2), weight(2)
-real*8  :: u(g_neqns), up(g_neqns), rhsel(g_gdof,g_neqns,imax)
-
-real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp
-
-associate (nummat=>g_mmi%nummat)
-
-  call rutope(1, ngauss, carea, weight)
-
-  do ie = 1,imax
-  do ig = 1,ngauss
-
-    dx = coord(ie+1)-coord(ie)
-    dx2 = weight(ig)/2.0 * dx
-
-    ! basis function
-
-    do ieqn = 1,g_neqns
-      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
-    end do !ieqn
-
-    call get_uprim_mm6eq(u, up)
-
-    rho  = sum(u(g_mmi%irmin:g_mmi%irmax))
-    p = 0.0
-    do imat = 1,nummat
-      rhom(imat) = u(g_mmi%irmin+imat-1) / u(imat)
-      pm(imat)   = up(g_mmi%irmin+imat-1)
-      p = p + u(imat)*pm(imat)
-    end do !imat
-
-    ! relaxed pressure calculations
-    rel_time = 0.0
-    nume = 0.0
-    deno = 0.0
-    do imat = 1,nummat
-      aimat = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), pm(imat))
-      km(imat) = rhom(imat) * aimat*aimat
-      rel_time = max( rel_time, g_prelct * dx/aimat )
-      nume = nume + pm(imat)*u(imat)/km(imat)
-      deno = deno +          u(imat)/km(imat)
-    end do !imat
-    p_star = nume/deno
-
-    do imat = 1,nummat
-      s_alp(imat) = 1.0/rel_time * (pm(imat)-p_star)*(u(imat)/km(imat))
-    end do !imat
-
-    do imat = 1,nummat
-      rhsel(1,imat,ie) = rhsel(1,imat,ie) + dx2 * s_alp(imat)
-      rhsel(1,g_mmi%iemin+imat-1,ie) = rhsel(1,g_mmi%iemin+imat-1,ie) - dx2 * p*s_alp(imat)
-
-      rhsel(2,imat,ie) = rhsel(2,imat,ie) + dx2 * carea(ig) * s_alp(imat)
-      rhsel(2,g_mmi%iemin+imat-1,ie) = rhsel(2,g_mmi%iemin+imat-1,ie) - dx2 * carea(ig) * p*s_alp(imat)
-    end do !imat
-
-  end do !ig
-  end do !ie
-
-end associate
-
-end subroutine relaxpressure_p1
-
-!-------------------------------------------------------------------------------
-
-subroutine relaxpressure_p1p2(ucons, rhsel)
+subroutine relaxpressure_dg(ucons, rhsel)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -1461,12 +1208,20 @@ associate (nummat=>g_mmi%nummat)
     dx = coord(ie+1)-coord(ie)
     dx2 = weight(ig)/2.0 * dx
 
-    ! basis function
+    !--- dgp1
+    if (g_nsdiscr .eq. 11) then
+      do ieqn = 1,g_neqns
+        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
+      end do !ieqn
 
-    b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
-    do ieqn = 1,g_neqns
-      u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
-    end do !ieqn
+    !--- rdgp1p2
+    elseif (g_nsdiscr .eq. 12) then
+      b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
+      do ieqn = 1,g_neqns
+        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
+      end do !ieqn
+
+    end if
 
     call get_uprim_mm6eq(u, up)
 
@@ -1508,7 +1263,7 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine relaxpressure_p1p2
+end subroutine relaxpressure_dg
 
 !-------------------------------------------------------------------------------
 !----- 2-material Gaussian function in volume-fraction
