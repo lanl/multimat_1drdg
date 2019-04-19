@@ -19,6 +19,7 @@ implicit none
 
 !----- Local variable definitions:
 real*8, allocatable :: ucons(:,:,:), err_log(:)
+real*8 :: t_start, t_end
 
 procedure(rhs_p0p1_mm6eq), pointer :: rhs_mm6eq => NULL()
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
@@ -80,6 +81,8 @@ if (i_system .eq. -1) then
 else if (i_system .eq. 1) then
    call init_soln_mm6eq(ucons)
 end if
+
+call cpu_time(t_start)
 
 !----- Time-stepping:
 dt = dt_u
@@ -150,6 +153,15 @@ else if (i_system .eq. 1) then
 end if
 
 close(33)
+
+call cpu_time(t_end)
+
+write(*,*)
+write(*,*) "------------------------------------------------------------------"
+write(*,*) "Run-time:", t_end-t_start
+write(*,*) "Time per time-step:", (t_end-t_start) / ntstep
+write(*,*) "------------------------------------------------------------------"
+write(*,*)
 
 !----- Cleanup:
 deallocate(ucons, &
