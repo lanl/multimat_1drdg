@@ -292,7 +292,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      call nondimen_mm6eq()
 
-     if (g_nsdiscr .ge. 1) then
+     if (g_nsdiscr .ge. 11) then
        call weakinit_p1(ucons)
        if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
 
@@ -303,6 +303,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
          s = gaussian(xf,0.0)
          ucons(1,:,ielem) = s(:)
        end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
 
      end if
 
@@ -607,6 +608,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
+  call limiting_p1(ucons)
   call ignore_tinyphase_mm6eq(ucons)
 
   call gnuplot_flow_mm6eq(ucons, 0)
@@ -654,8 +656,6 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     end do !ieqn
 
   end do !ie
-
-  call limiting_p1(ucons)
 
 end subroutine weakinit_p1
 
