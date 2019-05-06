@@ -314,7 +314,9 @@ associate (nummat=>g_mmi%nummat)
   endif
 
   do imat = 1,nummat
-    vriem(imat,ifc) = al_star(lplus, lminu, ul(imat), ur(imat))
+    vriem(imat,ifc) = al_star(lplus, lminu, &
+                              ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                              ur(imat)*up_r(g_mmi%irmin+imat-1))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
 
@@ -364,7 +366,7 @@ end subroutine surfaceint_dg
 
 subroutine volumeint_dg(ucons, rgrad, vriem, rhsel)
 
-integer :: ig, ie, ieqn, ngauss, imat, jmat
+integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
@@ -408,15 +410,12 @@ associate (nummat=>g_mmi%nummat)
 
     call get_uprim_mm6eq(u, up)
 
-    ! bulk pressure
     p = 0.0
-    do imat = 1,nummat
-    p = p + u(imat)*up(g_mmi%irmin+imat-1)
-    end do !imat
-
-    ! mass-fractions
+    dapdx = 0.0
     rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
     do imat = 1,nummat
+      p = p + u(imat)*up(g_mmi%irmin+imat-1)
+      dapdx = dapdx + rgrad(imat,ie)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
     end do !imat
 
@@ -433,11 +432,6 @@ associate (nummat=>g_mmi%nummat)
       cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat!(u(g_mmi%iemin+imat-1) )
 
       ! non-conservative fluxes
-      dapdx = 0.0
-      do jmat = 1,nummat
-        dapdx = dapdx + rgrad(jmat,ie)
-      end do !jmat
-
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
