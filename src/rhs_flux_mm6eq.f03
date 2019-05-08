@@ -93,7 +93,7 @@ subroutine flux_p0_mm6eq(ucons, rhsel)
 integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
-           ncnflux(g_neqns,2), intflux(g_neqns), lplus, lminu, lmag, &
+           ncnflux(g_neqns,2), intflux(g_neqns), lplus, lminu, lmag, pstar, &
            rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
@@ -118,7 +118,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
      call llf_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
      call llf_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag, pstar)
      call ausmplus_nonconserv(ul, ur, ul, ur, lplus, lminu, lmag, ncnflux)
   else
      write(*,*) "Invalid flux scheme."
@@ -153,7 +153,7 @@ integer :: ifc, iel, ier, ieqn
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
            ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag
+           lplus, lminu, lmag, pstar
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -183,7 +183,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
      call llf_nonconserv(ul, ur, uavgl, uavgr, &
                          lplus, lminu, lmag, ncnflux)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag, pstar)
      call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
                               lplus, lminu, lmag, ncnflux)
   else
@@ -218,8 +218,8 @@ subroutine flux_p1_mm6eq(ucons, rhsel)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 integer :: ie
 
-real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
-           vriemann(g_mmi%nummat+1,imax+1), &
+real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
+           vriemann(g_mmi%nummat+2,imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
   riemanngrad = 0.0
@@ -240,8 +240,8 @@ subroutine flux_p1p2_mm6eq(ucons, rhsel)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
-           vriemann(g_mmi%nummat+1,imax+1), &
+real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
+           vriemann(g_mmi%nummat+2,imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
   riemanngrad = 0.0
@@ -264,10 +264,10 @@ integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag
+           lplus, lminu, lmag, pstar
 
-real*8  :: rgrad_f(g_mmi%nummat+1), &
-           rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
+real*8  :: rgrad_f(g_mmi%nummat), &
+           rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
@@ -296,6 +296,9 @@ associate (nummat=>g_mmi%nummat)
 
   end if
 
+  call check_volfrac(iel, ul)
+  call check_volfrac(ier, ur)
+
   uavgl(:) = ucons(1,:,iel)
   uavgr(:) = ucons(1,:,ier)
 
@@ -305,7 +308,7 @@ associate (nummat=>g_mmi%nummat)
   !--- fluxes
 
   if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
+     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag, pstar)
   else if (i_flux .eq. 3) then
      call hllc_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
   else
@@ -319,6 +322,7 @@ associate (nummat=>g_mmi%nummat)
                               ur(imat)*up_r(g_mmi%irmin+imat-1))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
+  vriem(nummat+2,ifc) = pstar
 
   !--- compute gradients of volume fractions and velocity for the
   !--- non-conservative terms from Riemann reconstructed values
@@ -338,6 +342,7 @@ associate (nummat=>g_mmi%nummat)
       rgrad(imat,iel) = rgrad(imat,iel) + rgrad_f(imat)
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + vriem(nummat+1,ifc)
+    rgrad(nummat+2,iel) = rgrad(nummat+2,iel) + vriem(nummat+2,ifc)
 
   end if
 
@@ -351,6 +356,7 @@ associate (nummat=>g_mmi%nummat)
       rgrad(imat,ier) = rgrad(imat,ier) - rgrad_f(imat)
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - vriem(nummat+1,ifc)
+    rgrad(nummat+2,ier) = rgrad(nummat+2,ier) - vriem(nummat+2,ifc)
 
   end if
 
@@ -377,7 +383,7 @@ real*8  :: dx2, b3, p, hmat, viriem, &
            nflux(g_gdof,g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
 
-real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
+real*8, intent(in) :: rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1), &
                       ucons(g_tdof,g_neqns,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -405,6 +411,8 @@ associate (nummat=>g_mmi%nummat)
       end do !ieqn
 
     end if
+
+    call check_volfrac(ie, u)
 
     viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
 
@@ -612,7 +620,7 @@ end subroutine llf_nonconserv
 !----- 2fluid AUSM+UP:
 !-------------------------------------------------------------------------------
 
-subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, flux, lambda_plus, lambda_minu, lambda_mag)
+subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, flux, lambda_plus, lambda_minu, lambda_mag, p_12)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns)
 
