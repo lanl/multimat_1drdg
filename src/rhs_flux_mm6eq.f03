@@ -149,63 +149,19 @@ end subroutine flux_p0_mm6eq
 
 subroutine flux_p0p1_mm6eq(ucons, rhsel)
 
-integer :: ifc, iel, ier, ieqn
-real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
-           up_l(g_neqns), up_r(g_neqns), &
-           ncnflux(g_neqns,2), intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag, pstar
-
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  do ifc = 1,imax+1
+real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
+           vriemann(g_mmi%nummat+2,imax+1), &
+           rhsel(g_gdof,g_neqns,imax)
 
-  intflux = 0.0
-  ncnflux = 0.0
+  riemanngrad = 0.0
+  vriemann = 0.0
 
-  iel = ifc - 1
-  ier = ifc
-
-  do ieqn = 1,g_neqns
-    ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
-    ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
-
-    uavgl(ieqn) = ucons(1,ieqn,iel)
-    uavgr(ieqn) = ucons(1,ieqn,ier)
-  end do !ieqn
-
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
-
-  !--- fluxes
-
-  if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
-     call llf_nonconserv(ul, ur, uavgl, uavgr, &
-                         lplus, lminu, lmag, ncnflux)
-  else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag, pstar)
-     call ausmplus_nonconserv(ul, ur, uavgl, uavgr, &
-                              lplus, lminu, lmag, ncnflux)
-  else
-     write(*,*) "Invalid flux scheme."
-     stop
-  endif
-
-  if (iel .gt. 0) then
-    do ieqn = 1,g_neqns
-          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
-          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - ncnflux(ieqn,1)
-    end do !ieqn
-  end if
-
-  if (ier .lt. (imax+1)) then
-    do ieqn = 1,g_neqns
-          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
-          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + ncnflux(ieqn,2)
-    end do !ieqn
-  end if
-
-  end do !ifc
+  !--- surface integration
+  call surfaceint_dg(ucons, riemanngrad, vriemann, rhsel)
+  !--- volume integration
+  call volumeint_dg(ucons, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_p0p1_mm6eq
 
@@ -216,7 +172,6 @@ end subroutine flux_p0p1_mm6eq
 subroutine flux_p1_mm6eq(ucons, rhsel)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-integer :: ie
 
 real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
            vriemann(g_mmi%nummat+2,imax+1), &
@@ -281,7 +236,7 @@ associate (nummat=>g_mmi%nummat)
   ier = ifc
 
   !--- dgp1
-  if (g_nsdiscr .eq. 11) then
+  if ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
     do ieqn = 1,g_neqns
       ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
       ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
@@ -335,7 +290,7 @@ associate (nummat=>g_mmi%nummat)
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
           rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
-          rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
+          if (g_nsdiscr .ge. 11) rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -349,7 +304,7 @@ associate (nummat=>g_mmi%nummat)
   if (ier .lt. (imax+1)) then
     do ieqn = 1,g_neqns
           rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
-          rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
+          if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -398,7 +353,7 @@ associate (nummat=>g_mmi%nummat)
     dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
 
     !--- dgp1
-    if (g_nsdiscr .eq. 11) then
+    if ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
       do ieqn = 1,g_neqns
         u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
       end do !ieqn
@@ -431,7 +386,7 @@ associate (nummat=>g_mmi%nummat)
     ! momentum flux
     cflux(g_mmi%imome) = up(g_mmi%imome) * u(g_mmi%imome) + p
     nflux(1,g_mmi%imome) = 0.0
-    nflux(2,g_mmi%imome) = 0.0
+    if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
     do imat = 1,nummat
       hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
       ! other conservative fluxes
@@ -444,18 +399,20 @@ associate (nummat=>g_mmi%nummat)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
                                                          - rgrad(imat,ie) )
-      nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
-      nflux(2,g_mmi%irmin+imat-1) = 0.0
-      nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
+      if (g_nsdiscr .gt. 11) then
+        nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !up(g_mmi%imome) * 2.0
+        nflux(2,g_mmi%irmin+imat-1) = 0.0
+        nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
+      end if
     end do !imat
 
     do ieqn = 1,g_neqns
-      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+      if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
     end do !ieqn
 
     do ieqn = 1,g_neqns
       rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
-      rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
+      if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
     end do !ieqn
 
   end do !ig
