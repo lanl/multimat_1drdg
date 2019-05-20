@@ -18,10 +18,9 @@ USE time_integration
 implicit none
 
 !----- Local variable definitions:
-real*8, allocatable :: ucons(:,:,:), err_log(:)
+real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end
 
-procedure(rhs_p0p1_mm6eq), pointer :: rhs_mm6eq => NULL()
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
 procedure(limiting_p1), pointer :: tvdlimiting_mm6eq => NULL()
 
@@ -65,6 +64,7 @@ end if
 
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
+         uprim(g_tdof,g_mmi%nummat+1,0:imax+1), &
          err_log(g_neqns))
 
 allocate(coord(0:imax+2))
@@ -79,7 +79,7 @@ call screen_output()
 if (i_system .eq. -1) then
    call init_soln_kex(ucons)
 else if (i_system .eq. 1) then
-   call init_soln_mm6eq(ucons)
+   call init_soln_mm6eq(ucons, uprim)
 end if
 
 call cpu_time(t_start)
@@ -114,7 +114,7 @@ if (i_system .eq. -1) then
 
   end select
 
-  call reconst_mm6eq(ucons)
+  call reconst_mm6eq(ucons, uprim)
   call errorcalc_p1(ucons, 0.0, err_log)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "      cubic: log(||e||): ", err_log(2), 10.0**err_log(2)
@@ -125,19 +125,15 @@ else if (i_system .eq. 1) then
   select case(g_nsdiscr)
 
   case(0)
-    rhs_mm6eq => rhs_p0_mm6eq
     reconst_mm6eq => reconstruction_p0
     tvdlimiting_mm6eq => limiting_p0
   case(1)
-    rhs_mm6eq => rhs_p0p1_mm6eq
     reconst_mm6eq => reconstruction_p0p1
     tvdlimiting_mm6eq => limiting_p1
   case(11)
-    rhs_mm6eq => rhs_p1_mm6eq
     reconst_mm6eq => reconstruction_p1
     tvdlimiting_mm6eq => limiting_p1
   case(12)
-    rhs_mm6eq => rhs_p1p2_mm6eq
     reconst_mm6eq => reconstruction_p1p2
     tvdlimiting_mm6eq => limiting_p2
   case default
@@ -147,8 +143,8 @@ else if (i_system .eq. 1) then
 
   end select
 
-  call reconst_mm6eq(ucons)
-  call ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons)
+  call reconst_mm6eq(ucons, uprim)
+  call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
 
 end if
 
@@ -165,6 +161,7 @@ write(*,*)
 
 !----- Cleanup:
 deallocate(ucons, &
+           uprim, &
            err_log)
 
 deallocate(g_gam, g_cp, g_pc, &

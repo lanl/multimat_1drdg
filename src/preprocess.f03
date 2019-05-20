@@ -271,10 +271,10 @@ end subroutine init_soln_kex
 !----- velocity equilibrium 2fluid model:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_mm6eq(ucons)
+subroutine init_soln_mm6eq(ucons, uprim)
 
 integer :: imat, ielem
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -607,12 +607,13 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   end if
 
   ! boundary conditions:
-  call get_bc_mm6eq(ucons)
-  call limiting_p1(ucons)
+  call recons_primitives(ucons, uprim)
+  call get_bc_mm6eq(ucons, uprim)
+  call limiting_p1(ucons, uprim)
   call ignore_tinyphase_mm6eq(ucons)
 
-  call gnuplot_flow_mm6eq(ucons, 0)
-  call gnuplot_flow_p1_mm6eq(ucons, 0)
+  call gnuplot_flow_mm6eq(ucons, uprim, 0)
+  call gnuplot_flow_p1_mm6eq(ucons, uprim, 0)
 
 end subroutine init_soln_mm6eq
 
@@ -675,10 +676,11 @@ end function
 
 !----------------------------------------------------------------------------------------------
 
-subroutine gnuplot_flow_mm6eq(ucons, itstep)
+subroutine gnuplot_flow_mm6eq(ucons, uprim, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                       uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 integer :: ielem, imat
 real*8  :: xcc, pmix, tmix, rhomix, emix, trcell
@@ -714,6 +716,8 @@ associate (nummat=>g_mmi%nummat)
 
      uconsi = ucons(1,:,ielem)
      call get_uprim_mm6eq(uconsi, uprimi)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,1:nummat,ielem)
+     uprimi(g_mmi%imome) = uprim(1,nummat+1,ielem)
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
 
@@ -765,14 +769,15 @@ end subroutine gnuplot_flow_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine gnuplot_flow_p1_mm6eq(ucons, itstep)
+subroutine gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
 
 integer, intent(in) :: itstep
-real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                       uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 integer :: ielem, imat
 real*8  :: xp, pmix, tmix, rhomix, emix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns)
+real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_mmi%nummat+1)
 
 character(len=100) :: filename2,filename3
 
@@ -818,12 +823,17 @@ associate (nummat=>g_mmi%nummat)
      ! left face
      if (g_nsdiscr .gt. 12) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
+     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem)
      else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
+     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem)
      else
      uconsi = ucons(1,:,ielem)
+     uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(1:nummat)
+     uprimi(g_mmi%imome) = uprimp(nummat+1)
 
      xp = coord(ielem)
 
@@ -877,12 +887,17 @@ associate (nummat=>g_mmi%nummat)
      ! right face
      if (g_nsdiscr .gt. 12) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
+     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem)
      else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
+     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem)
      else
      uconsi = ucons(1,:,ielem)
+     uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(1:nummat)
+     uprimi(g_mmi%imome) = uprimp(nummat+1)
 
      xp = coord(ielem+1)
 

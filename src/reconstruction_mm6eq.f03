@@ -18,9 +18,12 @@ CONTAINS
 !----- P0 reconstruction (does nothing):
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p0(ucons)
+subroutine reconstruction_p0(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+
+  !--- reconstruct primitives from first-order solution
+  call recons_primitives(ucons, uprim)
 
 end subroutine reconstruction_p0
 
@@ -28,17 +31,20 @@ end subroutine reconstruction_p0
 !----- P0P1 reconstruction:
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p0p1(ucons)
+subroutine reconstruction_p0p1(ucons, uprim)
 
 integer :: ie
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
   do ie = 1,imax
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
-  call limiting_p1(ucons)
+  !--- reconstruct primitives from second-order solution
+  call recons_primitives(ucons, uprim)
+
+  call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p0p1
 
@@ -46,12 +52,15 @@ end subroutine reconstruction_p0p1
 !----- P1 reconstruction (only limiting):
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p1(ucons)
+subroutine reconstruction_p1(ucons, uprim)
 
 integer :: ie
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
-  call limiting_p1(ucons)
+  !--- reconstruct primitives from second-order solution
+  call recons_primitives(ucons, uprim)
+
+  call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p1
 
@@ -59,7 +68,7 @@ end subroutine reconstruction_p1
 !----- P1P2 reconstruction:
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p1p2(ucons)
+subroutine reconstruction_p1p2(ucons, uprim)
 
 integer :: ig, j, ie, je, ieqn, ngauss
 data       ngauss/2/
@@ -68,7 +77,7 @@ real*8  :: dxi, dxj, xci, xcj, xg, wi, &
            carea(2), weight(2), &
            b2, b3, b2t, b3t, &
            r1, r2, rhs, lhs
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
 
@@ -131,17 +140,87 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   end do !ieqn
 
-  call limiting_p2(ucons)
+  !--- reconstruct primitives from third-order solution
+  call recons_primitives(ucons, uprim)
+  uprim(3,:,:) = 0.0
+
+  call limiting_p2(ucons, uprim)
 
 end subroutine reconstruction_p1p2
+
+!-------------------------------------------------------------------------------
+!----- Reconstructing primitives from DG solution:
+!-------------------------------------------------------------------------------
+
+subroutine recons_primitives(ucons, uprim)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+integer :: ie, ifc, imat, ieqn
+real*8  :: rhoavg, uface(g_neqns), up_face(g_neqns), &
+           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    !--- 1. cell-average material pressures and bulk velocity
+    uface(:) = ucons(1,:,ie)
+    call get_uprim_mm6eq(uface, up_face)
+    do imat = 1,nummat
+      uprim(1,imat,ie) = ucons(1,imat,ie) * up_face(g_mmi%irmin+imat-1)
+    end do !imat
+    rhoavg = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
+    uprim(1,nummat+1,ie) = ucons(1,g_mmi%imome,ie) / rhoavg
+
+    !--- 2. "gradients" of material pressures and bulk velocity
+    if (g_nsdiscr .gt. 0) then
+    uprim(2,:,ie) = 0.0
+    do ifc = 1,2
+
+      !--- rdgp0p1 or dgp1
+      if ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
+        do ieqn = 1,g_neqns
+          uface(ieqn) = ucons(1,ieqn,ie) + ((-1.0)**ifc) * ucons(2,ieqn,ie)
+        end do !ieqn
+
+      !--- rdgp1p2
+      elseif (g_nsdiscr .eq. 12) then
+        do ieqn = 1,g_neqns
+          uface(ieqn) = ucons(1,ieqn,ie) + ((-1.0)**ifc) * ucons(2,ieqn,ie) &
+                                         + 1.0/3.0*ucons(3,ieqn,ie)
+        end do !ieqn
+
+      end if
+
+      call get_uprim_mm6eq(uface, up_face)
+
+      do imat = 1,nummat
+        uprim(2,imat,ie) = uprim(2,imat,ie) &
+          + 0.5 * ((-1.0)**ifc) * uface(imat)*up_face(g_mmi%irmin+imat-1)
+      end do !imat
+
+    end do !ifc
+
+    uprim(2,nummat+1,ie) = ( ucons(2,g_mmi%imome,ie) &
+                             - uprim(1,nummat+1,ie) &
+                             * sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie)) ) &
+                           / rhoavg
+    end if
+
+  end do !ie
+
+end associate
+
+end subroutine recons_primitives
 
 !-------------------------------------------------------------------------------
 !----- P0 limiting:
 !-------------------------------------------------------------------------------
 
-subroutine limiting_p0(ucons)
+subroutine limiting_p0(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 end subroutine limiting_p0
 
@@ -149,22 +228,22 @@ end subroutine limiting_p0
 !----- P1 limiting:
 !-------------------------------------------------------------------------------
 
-subroutine limiting_p1(ucons)
+subroutine limiting_p1(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   select case (g_nlim)
 
   case(0)
 
   case(1)
-    call min_superbee(ucons)
+    call min_superbee(ucons, uprim)
 
   case(2)
-    call superbee_p1(ucons)
+    call superbee_p1(ucons, uprim)
 
   case(3)
-    call oversuperbee(ucons)
+    call oversuperbee(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
@@ -180,22 +259,22 @@ end subroutine limiting_p1
 !----- P2 limiting:
 !-------------------------------------------------------------------------------
 
-subroutine limiting_p2(ucons)
+subroutine limiting_p2(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   select case (g_nlim)
 
   case(0)
 
   case(2)
-    call superbee_p2(ucons)
+    call superbee_p2(ucons, uprim)
 
   case(4)
-    call weno_p2(ucons)
+    call weno_p2(ucons, uprim)
 
   case(5)
-    call superbeeweno_p2(ucons)
+    call superbeeweno_p2(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
@@ -424,11 +503,12 @@ end subroutine boundpreserve_alpha_p2
 !----- superbee limiter:
 !-------------------------------------------------------------------------------
 
-subroutine min_superbee(ucons)
+subroutine min_superbee(ucons, uprim)
 
 integer :: ie, ieqn, ifc
 real*8  :: theta(g_neqns)
-real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   do ie = 1,imax
 
@@ -456,11 +536,12 @@ end subroutine min_superbee
 !----- system-consistent superbee limiter for P1 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine superbee_p1(ucons)
+subroutine superbee_p1(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_mmi%nummat+1)
-real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -473,12 +554,13 @@ associate (nummat=>g_mmi%nummat)
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-    !! internal energy monotonicity
-    !call intenergy_lim(uneigh, thetap)
-    !do imat = 1,nummat
-    !  theta(g_mmi%iemin+imat-1) = min( theta(g_mmi%iemin+imat-1), thetap(imat) )
-    !end do !imat
-    !theta(g_mmi%imome) = min( theta(g_mmi%imome), thetap(nummat+1) )
+    uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
+
+    ! monotonicity of primitives
+    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
+    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
@@ -515,13 +597,13 @@ end subroutine superbee_p1
 !----- system-consistent superbee limiter for P2 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine superbee_p2(ucons)
+subroutine superbee_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            thetap(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
-           ucons(g_tdof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -547,12 +629,13 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
-    !! internal energy monotonicity
-    !call intenergy_lim(uneigh, thetap)
-    !do imat = 1,nummat
-    !  theta1(g_mmi%iemin+imat-1) = min( theta1(g_mmi%iemin+imat-1), thetap(imat) )
-    !end do !imat
-    !theta1(g_mmi%imome) = min( theta1(g_mmi%imome), thetap(nummat+1) )
+    uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
+
+    ! monotonicity of primitives
+    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
+    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
@@ -591,14 +674,14 @@ end subroutine superbee_p2
 !----- system-consistent weno limiter for P2:
 !-------------------------------------------------------------------------------
 
-subroutine weno_p2(ucons)
+subroutine weno_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            thetap(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -672,13 +755,13 @@ end subroutine weno_p2
 !----- system-consistent superbee+weno limiter for P1P2:
 !-------------------------------------------------------------------------------
 
-subroutine superbeeweno_p2(ucons)
+subroutine superbeeweno_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -747,12 +830,13 @@ end subroutine superbeeweno_p2
 !----- system-consistent overbee+superbee limiter:
 !-------------------------------------------------------------------------------
 
-subroutine oversuperbee(ucons)
+subroutine oversuperbee(ucons, uprim)
 
 integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
 real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
-real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -792,82 +876,6 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine oversuperbee
-
-!-------------------------------------------------------------------------------
-!----- ensure internal energies are "monotone"
-!-------------------------------------------------------------------------------
-
-subroutine intenergy_lim(ucons, thetap)
-
-real*8,  intent(in) :: ucons(2,g_neqns,-1:1)
-
-integer :: imat
-real*8  :: rhoep, rhoup, arhop, rhop, alphp, &
-           uneigh(2,1,-1:1), thetap(g_mmi%nummat+1)
-
-associate (nummat=>g_mmi%nummat)
-
-  thetap = 1.0
-
-  ! material internal energy
-  do imat = 1,nummat
-
-    uneigh = 0.0
-
-    uneigh(1,1,-1) =  ucons(1,g_mmi%iemin+imat-1,-1) &
-                    - ( ucons(1,g_mmi%irmin+imat-1,-1) &
-                       * ( ucons(1,g_mmi%imome,-1) &
-                          / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,-1)) )**2.0 ) / 2.0
-    uneigh(1,1,-1) = uneigh(1,1,-1) / ucons(1,imat,-1)
-
-    uneigh(1,1,0) =  ucons(1,g_mmi%iemin+imat-1,0) &
-                   - ( ucons(1,g_mmi%irmin+imat-1,0) &
-                      * ( ucons(1,g_mmi%imome,0) &
-                         / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) )**2.0 ) / 2.0
-    uneigh(1,1,0) = uneigh(1,1,0) / ucons(1,imat,0)
-
-    uneigh(1,1,1) =  ucons(1,g_mmi%iemin+imat-1,1) &
-                   - ( ucons(1,g_mmi%irmin+imat-1,1) &
-                      * ( ucons(1,g_mmi%imome,1) &
-                         / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,1)) )**2.0 ) / 2.0
-    uneigh(1,1,1) = uneigh(1,1,1) / ucons(1,imat,1)
-
-    rhoep = ucons(1,g_mmi%iemin+imat-1,0) + ucons(2,g_mmi%iemin+imat-1,0)
-    rhoup = ucons(1,g_mmi%imome,0) + ucons(2,g_mmi%imome,0)
-    arhop = ucons(1,g_mmi%irmin+imat-1,0) + ucons(2,g_mmi%irmin+imat-1,0)
-    rhop  = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)+ucons(2,g_mmi%irmin:g_mmi%irmax,0))
-    alphp = ucons(1,imat,0) + ucons(2,imat,0)
-
-    uneigh(2,1,0) = ( rhoep - ( arhop * (rhoup/rhop)**2.0 ) / 2.0 ) / alphp
-    uneigh(2,1,0) = uneigh(2,1,0) - uneigh(1,1,0)
-
-    call superbee_fn(1, 2.0, 1.0, uneigh(:,1,:), thetap(imat))
-
-  end do !imat
-
-  ! velocity
-  uneigh = 0.0
-  uneigh(1,1,-1) =  ucons(1,g_mmi%imome,-1) &
-                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,-1))
-  uneigh(1,1,0)  =  ucons(1,g_mmi%imome,0) &
-                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0))
-  uneigh(1,1,1)  =  ucons(1,g_mmi%imome,1) &
-                   / sum(ucons(1,g_mmi%irmin:g_mmi%irmax,1))
-
-  rhoup = ucons(1,g_mmi%imome,0) + ucons(2,g_mmi%imome,0)
-  rhop  = 0.0
-  do imat = 1,nummat
-    rhop = rhop + ucons(1,g_mmi%irmin+imat-1,0)+ucons(2,g_mmi%irmin+imat-1,0)
-  end do !imat
-
-  uneigh(2,1,0) = rhoup/rhop
-  uneigh(2,1,0) = uneigh(2,1,0) - uneigh(1,1,0)
-
-  call superbee_fn(1, 2.0, 1.0, uneigh(:,1,:), thetap(nummat+1))
-
-end associate
-
-end subroutine intenergy_lim
 
 !-------------------------------------------------------------------------------
 !----- Superbee limiter for n equations individually

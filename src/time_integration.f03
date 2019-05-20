@@ -16,12 +16,13 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(rhs_mm6eq, reconst_mm6eq, ucons)
+subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
 
-procedure(), pointer :: rhs_mm6eq, reconst_mm6eq
+procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof), err_log(g_neqns)
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
+            uprim(g_tdof,g_mmi%nummat+1,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
@@ -48,7 +49,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_mm6eq(ucons, rhsel)
+        call rhs_rdg_mm6eq(ucons, uprim, rhsel)
 
         do ielem = 1,imax
 
@@ -68,10 +69,10 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         end do !ieqn
         end do !ielem
 
-        call get_bc_mm6eq(ucons)
+        call get_bc_mm6eq(ucons, uprim)
         call ignore_tinyphase_mm6eq(ucons)
 
-        call reconst_mm6eq(ucons)
+        call reconst_mm6eq(ucons, uprim)
 
      end do !istage
      !---------------------------------------------------------
@@ -95,8 +96,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
-     call gnuplot_flow_mm6eq(ucons, itstep)
-     call gnuplot_flow_p1_mm6eq(ucons, itstep)
+     call gnuplot_flow_mm6eq(ucons, uprim, itstep)
+     call gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
      end if
 
      if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
@@ -107,8 +108,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
   itstep = itstep - 1
 
-  call gnuplot_flow_mm6eq(ucons, itstep)
-  call gnuplot_flow_p1_mm6eq(ucons, itstep)
+  call gnuplot_flow_mm6eq(ucons, uprim, itstep)
+  call gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
   !----- compute L2-error-norm

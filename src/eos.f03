@@ -264,8 +264,7 @@ associate (nummat=>g_mmi%nummat)
       write(*,*) "  density:      ", uc(g_mmi%irmin+imat-1)
       write(*,*) "  total-energy: ", uc(g_mmi%iemin+imat-1)
       write(*,*) "------------------------------------------------------------------"
-      write(*,*) "TERMINATING CALCULATION."
-      write(*,*) "------------------------------------------------------------------"
+      write(*,*) " "
     end if
 
   end do !imat
