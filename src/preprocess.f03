@@ -601,6 +601,80 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
+  !--- 3-material shocked problem
+  !----------
+  else if (iprob .eq. 4) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(1) = 1.0-2.0*g_alphamin
+     alpha_fs(2) = g_alphamin
+     alpha_fs(3) = g_alphamin
+     t_fs = 0.0348432
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
+
+      print*, rhomat_fs
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = u_fs
+     ! right state
+     p1r = 0.1*pr_fs
+     t1r = 0.1*t_fs
+     ur  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.4) then
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(2)
+           ucons(1,3,ielem) = alpha_fs(3)
+           do imat = 1,g_mmi%nummat
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1l, rhomat_fs(imat), ul)
+           end do !imat
+
+        elseif (xf .le. 0.6) then
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = 1.0-2.0*g_alphamin
+           ucons(1,3,ielem) = g_alphamin
+           do imat = 1,g_mmi%nummat
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1r, rhomat_fs(imat), ur)
+           end do !imat
+
+        else
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = g_alphamin
+           ucons(1,3,ielem) = 1.0-2.0*g_alphamin
+           do imat = 1,g_mmi%nummat
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1r, rhomat_fs(imat), ur)
+           end do !imat
+
+        end if
+
+        ucons(1,g_mmi%imome,ielem) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * u_fs
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -609,7 +683,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   ! boundary conditions:
   call recons_primitives(ucons, uprim)
   call get_bc_mm6eq(ucons, uprim)
-  call limiting_p1(ucons, uprim)
+  if (g_nsdiscr .ge. 1) call limiting_p1(ucons, uprim)
   call ignore_tinyphase_mm6eq(ucons)
 
   call gnuplot_flow_mm6eq(ucons, uprim, 0)
@@ -823,7 +897,7 @@ associate (nummat=>g_mmi%nummat)
      ! left face
      if (g_nsdiscr .gt. 12) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
-     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem)
+     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem) + 1.0/3.0*uprim(3,:,ielem)
      else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
      uprimp = uprim(1,:,ielem) - uprim(2,:,ielem)
@@ -887,7 +961,7 @@ associate (nummat=>g_mmi%nummat)
      ! right face
      if (g_nsdiscr .gt. 12) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
-     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem)
+     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem) + 1.0/3.0*uprim(3,:,ielem)
      else if (g_nsdiscr .gt. 0) then
      uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
      uprimp = uprim(1,:,ielem) + uprim(2,:,ielem)

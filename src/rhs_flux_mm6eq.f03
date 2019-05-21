@@ -114,8 +114,8 @@ associate (nummat=>g_mmi%nummat)
       ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
     end do !ieqn
     do imat = 1,nummat+1
-      pp_l(imat) = uprim(1,imat,iel) + uprim(2,imat,iel)
-      pp_r(imat) = uprim(1,imat,ier) - uprim(2,imat,ier)
+      pp_l(imat) = uprim(1,imat,iel) + uprim(2,imat,iel) + 1.0/3.0*uprim(3,imat,iel)
+      pp_r(imat) = uprim(1,imat,ier) - uprim(2,imat,ier) + 1.0/3.0*uprim(3,imat,ier)
     end do !imat
 
   end if

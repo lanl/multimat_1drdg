@@ -142,7 +142,6 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
   !--- reconstruct primitives from third-order solution
   call recons_primitives(ucons, uprim)
-  uprim(3,:,:) = 0.0
 
   call limiting_p2(ucons, uprim)
 
@@ -157,7 +156,7 @@ subroutine recons_primitives(ucons, uprim)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ie, ifc, imat, ieqn
-real*8  :: rhoavg, uface(g_neqns), up_face(g_neqns), &
+real*8  :: rhoavg, drhodx, uface(g_neqns), up_face(g_neqns), &
            uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
@@ -202,10 +201,17 @@ associate (nummat=>g_mmi%nummat)
 
     end do !ifc
 
+    drhodx = sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie))
     uprim(2,nummat+1,ie) = ( ucons(2,g_mmi%imome,ie) &
                              - uprim(1,nummat+1,ie) &
                              * sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie)) ) &
                            / rhoavg
+
+    if (g_nsdiscr .eq. 12) then
+      uprim(3,nummat+1,ie) = ( ucons(3,g_mmi%imome,ie) &
+                               - (uprim(1,nummat+1,ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
+                                  + 2.0*drhodx*uprim(2,nummat+1,ie)) ) / rhoavg
+    end if
     end if
 
   end do !ie
@@ -560,14 +566,15 @@ associate (nummat=>g_mmi%nummat)
 
     ! monotonicity of primitives
     call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
-    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    uprim(2,1:nummat,ie) = minval(thetap(1:nummat)) * uprim(2,1:nummat,ie)
+    uprim(2,nummat+1,ie) = thetap(nummat+1) * uprim(2,nummat+1,ie)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
 
     ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta(iamax)
+    theta(1:nummat) = minval(theta(1:nummat)) !theta(iamax)
 
     ! 2. Obtain consistent limiter functions for the equation system
     !    Interface detection
@@ -575,6 +582,7 @@ associate (nummat=>g_mmi%nummat)
          interface_cell(almax, dalmax) ) then
 
       call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
+      uprim(2,nummat+1,ie) = 0.0
 
     else
 
@@ -601,7 +609,7 @@ subroutine superbee_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
-           thetap(g_mmi%nummat+1)
+           thetap2(g_mmi%nummat+1), thetap1(g_mmi%nummat+1)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
@@ -622,6 +630,18 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
 
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,1:nummat+1,-1) = uprim(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,1:nummat+1,0)  = uprim(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,1:nummat+1,1)  = uprim(2:3,:,ie+1) / dx2
+
+    ! monotonicity of primitives
+    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap2)
+
     !--- 2. P1 derivative limiting
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
@@ -634,15 +654,19 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
 
     ! monotonicity of primitives
-    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
-    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap1)
+
+    thetap1(1:nummat) = minval(thetap1(1:nummat))
+    thetap2(1:nummat) = minval(thetap2(1:nummat))
+    uprim(3,:,ie) = thetap2(:) * uprim(3,:,ie)
+    uprim(2,:,ie) = max(thetap1(:), thetap2(:)) * uprim(2,:,ie)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
 
     ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = theta1(iamax)
+    theta1(1:nummat) = minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
 
     !--- 3. Obtain consistent limiter functions for the equation system
@@ -651,6 +675,7 @@ associate (nummat=>g_mmi%nummat)
          interface_cell(almax, dalmax) ) then
 
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+      uprim(2:3,nummat+1,ie) = 0.0
 
     else
 
