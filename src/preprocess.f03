@@ -1069,7 +1069,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
   err_log = 0.0
   errlow_log = 0.0
 
-  if (iprob .eq. -1) then
+  if ( (iprob .eq. -1) .or. (iprob .eq. 0) ) then
 
     do ie = 1,imax
     do ig = 1,ngauss
@@ -1096,7 +1096,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
       end if
 
       if (i_system .eq. 1) then
-        s = gaussian(xg,t)
+        if (iprob.eq.-1) s = gaussian(xg,t)
+        if (iprob.eq.0) s = contact(xg,t)
       else if (i_system .eq. -1) then
         s = quadraticfn(xg,t)
       end if

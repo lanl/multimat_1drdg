@@ -1,0 +1,23 @@
+1               / pde system type
+----------------------------------------------------------------------------------------------
+0               / problem setup
+400             / mesh size (imax)
+1    0          / left and right boundary conditions
+0               / initialize from restart file './output/frozen_flow/frozenflow.dat'
+2               / Numerical Flux (1:LLF; 2:AUSM+)
+----------------------------------------------------------------------------------------------
+0       0.0                / pressure relaxation (0: no p-relx) and scaling
+2                          / number of materials: nummat
+1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
+1.4     0.0     1004.5     / material-1 properties: gamma, P_c, C_p
+----------------------------------------------------------------------------------------------
+10.0            / Freestream velocity
+1.1d5           / Freestream pressure
+----------------------------------------------------------------------------------------------
+12   2   1      / Space discretization, limiter and material interface detection
+5.0d-07         / Time-step size
+40000           / Maximum number of timesteps
+----------------------------------------------------------------------------------------------
+5000            / File-output dump
+1000            / On-screen output
+----------------------------------------------------------------------------------------------

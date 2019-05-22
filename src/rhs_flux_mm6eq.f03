@@ -1103,6 +1103,34 @@ real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
 end function
 
 !-------------------------------------------------------------------------------
+!----- 2-material contact in volume-fraction
+!-------------------------------------------------------------------------------
+
+function contact(x,t)
+
+real*8, intent(in)  :: x, t
+real*8  :: xc, al1, rho1, rho2, contact(g_neqns)
+
+  xc  = 0.5 + u_fs*t
+  if (x .le. xc) then
+    al1 = alpha_fs(1)
+  else
+    al1 = 1.0-alpha_fs(1)
+  end if
+
+  rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+  rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+  contact(1) = al1
+  contact(2) = 1.0-al1
+  contact(3) = al1 * rho1
+  contact(4) = (1.0-al1) * rho2
+  contact(5) = (contact(3)+contact(4)) * u_fs
+  contact(6) = al1 * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
+  contact(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+
+end function
+
+!-------------------------------------------------------------------------------
 
 function al_star(lplus, lminu, al, ar)
   real*8, intent(in) :: al, ar, lplus, lminu

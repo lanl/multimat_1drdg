@@ -1,0 +1,38 @@
+#set title 'Order-of-accuracy check for advecting Gaussian of water (multi-mat)'
+#set size 0.7
+set grid
+set xlabel 'Total DoFs' offset 0,0.25
+set ylabel 'Error' offset 0.75,0
+set log xy
+set format y "10^{%+02T}"
+#set format y "%5.2f"
+#set format x "%5.2f"
+#set xrange [-1.4:-2.4] reverse
+set xtics font ",11"
+set ytics font ",11"
+set xtics 25,2
+set yrange [1e-2:0.3]
+set key box
+set key bottom left
+set key samplen 3
+set key height +0.5
+set key width -2
+set key font ",11"
+set key spacing 1.25
+f(x) = -x + 1.25
+s(x) = -2*x + 1.75
+t(x) = -3*x + 2.50
+l(x) = 0.001 
+#set arrow from 400,2e-6 to 150,2e-6 head filled lw 3
+#set label "2x less" at 200,5e-6 textcolor ls 7
+set terminal eps enhanced
+set output "abserror_detail.eps"
+plot 'p0.dat'   u 5:4 w lp lw 3.5 pt 6 lt 6  t 'DG(P_0) Slope = 0.244',\
+     'p0p1.dat' u 5:4 w lp lw 3.5 pt 7 lt 7  t 'rDG(P_0P_1) Slope = 0.353',\
+     'p1.dat'   u 5:4 w lp lw 3.5 pt 8 lt 9  t 'DG(P_1) Slope = 0.387',\
+     'p1p2.dat' u 5:4 w lp lw 3.5 pt 9 lt 10 t 'rDG(P_1P_2) Slope = 0.415' #,\
+#     'marker.dat' u 1:2 w lp lt -1 dt 2 lw 4 pt 7 ps 0.5 notitle #,\
+#     f(x) w l lt -1 dt 2 lw 3 notitle,\
+#     s(x) w l lt -1 dt 4 lw 3 notitle,\
+#     t(x) w l lt -1      lw 3 notitle
+reset
