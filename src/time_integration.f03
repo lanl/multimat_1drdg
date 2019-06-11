@@ -20,7 +20,7 @@ subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
 
 procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-real*8   :: mm(g_tdof), err_log(g_neqns)
+real*8   :: mm(g_tdof), err_log(g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uprim(g_tdof,g_mmi%nummat+1,0:imax+1), &
             k1(3),k2(3)
@@ -113,7 +113,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   call gnuplot_diagnostics_mm6eq(cons_err, itstep)
 
   !----- compute L2-error-norm
-  call errorcalc_p1(ucons, g_time*a_nd, err_log)
+  call errorcalc_p1(ucons, g_time*a_nd, err_log, linfty)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"
@@ -124,6 +124,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   write(*,*) "  Mass:         ", cons_err(1)
   write(*,*) "  Total-energy: ", cons_err(2)
   write(*,*) "  log(||e||): ", err_log(1), 10.0**err_log(1)
+  write(*,*) "  |e|_inf:    ", linfty
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"
   write(*,*) " "

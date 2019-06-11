@@ -147,6 +147,7 @@ associate (nummat=>g_mmi%nummat)
     vriem(imat,ifc) = al_star(lplus, lminu, &
                               ul(imat)*up_l(g_mmi%irmin+imat-1), &
                               ur(imat)*up_r(g_mmi%irmin+imat-1))
+                              !pp_l(imat), pp_r(imat))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
   vriem(nummat+2,ifc) = pstar
@@ -342,12 +343,12 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pm_l(imat)   = up_l(g_mmi%irmin+imat-1)
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), pm_l(imat))
+    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pm_l(imat))
     hm_l(imat)   = em_l(imat) + al_l(imat)*pm_l(imat)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pm_r(imat)   = up_r(g_mmi%irmin+imat-1)
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), pm_r(imat))
+    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pm_r(imat))
     hm_r(imat)   = em_r(imat) + al_r(imat)*pm_r(imat)
   end do !imat
   p_l = sum(pm_l)
@@ -494,8 +495,9 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), pi_l)
+    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    !hm_l(imat)   = em_l(imat) + pp_l(imat)
     p_l = p_l + al_l(imat)*pi_l
     !p_l = p_l + pp_l(imat)
 
@@ -506,8 +508,9 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), pi_r)
+    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    !hm_r(imat)   = em_r(imat) + pp_r(imat)
     p_r = p_r + al_r(imat)*pi_r
     !p_r = p_r + pp_r(imat)
   end do !imat
@@ -674,7 +677,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), pi_l)
+    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
 
@@ -685,7 +688,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), pi_r)
+    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
   end do !imat
@@ -862,8 +865,16 @@ associate (nummat=>g_mmi%nummat)
 
   else if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
-     ucons(1,:,0) = ucons(1,:,1)
-     uprim(1,:,0) = uprim(1,:,1)
+     if (g_nsdiscr .eq. 0) then
+       ucons(1,:,0) = ucons(1,:,1)
+       uprim(1,:,0) = uprim(1,:,1)
+     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1)
+       uprim(1,:,0) = uprim(1,:,1) - uprim(2,:,1)
+     else if (g_nsdiscr .eq. 12) then
+       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
+       uprim(1,:,0) = uprim(1,:,1) - uprim(2,:,1) + uprim(3,:,1)/3.0
+     end if
 
   else if (g_lbflag .eq. 1) then
      !--- supersonic inflow
@@ -903,7 +914,7 @@ associate (nummat=>g_mmi%nummat)
        uprim(1,:,0) = uprim(1,:,imax) + uprim(2,:,imax)
      else if (g_nsdiscr .eq. 12) then
        ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
-       uprim(1,:,0) = uprim(1,:,imax) + uprim(2,:,imax)
+       uprim(1,:,0) = uprim(1,:,imax) + uprim(2,:,imax) + uprim(3,:,imax)/3.0
      end if
 
   else
@@ -921,8 +932,16 @@ associate (nummat=>g_mmi%nummat)
 
   else if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
-     ucons(1,:,imax+1) = ucons(1,:,imax)
-     uprim(1,:,imax+1) = uprim(1,:,imax)
+     if (g_nsdiscr .eq. 0) then
+       ucons(1,:,imax+1) = ucons(1,:,imax)
+       uprim(1,:,imax+1) = uprim(1,:,imax)
+     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) - ucons(2,:,imax)
+       uprim(1,:,imax+1) = uprim(1,:,imax) - uprim(2,:,imax)
+     else if (g_nsdiscr .eq. 12) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) - ucons(2,:,imax) + ucons(3,:,imax)/3.0
+       uprim(1,:,imax+1) = uprim(1,:,imax) - uprim(2,:,imax) + uprim(3,:,imax)/3.0
+     end if
 
   else if (g_rbflag .eq. 1) then
      !--- supersonic inflow
@@ -962,7 +981,7 @@ associate (nummat=>g_mmi%nummat)
        uprim(1,:,imax+1) = uprim(1,:,1) - uprim(2,:,1)
      else if (g_nsdiscr .eq. 12) then
        ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
-       uprim(1,:,imax+1) = uprim(1,:,1) - uprim(2,:,1)
+       uprim(1,:,imax+1) = uprim(1,:,1) - uprim(2,:,1) + uprim(3,:,1)/3.0
      end if
 
   else
@@ -1049,7 +1068,7 @@ associate (nummat=>g_mmi%nummat)
     nume = 0.0
     deno = 0.0
     do imat = 1,nummat
-      aimat = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), pm(imat))
+      aimat = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), u(imat), pm(imat))
       km(imat) = rhom(imat) * aimat*aimat
       rel_time = max( rel_time, g_prelct * dx/aimat )
       nume = nume + pm(imat)*u(imat)/km(imat)

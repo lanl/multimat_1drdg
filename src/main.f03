@@ -19,7 +19,7 @@ implicit none
 
 !----- Local variable definitions:
 real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
-real*8 :: t_start, t_end
+real*8 :: t_start, t_end, linfty
 
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
 procedure(limiting_p1), pointer :: tvdlimiting_mm6eq => NULL()
@@ -115,7 +115,7 @@ if (i_system .eq. -1) then
   end select
 
   call reconst_mm6eq(ucons, uprim)
-  call errorcalc_p1(ucons, 0.0, err_log)
+  call errorcalc_p1(ucons, 0.0, err_log, linfty)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "      cubic: log(||e||): ", err_log(2), 10.0**err_log(2)
   write(*,*) "   gaussian: log(||e||): ", err_log(3), 10.0**err_log(3)

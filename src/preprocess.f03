@@ -261,6 +261,7 @@ real*8  :: dx, xg, wi, xc, &
 
   else
     write(*,*) "Incorrect problem setup code!"
+    call exit
 
   end if
 
@@ -675,6 +676,85 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
+  !--- 3-material shocked problem
+  !----------
+  else if (iprob .eq. 5) then
+
+     g_alphamin = 1.d-08
+
+     alpha_fs(1) = 1.0-2.0*g_alphamin
+     alpha_fs(2) = g_alphamin
+     alpha_fs(3) = g_alphamin
+     u_fs = 0.0
+     pr_fs = 1.0d9
+     t_fs = 494.646
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
+
+     print*, rhomat_fs
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = u_fs
+     ! right state
+     p1r = pr_fs/1.0d4
+     t1r = 0.070441*t_fs
+     ur  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.6) then
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(2)
+           ucons(1,3,ielem) = alpha_fs(3)
+           do imat = 1,g_mmi%nummat
+              rho1 = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), p1l, t1l)
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rho1
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1l, rho1, ul)
+           end do !imat
+
+        elseif (xf .le. 0.75) then
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = 1.0-2.0*g_alphamin
+           ucons(1,3,ielem) = g_alphamin
+           do imat = 1,g_mmi%nummat
+              rho1 = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), p1r, t1r)
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rho1
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1r, rho1, ur)
+           end do !imat
+
+        else
+           ucons(1,1,ielem) = g_alphamin
+           ucons(1,2,ielem) = g_alphamin
+           ucons(1,3,ielem) = 1.0-2.0*g_alphamin
+           do imat = 1,g_mmi%nummat
+              rho1 = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), p1r, t1r)
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rho1
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1r, rho1, ur)
+           end do !imat
+
+        end if
+
+        ucons(1,g_mmi%imome,ielem) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * u_fs
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -757,7 +837,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xcc, pmix, tmix, rhomix, emix, trcell
+real*8  :: xcc, pmix, tmix, rhomix, emix, temix, trcell
 real*8  :: uconsi(g_neqns), uprimi(g_neqns)
 
 character(len=100) :: filename2,filename3
@@ -799,15 +879,19 @@ associate (nummat=>g_mmi%nummat)
      pmix = 0.0
      tmix = 0.0
      emix = 0.0
+     temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
                          *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+        temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
+     temix = temix/rhomix
 
      if ( interface_cell(uprimi(1), 0.0) ) then
        trcell = 1.0
@@ -830,7 +914,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(23,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(23,'(2E16.6)') emix, &
+     write(23,'(3E16.6)') emix, &
+                          temix, &
                           trcell
 
   end do !ielem
@@ -850,7 +935,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xp, pmix, tmix, rhomix, emix, trcell
+real*8  :: xp, pmix, tmix, rhomix, emix, temix, trcell
 real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_mmi%nummat+1)
 
 character(len=100) :: filename2,filename3
@@ -915,15 +1000,19 @@ associate (nummat=>g_mmi%nummat)
      pmix = 0.0
      tmix = 0.0
      emix = 0.0
+     temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
                          *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+        temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
+     temix = temix/rhomix
 
      if ( interface_cell(uconsi(1), 0.0) ) then
        trcell = 1.0
@@ -946,7 +1035,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(24,'(2E16.6)') emix, &
+     write(24,'(3E16.6)') emix, &
+                          temix, &
                           trcell
 
      !write(25,'(8E16.6)') xp, &                                                               !1
@@ -979,15 +1069,19 @@ associate (nummat=>g_mmi%nummat)
      pmix = 0.0
      tmix = 0.0
      emix = 0.0
+     temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
                          *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+        temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
+     temix = temix/rhomix
 
      if ( interface_cell(uconsi(1), 0.0) ) then
        trcell = 1.0
@@ -1010,7 +1104,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(24,'(2E16.6)') emix, &
+     write(24,'(3E16.6)') emix, &
+                          temix, &
                           trcell
 
      !write(25,'(8E16.6)') xp, &                                                               !1
@@ -1050,7 +1145,7 @@ end subroutine gnuplot_diagnostics_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine errorcalc_p1(ucons, t, err_log)
+subroutine errorcalc_p1(ucons, t, err_log, linfty)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
 
@@ -1061,13 +1156,14 @@ real*8  :: dx, xg, wi, xc, b3i, &
            u(g_neqns), ulow(g_neqns), &
            carea(3), weight(3), &
            s(g_neqns), &
-           err, err_log(g_neqns), &
+           err, linfty, err_log(g_neqns), &
            errlow_log(g_neqns)
 
   call rutope(1, ngauss, carea, weight)
 
   err_log = 0.0
   errlow_log = 0.0
+  linfty = 0.d0
 
   if ( (iprob .eq. -1) .or. (iprob .eq. 0) ) then
 
@@ -1108,6 +1204,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
         err = ulow(ieqn) - s(ieqn)
         errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
       end do !ieqn
+      linfty = max(linfty, dabs(u(1) - s(1)))
 
     end do !ig
     end do !ie

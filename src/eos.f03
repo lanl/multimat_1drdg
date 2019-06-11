@@ -114,16 +114,24 @@ end function
 !----- speed of sound from density and pressure using stiffened gas eos
 !----------------------------------------------------------------------------------------------
 
-function eos3_ss(gam, p_c, rho, pr)
+function eos3_ss(gam, p_c, rho, al, pr)
 
-real*8, intent(in) :: gam, p_c, rho, pr
+real*8, intent(in) :: gam, p_c, rho, al, pr
 
 real*8  :: pre, eos3_ss
 
     pre = max(pr+p_c, 1.0d-14);
-    if (rho .lt. 1.0d-16) &
-      write(*,*) "Warning: zero/negative density encountered in speed of sound calculation: ", rho
-    eos3_ss = dsqrt(gam *pre/rho);
+    if (rho .lt. 1.0d-16) then
+      if (al .le. 100.0*g_alphamin) then
+        eos3_ss = 0.0
+      else
+        write(*,*) "Error: zero/negative density encountered in speed of sound calculation: ", rho
+        write(*,*) "  Volume-fraction: ", al
+        call exit
+      end if
+    else
+      eos3_ss = dsqrt(gam *pre/rho);
+    end if
 
 end function
 
@@ -254,20 +262,20 @@ associate (nummat=>g_mmi%nummat)
 
   eps = 0.0001*g_alphamin
 
-  do imat = 1,nummat
+  !do imat = 1,nummat
 
-    if ( (uc(imat) .lt. eps) .or. (uc(imat) .gt. 1.0-eps) ) then
-      write(*,*) "------------------------------------------------------------------"
-      write(*,*) "Bound-violating volume fraction: ", uc(imat)
-      write(*,*) "  in cell ", ie
-      write(*,*) "  material-id:  ", imat
-      write(*,*) "  density:      ", uc(g_mmi%irmin+imat-1)
-      write(*,*) "  total-energy: ", uc(g_mmi%iemin+imat-1)
-      write(*,*) "------------------------------------------------------------------"
-      write(*,*) " "
-    end if
+  !  if ( (uc(imat) .lt. eps) .or. (uc(imat) .gt. 1.0-eps) ) then
+  !    write(*,*) "------------------------------------------------------------------"
+  !    write(*,*) "Bound-violating volume fraction: ", uc(imat)
+  !    write(*,*) "  in cell ", ie
+  !    write(*,*) "  material-id:  ", imat
+  !    write(*,*) "  density:      ", uc(g_mmi%irmin+imat-1)
+  !    write(*,*) "  total-energy: ", uc(g_mmi%iemin+imat-1)
+  !    write(*,*) "------------------------------------------------------------------"
+  !    write(*,*) " "
+  !  end if
 
-  end do !imat
+  !end do !imat
 
 end associate
 
