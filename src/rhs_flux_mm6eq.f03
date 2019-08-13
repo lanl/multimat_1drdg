@@ -535,11 +535,20 @@ associate (nummat=>g_mmi%nummat)
   end do !imat
 
   ! numerical speed of sound choice:
+
+  ! Kapila
   ac_12 = 0.0
   do imat = 1,nummat
     ac_12 = ac_12 + ( al_12(imat)*rhom_12(imat)*am_12(imat)*am_12(imat) )
   end do !imat
   ac_12 = dsqrt( ac_12 / rho_12 )
+
+  ! Wood
+  !ac_12 = 0.0
+  !do imat = 1,nummat
+  !  ac_12 = ac_12 + al_12(imat) / ( rho_12*rhom_12(imat)*am_12(imat)*am_12(imat) )
+  !end do !imat
+  !ac_12 = dsqrt( 1.0 / ac_12 ) / rho_12
 
   m_l = u_l/ac_12
   m_r = u_r/ac_12

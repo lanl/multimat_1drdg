@@ -434,53 +434,6 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
-     !--- single-material Sod problem
-     !g_alphamin = 1.d-14
-
-     !alpha_fs(1) = 1.0
-     !u_fs = 0.0
-     !pr_fs = 1.0
-     !t_fs = 3.484321d-3
-     !rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
-
-     !call nondimen_mm6eq()
-
-     !! left state
-     !p1l = pr_fs
-     !t1l = t_fs
-     !ul  = u_fs
-     !! right state
-     !p1r = 0.1*pr_fs
-     !t1r = 0.8*t_fs
-     !ur  = u_fs
-
-     !do ielem = 0,imax+1
-
-     !   xf = coord(ielem)
-
-     !   if (xf .le. 0.5) then
-     !      rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
-     !      ucons(1,1,ielem) = alpha_fs(1)
-     !      ucons(1,2,ielem) = alpha_fs(1) * rho1
-     !      ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
-     !      ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
-     !   else
-     !      rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
-     !      ucons(1,1,ielem) = alpha_fs(1)
-     !      ucons(1,2,ielem) = alpha_fs(1) * rho1
-     !      ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
-     !      ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
-     !   end if
-
-     !   if (g_nsdiscr .ge. 1) then
-     !     ucons(2,:,ielem) = 0.0
-     !       if (g_nsdiscr .ge. 12) then
-     !         ucons(3,:,ielem) = 0.0
-     !       end if
-     !   end if
-
-     !end do !ielem
-
   !--- Abgrall's water-air Shocktube
   !----------
   else if (iprob .eq. 2) then
@@ -745,6 +698,56 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
         end if
 
         ucons(1,g_mmi%imome,ielem) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * u_fs
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
+  !--- single-material Sod Shocktube
+  !----------
+  else if (iprob .eq. 6) then
+
+     g_alphamin = 1.d-14
+
+     alpha_fs(1) = 1.0
+     u_fs = 0.0
+     pr_fs = 1.0
+     t_fs = 3.484321d-3
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = u_fs
+     ! right state
+     p1r = 0.1*pr_fs
+     t1r = 0.8*t_fs
+     ur  = u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.5) then
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+        else
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+        end if
 
         if (g_nsdiscr .ge. 1) then
           ucons(2,:,ielem) = 0.0
