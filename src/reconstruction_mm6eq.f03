@@ -20,7 +20,7 @@ CONTAINS
 
 subroutine reconstruction_p0(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   !--- reconstruct primitives from first-order solution
   call recons_primitives(ucons, uprim)
@@ -34,7 +34,7 @@ end subroutine reconstruction_p0
 subroutine reconstruction_p0p1(ucons, uprim)
 
 integer :: ie
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
   do ie = 1,imax
@@ -55,7 +55,7 @@ end subroutine reconstruction_p0p1
 subroutine reconstruction_p1(ucons, uprim)
 
 integer :: ie
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   !--- reconstruct primitives from second-order solution
   call recons_primitives(ucons, uprim)
@@ -77,7 +77,7 @@ real*8  :: dxi, dxj, xci, xcj, xg, wi, &
            carea(2), weight(2), &
            b2, b3, b2t, b3t, &
            r1, r2, rhs, lhs
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
 
@@ -157,7 +157,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ie, ifc, imat, ieqn
 real*8  :: rhoavg, drhodx, uface(g_neqns), up_face(g_neqns), &
-           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -167,10 +167,11 @@ associate (nummat=>g_mmi%nummat)
     uface(:) = ucons(1,:,ie)
     call get_uprim_mm6eq(uface, up_face)
     do imat = 1,nummat
-      uprim(1,imat,ie) = ucons(1,imat,ie) * up_face(g_mmi%irmin+imat-1)
+      uprim(1,apr_idx(nummat, imat),ie) = ucons(1,imat,ie) &
+        * up_face(g_mmi%irmin+imat-1)
     end do !imat
     rhoavg = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
-    uprim(1,nummat+1,ie) = ucons(1,g_mmi%imome,ie) / rhoavg
+    uprim(1,vel_idx(nummat, 0),ie) = ucons(1,g_mmi%imome,ie) / rhoavg
 
     !--- 2. "gradients" of material pressures and bulk velocity
     if (g_nsdiscr .gt. 0) then
@@ -195,22 +196,22 @@ associate (nummat=>g_mmi%nummat)
       call get_uprim_mm6eq(uface, up_face)
 
       do imat = 1,nummat
-        uprim(2,imat,ie) = uprim(2,imat,ie) &
+        uprim(2,apr_idx(nummat, imat),ie) = uprim(2,apr_idx(nummat, imat),ie) &
           + 0.5 * ((-1.0)**ifc) * uface(imat)*up_face(g_mmi%irmin+imat-1)
       end do !imat
 
     end do !ifc
 
     drhodx = sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie))
-    uprim(2,nummat+1,ie) = ( ucons(2,g_mmi%imome,ie) &
-                             - uprim(1,nummat+1,ie) &
+    uprim(2,vel_idx(nummat, 0),ie) = ( ucons(2,g_mmi%imome,ie) &
+                             - uprim(1,vel_idx(nummat, 0),ie) &
                              * sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie)) ) &
                            / rhoavg
 
     if (g_nsdiscr .eq. 12) then
-      uprim(3,nummat+1,ie) = ( ucons(3,g_mmi%imome,ie) &
-                               - (uprim(1,nummat+1,ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
-                                  + 2.0*drhodx*uprim(2,nummat+1,ie)) ) / rhoavg
+      uprim(3,vel_idx(nummat, 0),ie) = ( ucons(3,g_mmi%imome,ie) &
+                               - (uprim(1,vel_idx(nummat, 0),ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
+                                  + 2.0*drhodx*uprim(2,vel_idx(nummat, 0),ie)) ) / rhoavg
     end if
     end if
 
@@ -226,7 +227,7 @@ end subroutine recons_primitives
 
 subroutine limiting_p0(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
 end subroutine limiting_p0
 
@@ -236,7 +237,7 @@ end subroutine limiting_p0
 
 subroutine limiting_p1(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   select case (g_nlim)
 
@@ -267,7 +268,7 @@ end subroutine limiting_p1
 
 subroutine limiting_p2(ucons, uprim)
 
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   select case (g_nlim)
 
@@ -514,7 +515,7 @@ subroutine min_superbee(ucons, uprim)
 integer :: ie, ieqn, ifc
 real*8  :: theta(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
-           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           uprim(g_tdof,g_nprim,0:imax+1)
 
   do ie = 1,imax
 
@@ -545,9 +546,9 @@ end subroutine min_superbee
 subroutine superbee_p1(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
-real*8  :: almax, dalmax, theta(g_neqns), thetap(g_mmi%nummat+1), thetac
+real*8  :: almax, dalmax, theta(g_neqns), thetap(g_nprim), thetac
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
-           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           uprim(g_tdof,g_nprim,0:imax+1)
 logical :: tr_cell(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
@@ -575,16 +576,17 @@ associate (nummat=>g_mmi%nummat)
 
       ! iii. consistent limiting
       call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
-      uprim(2,1:nummat,ie) = ucons(2,1:nummat,ie) &
-        * uprim(1,1:nummat,ie)/ucons(1,1:nummat,ie)
-      uprim(2,nummat+1,ie) = 0.0
+      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = ucons(2,1:nummat,ie) &
+        * uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)/ucons(1,1:nummat,ie)
+      uprim(2,vel_idx(nummat, 0),ie) = 0.0
 
       !--- common for all equations
       !ucons(2,:,ie) = min(theta(iamax), minval(theta(nummat+1:))) * ucons(2,:,ie)
 
-      !uprim(2,1:nummat,ie) = minval(thetap(1:nummat)) * uprim(2,1:nummat,ie)
-      !uprim(2,nummat+1,ie) = min(theta(iamax), minval(theta(nummat+1:))) &
-      !  * uprim(2,nummat+1,ie)
+      !uprim(2,1:nummat,ie) = minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = min(theta(iamax), minval(theta(nummat+1:))) &
+      !  * uprim(2,vel_idx(nummat, 0),ie)
       !---
 
       !--- separate-per-equation
@@ -592,8 +594,10 @@ associate (nummat=>g_mmi%nummat)
       !thetac = minval(theta(g_mmi%irmin:))
       !ucons(2,g_mmi%irmin:,ie) = thetac * ucons(2,g_mmi%irmin:,ie)
 
-      !uprim(2,1:nummat,ie) = minval(thetap(1:nummat)) * uprim(2,1:nummat,ie)
-      !uprim(2,nummat+1,ie) = thetac * uprim(2,nummat+1,ie)
+      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = thetac * uprim(2,vel_idx(nummat, 0),ie)
       !---
 
       !--- additional limiting step to check TVD constraints
@@ -634,7 +638,7 @@ associate (nummat=>g_mmi%nummat)
       uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
 
       ! ii. monotonicity of primitives
-      call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
+      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
 
       ! iii. use common limiter function for all volume-fractions
       theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
@@ -643,8 +647,11 @@ associate (nummat=>g_mmi%nummat)
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
       end do !ieqn
 
-      uprim(2,1:nummat,ie) = minval(thetap(1:nummat)) * uprim(2,1:nummat,ie)
-      uprim(2,nummat+1,ie) = thetap(nummat+1) * uprim(2,nummat+1,ie)
+      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+        minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+        * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+        * uprim(2,vel_idx(nummat, 0),ie)
 
     end if
 
@@ -663,9 +670,9 @@ subroutine superbee_p2(ucons, uprim)
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            theta1c, theta2c, &
-           thetap2(g_mmi%nummat+1), thetap1(g_mmi%nummat+1)
+           thetap2(g_nprim), thetap1(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
-           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -694,7 +701,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:nummat+1,1)  = uprim(2:3,:,ie+1) / dx2
 
     ! monotonicity of primitives
-    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap2)
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap2)
 
     !--- 2. P1 derivative limiting
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
@@ -708,9 +715,11 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
 
     ! monotonicity of primitives
-    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap1)
-    thetap1(1:nummat) = minval(thetap1(1:nummat))
-    thetap2(1:nummat) = minval(thetap2(1:nummat))
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap1)
+    thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)) = &
+      minval(thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)))
+    thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)) = &
+      minval(thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)))
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
@@ -737,20 +746,25 @@ associate (nummat=>g_mmi%nummat)
       !  * ucons(2,g_mmi%irmin:,ie)
       !ucons(3,g_mmi%irmin:,ie) = theta2c * ucons(3,g_mmi%irmin:,ie)
 
-      !uprim(2,1:nummat,ie) = max(thetap1(1:nummat), thetap2(1:nummat)) &
-      !  * uprim(2,1:nummat,ie)
-      !uprim(3,1:nummat,ie) = thetap2(1:nummat) * uprim(3,1:nummat,ie)
-      !uprim(2,nummat+1,ie) = max(theta1c, theta2c) * uprim(2,nummat+1,ie)
-      !uprim(3,nummat+1,ie) = theta2c * uprim(3,nummat+1,ie)
+      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      !  max(thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)), &
+      !  thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      !  thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)) * &
+      !  uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = max(theta1c, theta2c) &
+      !  * uprim(2,vel_idx(nummat, 0),ie)
+      !uprim(3,vel_idx(nummat, 0),ie) = theta2c * uprim(3,vel_idx(nummat, 0),ie)
       !---
 
       !--- special interface treatment
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
       do imat = 1,nummat
-        uprim(2:3,imat,ie) = ucons(2:3,imat,ie) &
-          * uprim(1,imat,ie)/ucons(1,imat,ie)
+        uprim(2:3,apr_idx(nummat, imat),ie) = ucons(2:3,apr_idx(nummat, imat),ie) &
+          * uprim(1,apr_idx(nummat, imat),ie)/ucons(1,imat,ie)
       end do !imat
-      uprim(2:3,nummat+1,ie) = 0.0
+      uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
       !---
 
     else
@@ -779,10 +793,10 @@ subroutine weno_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
-           thetap(g_mmi%nummat+1)
+           thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -862,7 +876,7 @@ integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
-           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -937,7 +951,7 @@ integer :: ie, ieqn, iamax
 real*8  :: theta(g_neqns), theta_al, thrho(2)
 real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
-           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 

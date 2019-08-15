@@ -3,7 +3,7 @@ MODULE glob_var
 implicit none
 
 integer :: i_system, &
-           imax, g_neqns, ntstep, &
+           imax, g_neqns, g_nprim, ntstep, &
            g_nsdiscr, g_gdof, g_tdof, g_nlim, g_nmatint, &
            g_nprelx, &
            g_lbflag, g_rbflag, &
@@ -87,6 +87,35 @@ real*8 :: hdx
   p2basis = (x-xc)*(x-xc)/(2.0*hdx*hdx) - 1.0/6.0
 
 end function p2basis
+
+!-----------------------------------------------------------------------
+!----- Functions used to index into uprim
+!-----------------------------------------------------------------------
+
+pure integer function apr_idx(nummat, k)
+integer, intent(in) :: nummat, k
+
+  apr_idx = k
+
+end function apr_idx
+
+!-----------------------------------------------------------------------
+
+pure integer function mmom_idx(nummat, k)
+integer, intent(in) :: nummat, k
+
+  mmom_idx = nummat + k
+
+end function mmom_idx
+
+!-----------------------------------------------------------------------
+
+pure integer function vel_idx(nummat, idir)
+integer, intent(in) :: nummat, idir
+
+  vel_idx = nummat + 1
+
+end function vel_idx
 
 !-----------------------------------------------------------------------
 

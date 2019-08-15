@@ -44,6 +44,8 @@ else if (i_system .eq. 1) then
    g_mmi%iemax = g_mmi%iemin+g_mmi%nummat-1
 
    g_neqns = g_mmi%iemax
+   ! primitive variable vector. See glob_var.f03 for indexing
+   g_nprim = g_mmi%nummat+1
 end if
 
 if (g_nsdiscr .eq. 0) then
@@ -64,7 +66,7 @@ end if
 
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
-         uprim(g_tdof,g_mmi%nummat+1,0:imax+1), &
+         uprim(g_tdof,g_nprim,0:imax+1), &
          err_log(g_neqns))
 
 allocate(coord(0:imax+2))

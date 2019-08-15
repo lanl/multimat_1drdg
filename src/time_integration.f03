@@ -22,7 +22,7 @@ procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
 real*8   :: mm(g_tdof), err_log(g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
-            uprim(g_tdof,g_mmi%nummat+1,0:imax+1), &
+            uprim(g_tdof,g_nprim,0:imax+1), &
             k1(3),k2(3)
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 

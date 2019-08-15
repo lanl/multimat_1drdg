@@ -21,7 +21,7 @@ subroutine rhs_rdg_mm6eq(ucons, uprim, rhsel)
 real*8  :: rhsel(g_gdof,g_neqns,imax)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                      uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                      uprim(g_tdof,g_nprim,0:imax+1)
 
   call flux_rdg_mm6eq(ucons, uprim, rhsel)
 
@@ -38,7 +38,7 @@ end subroutine rhs_rdg_mm6eq
 subroutine flux_rdg_mm6eq(ucons, uprim, rhsel)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                      uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                      uprim(g_tdof,g_nprim,0:imax+1)
 
 real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
            vriemann(g_mmi%nummat+2,imax+1), &
@@ -63,14 +63,14 @@ subroutine surfaceint_dg(ucons, uprim, rgrad, vriem, rhsel)
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
-           pp_l(g_mmi%nummat+1), pp_r(g_mmi%nummat+1), &
+           pp_l(g_nprim), pp_r(g_nprim), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag, pstar
 
 real*8  :: rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                      uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                      uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -91,10 +91,10 @@ associate (nummat=>g_mmi%nummat)
       ul(ieqn) = ucons(1,ieqn,iel)
       ur(ieqn) = ucons(1,ieqn,ier)
     end do !ieqn
-    do imat = 1,nummat+1
-      pp_l(imat) = uprim(1,imat,iel)
-      pp_r(imat) = uprim(1,imat,ier)
-    end do !imat
+    do ieqn = 1,g_nprim
+      pp_l(ieqn) = uprim(1,ieqn,iel)
+      pp_r(ieqn) = uprim(1,ieqn,ier)
+    end do !ieqn
 
   !--- rdgp0p1 or dgp1
   elseif ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
@@ -102,10 +102,10 @@ associate (nummat=>g_mmi%nummat)
       ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
       ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
     end do !ieqn
-    do imat = 1,nummat+1
-      pp_l(imat) = uprim(1,imat,iel) + uprim(2,imat,iel)
-      pp_r(imat) = uprim(1,imat,ier) - uprim(2,imat,ier)
-    end do !imat
+    do ieqn = 1,g_nprim
+      pp_l(ieqn) = uprim(1,ieqn,iel) + uprim(2,ieqn,iel)
+      pp_r(ieqn) = uprim(1,ieqn,ier) - uprim(2,ieqn,ier)
+    end do !ieqn
 
   !--- rdgp1p2
   elseif (g_nsdiscr .eq. 12) then
@@ -113,10 +113,10 @@ associate (nummat=>g_mmi%nummat)
       ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel) + 1.0/3.0*ucons(3,ieqn,iel)
       ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
     end do !ieqn
-    do imat = 1,nummat+1
-      pp_l(imat) = uprim(1,imat,iel) + uprim(2,imat,iel) + 1.0/3.0*uprim(3,imat,iel)
-      pp_r(imat) = uprim(1,imat,ier) - uprim(2,imat,ier) + 1.0/3.0*uprim(3,imat,ier)
-    end do !imat
+    do ieqn = 1,g_nprim
+      pp_l(ieqn) = uprim(1,ieqn,iel) + uprim(2,ieqn,iel) + 1.0/3.0*uprim(3,ieqn,iel)
+      pp_r(ieqn) = uprim(1,ieqn,ier) - uprim(2,ieqn,ier) + 1.0/3.0*uprim(3,ieqn,ier)
+    end do !ieqn
 
   end if
 
@@ -147,7 +147,7 @@ associate (nummat=>g_mmi%nummat)
     vriem(imat,ifc) = al_star(lplus, lminu, &
                               ul(imat)*up_l(g_mmi%irmin+imat-1), &
                               ur(imat)*up_r(g_mmi%irmin+imat-1))
-                              !pp_l(imat), pp_r(imat))
+                              !pp_l(apr_idx(nummat, imat)), pp_r(apr_idx(nummat, imat)))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
   vriem(nummat+2,ifc) = pstar
@@ -205,7 +205,7 @@ real*8  :: dx2, b3, p, hmat, viriem, &
 
 real*8, intent(in) :: rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1), &
                       ucons(g_tdof,g_neqns,0:imax+1), &
-                      uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                      uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -455,7 +455,7 @@ subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
                           flux, lambda_plus, lambda_minu, lambda_mag, p_12)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
-                      pp_l(g_mmi%nummat+1), pp_r(g_mmi%nummat+1)
+                      pp_l(g_nprim), pp_r(g_nprim)
 
 integer :: imat
 real*8 :: flux(g_neqns)
@@ -497,9 +497,9 @@ associate (nummat=>g_mmi%nummat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
     am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
-    !hm_l(imat)   = em_l(imat) + pp_l(imat)
+    !hm_l(imat)   = em_l(imat) + pp_l(apr_idx(nummat, imat))
     p_l = p_l + al_l(imat)*pi_l
-    !p_l = p_l + pp_l(imat)
+    !p_l = p_l + pp_l(apr_idx(nummat, imat))
 
   ! ur
     al_r(imat)    = ur(imat)
@@ -510,9 +510,9 @@ associate (nummat=>g_mmi%nummat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
     am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
-    !hm_r(imat)   = em_r(imat) + pp_r(imat)
+    !hm_r(imat)   = em_r(imat) + pp_r(apr_idx(nummat, imat))
     p_r = p_r + al_r(imat)*pi_r
-    !p_r = p_r + pp_r(imat)
+    !p_r = p_r + pp_r(apr_idx(nummat, imat))
   end do !imat
 
   ! bulk state
@@ -523,8 +523,8 @@ associate (nummat=>g_mmi%nummat)
   rho_r = sum(arhom_r)
   !u_l    = rhou_l / rho_l
   !u_r    = rhou_r / rho_r
-  u_l = pp_l(nummat+1)
-  u_r = pp_r(nummat+1)
+  u_l = pp_l(vel_idx(nummat, 0))
+  u_r = pp_r(vel_idx(nummat, 0))
 
   ! average states
   rho_12  = 0.5*(rho_l + rho_r)
@@ -859,7 +859,7 @@ subroutine get_bc_mm6eq(ucons, uprim)
 
 integer :: imat
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), &
-           uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+           uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: pmat, u_conv
 
 associate (nummat=>g_mmi%nummat)
@@ -869,8 +869,8 @@ associate (nummat=>g_mmi%nummat)
   if (g_lbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
-     uprim(1,1:nummat,0) = ucons(1,1:nummat,0) * pr_fs
-     uprim(1,nummat+1,0) = u_fs
+     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),0) = ucons(1,1:nummat,0) * pr_fs
+     uprim(1,vel_idx(nummat, 0),0) = u_fs
 
   else if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
@@ -892,9 +892,9 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,0) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,imat,0) = alpha_fs(imat) * pr_fs
+        uprim(1,apr_idx(nummat, imat),0) = alpha_fs(imat) * pr_fs
      end do !imat
-     uprim(1,nummat+1,0) = u_fs
+     uprim(1,vel_idx(nummat, 0),0) = u_fs
      ucons(1,g_mmi%imome,0) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) * u_fs
 
   else if (g_lbflag .eq. 2) then
@@ -908,9 +908,9 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,1)/ucons(1,imat,1), u_conv)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,imat,0) = alpha_fs(imat) * pmat
+        uprim(1,apr_idx(nummat, imat),0) = alpha_fs(imat) * pmat
      end do !imat
-     uprim(1,nummat+1,0) = u_fs
+     uprim(1,vel_idx(nummat, 0),0) = u_fs
      ucons(1,g_mmi%imome,0) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) * u_fs
 
   else if (g_lbflag .eq. 3) then
@@ -936,8 +936,9 @@ associate (nummat=>g_mmi%nummat)
   if (g_rbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
-     uprim(1,1:nummat,imax+1) = ucons(1,1:nummat,imax+1) * pr_fs
-     uprim(1,nummat+1,imax+1) = u_fs
+     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),imax+1) = &
+       ucons(1,1:nummat,imax+1) * pr_fs
+     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
 
   else if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
@@ -959,9 +960,9 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,imax+1) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,imat,imax+1) = alpha_fs(imat) * pr_fs
+        uprim(1,apr_idx(nummat, imat),imax+1) = alpha_fs(imat) * pr_fs
      end do !imat
-     uprim(1,nummat+1,imax+1) = u_fs
+     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
      ucons(1,g_mmi%imome,imax+1) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1)) * u_fs
 
   else if (g_rbflag .eq. 2) then
@@ -975,9 +976,9 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,imax)/ucons(1,imat,imax), u_conv)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,imat,imax+1) = alpha_fs(imat) * pmat
+        uprim(1,apr_idx(nummat, imat),imax+1) = alpha_fs(imat) * pmat
      end do !imat
-     uprim(1,nummat+1,imax+1) = u_fs
+     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
      ucons(1,g_mmi%imome,imax+1) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1)) * u_fs
 
   else if (g_rbflag .eq. 3) then

@@ -275,7 +275,7 @@ end subroutine init_soln_kex
 subroutine init_soln_mm6eq(ucons, uprim)
 
 integer :: imat, ielem
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
 
@@ -837,7 +837,7 @@ subroutine gnuplot_flow_mm6eq(ucons, uprim, itstep)
 
 integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                       uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                       uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
 real*8  :: xcc, pmix, tmix, rhomix, emix, temix, trcell
@@ -873,8 +873,8 @@ associate (nummat=>g_mmi%nummat)
 
      uconsi = ucons(1,:,ielem)
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,1:nummat,ielem)
-     uprimi(g_mmi%imome) = uprim(1,nummat+1,ielem)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,apr_idx(nummat, 1):apr_idx(nummat, nummat),ielem)
+     uprimi(g_mmi%imome) = uprim(1,vel_idx(nummat, 0),ielem)
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
 
@@ -935,11 +935,11 @@ subroutine gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
 
 integer, intent(in) :: itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                       uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+                       uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
 real*8  :: xp, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_mmi%nummat+1)
+real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_nprim)
 
 character(len=100) :: filename2,filename3
 
@@ -994,8 +994,8 @@ associate (nummat=>g_mmi%nummat)
      uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(1:nummat)
-     uprimi(g_mmi%imome) = uprimp(nummat+1)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
+     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
 
      xp = coord(ielem)
 
@@ -1063,8 +1063,8 @@ associate (nummat=>g_mmi%nummat)
      uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(1:nummat)
-     uprimi(g_mmi%imome) = uprimp(nummat+1)
+     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
+     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
 
      xp = coord(ielem+1)
 
