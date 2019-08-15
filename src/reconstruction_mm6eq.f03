@@ -548,36 +548,36 @@ integer :: ie, ieqn, iamax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_mmi%nummat+1), thetac
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_mmi%nummat+1,0:imax+1)
+logical :: tr_cell(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
-    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
-    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
-    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
-
-    ! 1. compute limiter function
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
-
-    uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
-    uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
-    uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
-
-    ! monotonicity of primitives
-    call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
-
+    ! 1. detect interface/single-material cell
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
     dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
 
-    ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
-
-    ! 2. Obtain consistent limiter functions for the equation system
-    !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
+    ! 2a. Obtain consistent limiter functions for equation system at interface
+
+      uneigh(1:2,1:nummat,-1) = ucons(1:2,1:nummat,ie-1)
+      uneigh(1:2,1:nummat,0)  = ucons(1:2,1:nummat,ie)
+      uneigh(1:2,1:nummat,1)  = ucons(1:2,1:nummat,ie+1)
+
+      ! i. compute limiter function for volume fractions only
+      call superbee_fn(nummat, 2.0, 1.0, uneigh(:,1:nummat,:), theta(1:nummat))
+
+      ! ii. use common limiter function for all volume-fractions
+      theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
+
+      ! iii. consistent limiting
+      call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
+      uprim(2,1:nummat,ie) = ucons(2,1:nummat,ie) &
+        * uprim(1,1:nummat,ie)/ucons(1,1:nummat,ie)
+      uprim(2,nummat+1,ie) = 0.0
 
       !--- common for all equations
       !ucons(2,:,ie) = min(theta(iamax), minval(theta(nummat+1:))) * ucons(2,:,ie)
@@ -596,14 +596,48 @@ associate (nummat=>g_mmi%nummat)
       !uprim(2,nummat+1,ie) = thetac * uprim(2,nummat+1,ie)
       !---
 
-      !--- special interface treatment
-      call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
-      uprim(2,1:nummat,ie) = ucons(2,1:nummat,ie) &
-        * uprim(1,1:nummat,ie)/ucons(1,1:nummat,ie)
-      uprim(2,nummat+1,ie) = 0.0
+      !--- additional limiting step to check TVD constraints
+      !uneigh(1:2,g_mmi%irmin:g_mmi%iemax,-1) = ucons(1:2,g_mmi%irmin:g_mmi%iemax,ie-1)
+      !uneigh(1:2,g_mmi%irmin:g_mmi%iemax,0)  = ucons(1:2,g_mmi%irmin:g_mmi%iemax,ie)
+      !uneigh(1:2,g_mmi%irmin:g_mmi%iemax,1)  = ucons(1:2,g_mmi%irmin:g_mmi%iemax,ie+1)
+
+      !! iv. check if limiting satisfies TVD conditions for conserved quantities
+      !tr_cell = .false.
+      !do ieqn = g_mmi%irmin,g_mmi%iemax
+      !  tr_cell(ieqn) = troubled_cell(2.0, uneigh(:,ieqn,:), &
+      !    (coord(ie+1)-coord(ie)))
+      !end do !ieqn
+
+      !if (any(tr_cell)) then
+      !  call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+      !  theta(g_mmi%irmin:g_mmi%irmax) = minval(theta(g_mmi%irmin:g_mmi%irmax))
+      !  theta(g_mmi%iemin:g_mmi%iemax) = minval(theta(g_mmi%iemin:g_mmi%iemax))
+
+      !  do ieqn = g_mmi%irmin,g_mmi%iemax
+      !    ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
+      !  end do !ieqn
+      !end if
       !---
 
     else
+    ! 2b. Obtain limiter functions for equation system in single-material cell
+
+      uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+      uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+      uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+      ! i. compute limiter function
+      call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+
+      uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
+      uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
+      uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
+
+      ! ii. monotonicity of primitives
+      call superbee_fn(nummat+1, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
+
+      ! iii. use common limiter function for all volume-fractions
+      theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
 
       do ieqn = 1,g_neqns
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
@@ -1230,6 +1264,51 @@ logical :: al, dal
   end if
 
 end function interface_cell
+
+!-------------------------------------------------------------------------------
+!----- Troubled-cell indicator
+!-------------------------------------------------------------------------------
+
+logical function troubled_cell(beta, u, dx)
+
+real*8, intent(in) :: beta, u(g_tdof,1,-1:1), dx
+
+integer :: ifc
+real*8  :: dplus, dminu, difc, a1, a2, a3, mm
+
+  troubled_cell = .false.
+
+  dplus = u(1,1,0)-u(1,1,-1)
+  dminu = u(1,1,1)-u(1,1,0)
+
+  do ifc = 1,2
+    difc = ((-1.0)**ifc) * u(2,1,0)
+
+    a1 = difc
+    a2 = dplus
+    a3 = dminu
+
+    ! modified minmod
+    if (dabs(a1) < beta*dx*dx) then
+      mm = a1
+
+    else
+      if (a1*a2 > 0.0 .and. a2*a3 > 0.0) then
+        mm = dsign(1.0, a1) * min(dabs(a1), dabs(a2), dabs(a3))
+      else
+        mm = 0.0
+      end if
+
+    end if
+
+    if (dabs(mm-difc) > 1.0e-14) then
+      troubled_cell = troubled_cell .or. .true.
+    else
+      troubled_cell = troubled_cell .or. .false.
+    end if
+  end do !ifc
+
+end function troubled_cell
 
 !-------------------------------------------------------------------------------
 
