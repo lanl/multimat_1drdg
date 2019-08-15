@@ -633,12 +633,12 @@ associate (nummat=>g_mmi%nummat)
       ! i. compute limiter function
       call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-      uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
+      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
       ! ii. monotonicity of primitives
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap)
+      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
       ! iii. use common limiter function for all volume-fractions
       theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
@@ -692,16 +692,16 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
 
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
-    uneigh(1:2,1:nummat+1,-1) = uprim(2:3,:,ie-1) / dx2
+    uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
 
     dx2 = 0.5 * (coord(ie+1)-coord(ie))
-    uneigh(1:2,1:nummat+1,0)  = uprim(2:3,:,ie) / dx2
+    uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
 
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
-    uneigh(1:2,1:nummat+1,1)  = uprim(2:3,:,ie+1) / dx2
+    uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
     ! monotonicity of primitives
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap2)
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
 
     !--- 2. P1 derivative limiting
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
@@ -710,12 +710,12 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
-    uneigh(1:2,1:nummat+1,-1) = uprim(1:2,:,ie-1)
-    uneigh(1:2,1:nummat+1,0)  = uprim(1:2,:,ie)
-    uneigh(1:2,1:nummat+1,1)  = uprim(1:2,:,ie+1)
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     ! monotonicity of primitives
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:nummat+1,:), thetap1)
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
     thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)) = &
       minval(thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)))
     thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)) = &

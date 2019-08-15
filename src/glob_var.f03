@@ -113,7 +113,7 @@ end function mmom_idx
 pure integer function vel_idx(nummat, idir)
 integer, intent(in) :: nummat, idir
 
-  vel_idx = nummat + 1
+  vel_idx = 2*nummat + 1
 
 end function vel_idx
 

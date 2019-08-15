@@ -45,7 +45,7 @@ else if (i_system .eq. 1) then
 
    g_neqns = g_mmi%iemax
    ! primitive variable vector. See glob_var.f03 for indexing
-   g_nprim = g_mmi%nummat+1
+   g_nprim = 2*g_mmi%nummat+1
 end if
 
 if (g_nsdiscr .eq. 0) then
