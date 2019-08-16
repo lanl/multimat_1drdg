@@ -163,17 +163,19 @@ associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
-    !--- 1. cell-average material pressures and bulk velocity
+    !--- 1. cell-average bulk velocity, material pressures and material momenta
     uface(:) = ucons(1,:,ie)
     call get_uprim_mm6eq(uface, up_face)
+    rhoavg = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
+    uprim(1,vel_idx(nummat, 0),ie) = ucons(1,g_mmi%imome,ie) / rhoavg
     do imat = 1,nummat
       uprim(1,apr_idx(nummat, imat),ie) = ucons(1,imat,ie) &
         * up_face(g_mmi%irmin+imat-1)
+      uprim(1,mmom_idx(nummat, imat),ie) = ucons(1,g_mmi%irmin+imat-1,ie) &
+        * uprim(1,vel_idx(nummat, 0),ie)
     end do !imat
-    rhoavg = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
-    uprim(1,vel_idx(nummat, 0),ie) = ucons(1,g_mmi%imome,ie) / rhoavg
 
-    !--- 2. "gradients" of material pressures and bulk velocity
+    !--- 2. "gradients" of material pressures, bulk velocity and material momenta
     if (g_nsdiscr .gt. 0) then
     uprim(2,:,ie) = 0.0
     do ifc = 1,2
@@ -208,10 +210,18 @@ associate (nummat=>g_mmi%nummat)
                              * sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie)) ) &
                            / rhoavg
 
+    do imat = 1,nummat
+      uprim(2,mmom_idx(nummat, imat),ie) = &
+        uprim(1,vel_idx(nummat, 0),ie) * ucons(2,g_mmi%irmin+imat-1,ie) &
+        + ucons(1,g_mmi%irmin+imat-1,ie) * uprim(2,vel_idx(nummat, 0),ie)
+    end do !imat
+
     if (g_nsdiscr .eq. 12) then
       uprim(3,vel_idx(nummat, 0),ie) = ( ucons(3,g_mmi%imome,ie) &
-                               - (uprim(1,vel_idx(nummat, 0),ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
-                                  + 2.0*drhodx*uprim(2,vel_idx(nummat, 0),ie)) ) / rhoavg
+        - (uprim(1,vel_idx(nummat, 0),ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
+        + 2.0*drhodx*uprim(2,vel_idx(nummat, 0),ie)) ) / rhoavg
+      write(*,*) " FATAL: 2nd order dofs not reconstructed for material momenta!"
+      stop 1
     end if
     end if
 
@@ -576,9 +586,31 @@ associate (nummat=>g_mmi%nummat)
 
       ! iii. consistent limiting
       call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
+
+      !--- consistent limiting of primitives
       uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = ucons(2,1:nummat,ie) &
         * uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)/ucons(1,1:nummat,ie)
+      uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+        ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
+        * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
       uprim(2,vel_idx(nummat, 0),ie) = 0.0
+      !---
+
+      !uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+      !uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+      !uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+      !! iv. monotonicity of primitives
+      !call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
+      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+      !  * uprim(2,vel_idx(nummat, 0),ie)
 
       !--- common for all equations
       !ucons(2,:,ie) = min(theta(iamax), minval(theta(nummat+1:))) * ucons(2,:,ie)
@@ -650,6 +682,9 @@ associate (nummat=>g_mmi%nummat)
       uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
         minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
         * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+        minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
+        * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
       uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
         * uprim(2,vel_idx(nummat, 0),ie)
 
