@@ -421,14 +421,14 @@ real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
 integer :: imat
 real*8 :: flux(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
-                                   arhom_l,rhom_l,em_l,am_l,hm_l, &
-                                   arhom_r,rhom_r,em_r,am_r,hm_r, &
+                                   arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
+                                   arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
                                    am_12,rhom_12,al_12
 
 real*8 :: rhou_l, u_l, m_l, rho_l, pi_l, p_l, &
           rhou_r, u_r, m_r, rho_r, pi_r, p_r
 real*8 :: rho_12, ac_12, &
-          f_a, m_12, p_12, m_p, p_u
+          f_a, m_12, p_12, m_p, p_u(g_mmi%nummat)
 real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
 real*8 :: psplus_l,psplus_r,psminu_l,psminu_r
 real*8 :: temp
@@ -463,6 +463,7 @@ associate (nummat=>g_mmi%nummat)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
     rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
+    pm_l(imat)   = pi_l
 
   ! ur
     al_r(imat)    = ur(imat)
@@ -476,6 +477,7 @@ associate (nummat=>g_mmi%nummat)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
     rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
+    pm_r(imat)   = pi_r
   end do !imat
 
   rho_l = sum(arhom_l)
@@ -526,8 +528,13 @@ associate (nummat=>g_mmi%nummat)
   m_12 = msplus_l(3) + msminu_r(3) + m_p
 
   ! "u"
-  p_u   = -k_u* psplus_l* psminu_r* f_a* rho_12* ac_12* (u_r-u_l)
-  p_12 = psplus_l*p_l + psminu_r*p_r + p_u
+  !p_u   = -k_u* psplus_l* psminu_r* f_a* rho_12* ac_12* (u_r-u_l)
+  !p_12 = psplus_l*p_l + psminu_r*p_r + p_u
+  do imat = 1,nummat
+    p_u(imat) = -k_u* psplus_l* psminu_r* f_a* 0.5*(arhom_l(imat)+arhom_r(imat)) &
+      * ac_12* (u_r-u_l)
+  end do !imat
+  p_12 = psplus_l*p_l + psminu_r*p_r + sum(p_u)
 
   lambda = ac_12 * m_12
 
@@ -539,8 +546,13 @@ associate (nummat=>g_mmi%nummat)
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
     flux(g_mmi%irmin+imat-1) = lambda_plus*arhom_l(imat) + lambda_minu*arhom_r(imat)
     flux(g_mmi%iemin+imat-1) = lambda_plus*hm_l(imat)    + lambda_minu*hm_r(imat)
+    flux(g_mmi%imome) = flux(g_mmi%imome) &
+      + lambda_plus*pp_l(mmom_idx(nummat, imat)) &
+      + lambda_minu*pp_r(mmom_idx(nummat, imat)) &
+      + psplus_l*al_l(imat)*pm_l(imat) &
+      + psminu_r*al_r(imat)*pm_r(imat) + p_u(imat)
   end do !imat
-  flux(g_mmi%imome) = lambda_plus*rhou_l + lambda_minu*rhou_r + p_12
+  !flux(g_mmi%imome) = lambda_plus*rhou_l + lambda_minu*rhou_r + p_12
 
   lambda_mag = dabs(lambda) + 1.d-16
 

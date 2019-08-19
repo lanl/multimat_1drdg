@@ -613,7 +613,11 @@ associate (nummat=>g_mmi%nummat)
       !  * uprim(2,vel_idx(nummat, 0),ie)
 
       !--- common for all equations
-      !ucons(2,:,ie) = min(theta(iamax), minval(theta(nummat+1:))) * ucons(2,:,ie)
+      !thetac = min(minval(theta), &
+      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !ucons(2,:,ie) = thetac * ucons(2,:,ie)
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
+      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,1:nummat,ie) = minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
