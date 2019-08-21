@@ -57,10 +57,10 @@ subroutine reconstruction_p1(ucons, uprim)
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
+  call limiting_p1(ucons, uprim)
+
   !--- reconstruct primitives from second-order solution
   call recons_primitives(ucons, uprim)
-
-  call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p1
 
@@ -161,6 +161,8 @@ real*8  :: rhoavg, drhodx, uface(g_neqns), up_face(g_neqns), &
 
 associate (nummat=>g_mmi%nummat)
 
+  uprim(:,:,1:imax) = 0.0
+
   do ie = 1,imax
 
     !--- 1. cell-average bulk velocity, material pressures and material momenta
@@ -169,8 +171,7 @@ associate (nummat=>g_mmi%nummat)
     rhoavg = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
     uprim(1,vel_idx(nummat, 0),ie) = ucons(1,g_mmi%imome,ie) / rhoavg
     do imat = 1,nummat
-      uprim(1,apr_idx(nummat, imat),ie) = ucons(1,imat,ie) &
-        * up_face(g_mmi%irmin+imat-1)
+      uprim(1,apr_idx(nummat, imat),ie) = up_face(g_mmi%irmin+imat-1)
       uprim(1,mmom_idx(nummat, imat),ie) = ucons(1,g_mmi%irmin+imat-1,ie) &
         * uprim(1,vel_idx(nummat, 0),ie)
     end do !imat
@@ -611,8 +612,7 @@ associate (nummat=>g_mmi%nummat)
       call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
 
       !--- consistent limiting of primitives
-      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = ucons(2,1:nummat,ie) &
-        * uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)/ucons(1,1:nummat,ie)
+      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
       uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
         ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
         * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
@@ -830,8 +830,7 @@ associate (nummat=>g_mmi%nummat)
       !--- special interface treatment
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
       do imat = 1,nummat
-        uprim(2:3,apr_idx(nummat, imat),ie) = ucons(2:3,apr_idx(nummat, imat),ie) &
-          * uprim(1,apr_idx(nummat, imat),ie)/ucons(1,imat,ie)
+        uprim(2:3,apr_idx(nummat, imat),ie) = 0.0
       end do !imat
       uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
       !---

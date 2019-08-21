@@ -150,14 +150,14 @@ associate (nummat=>g_mmi%nummat)
   !--- non-conservative terms from Riemann reconstructed values
   do imat = 1,nummat
     vriem(imat,ifc) = al_star(lplus, lminu, &
-                              ul(imat)*up_l(g_mmi%irmin+imat-1), &
-                              ur(imat)*up_r(g_mmi%irmin+imat-1))
-                              !pp_l(apr_idx(nummat, imat)), &
-                              !pp_r(apr_idx(nummat, imat)))
+                              !ul(imat)*up_l(g_mmi%irmin+imat-1), &
+                              !ur(imat)*up_r(g_mmi%irmin+imat-1))
+                              ul(imat)*pp_l(apr_idx(nummat, imat)), &
+                              ur(imat)*pp_r(apr_idx(nummat, imat)))
     !vriem(imat,ifc) = pplus*ul(imat)*up_l(g_mmi%irmin+imat-1) &
     !  + pminu*ur(imat)*up_r(g_mmi%irmin+imat-1)
-    !vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
-    !  + pminu*pp_r(apr_idx(nummat, imat))
+    !vriem(imat,ifc) = pplus*ul(imat)*pp_l(apr_idx(nummat, imat)) &
+    !  + pminu*ur(imat)*pp_r(apr_idx(nummat, imat))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
 
@@ -265,8 +265,8 @@ associate (nummat=>g_mmi%nummat)
     dapdx = 0.0
     rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
     do imat = 1,nummat
-      p = p + u(imat)*up(g_mmi%irmin+imat-1)
-      !p = p + pp(apr_idx(nummat, imat))
+      !p = p + u(imat)*up(g_mmi%irmin+imat-1)
+      p = p + u(imat)*pp(apr_idx(nummat, imat))
       dapdx = dapdx + rgrad(imat,ie)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
     end do !imat
@@ -280,8 +280,8 @@ associate (nummat=>g_mmi%nummat)
     nflux(1,g_mmi%imome) = 0.0
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
     do imat = 1,nummat
-      !hmat = u(g_mmi%iemin+imat-1) + pp(apr_idx(nummat, imat))
-      hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
+      hmat = u(g_mmi%iemin+imat-1) + u(imat)*pp(apr_idx(nummat, imat))
+      !hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
       ! other conservative fluxes
       cflux(imat) = 0.0
       cflux(g_mmi%irmin+imat-1) = pp(vel_idx(nummat, 0)) * u(g_mmi%irmin+imat-1)
@@ -360,7 +360,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
-    !pi_l         = pp_l(apr_idx(nummat, imat)) / al_l(imat)
+    !pi_l         = pp_l(apr_idx(nummat, imat))
     am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
@@ -374,7 +374,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
-    !pi_r         = pp_r(apr_idx(nummat, imat)) / al_r(imat)
+    !pi_r         = pp_r(apr_idx(nummat, imat))
     am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
@@ -470,8 +470,8 @@ real*8 :: k_p, k_u
 
 associate (nummat=>g_mmi%nummat)
 
-  k_p = 0.5;
-  k_u = 0.5;
+  k_p = 1.0;
+  k_u = 1.0;
 
   flux(:) = 0.0
 
@@ -487,8 +487,8 @@ associate (nummat=>g_mmi%nummat)
     em_l(imat)    = ul(g_mmi%iemin+imat-1)
 
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
-    pi_l         = up_l(g_mmi%irmin+imat-1)
-    !pi_l         = pp_l(apr_idx(nummat, imat)) / al_l(imat)
+    !pi_l         = up_l(g_mmi%irmin+imat-1)
+    pi_l         = pp_l(apr_idx(nummat, imat))
     am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
@@ -501,8 +501,8 @@ associate (nummat=>g_mmi%nummat)
     em_r(imat)    = ur(g_mmi%iemin+imat-1)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
-    pi_r         = up_r(g_mmi%irmin+imat-1)
-    !pi_r         = pp_r(apr_idx(nummat, imat)) / al_r(imat)
+    !pi_r         = up_r(g_mmi%irmin+imat-1)
+    pi_r         = pp_r(apr_idx(nummat, imat))
     am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
@@ -643,7 +643,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_l(imat) = arhom_l(imat) / al_l(imat)
     pi_l         = up_l(g_mmi%irmin+imat-1)
-    !pi_l         = pp_l(apr_idx(nummat, imat)) / al_l(imat)
+    !pi_l         = pp_l(apr_idx(nummat, imat))
     am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
     hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
@@ -655,7 +655,7 @@ associate (nummat=>g_mmi%nummat)
 
     rhom_r(imat) = arhom_r(imat) / al_r(imat)
     pi_r         = up_r(g_mmi%irmin+imat-1)
-    !pi_r         = pp_r(apr_idx(nummat, imat)) / al_r(imat)
+    !pi_r         = pp_r(apr_idx(nummat, imat))
     am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
     hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
@@ -828,7 +828,7 @@ associate (nummat=>g_mmi%nummat)
   if (g_lbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
-     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),0) = ucons(1,1:nummat,0) * pr_fs
+     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),0) = pr_fs
      uprim(1,mmom_idx(nummat,1):mmom_idx(nummat,nummat),0) = &
        ucons(1,g_mmi%irmin:g_mmi%irmax,0) * u_fs
      uprim(1,vel_idx(nummat, 0),0) = u_fs
@@ -853,7 +853,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,0) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),0) = alpha_fs(imat) * pr_fs
+        uprim(1,apr_idx(nummat, imat),0) = pr_fs
         uprim(1,mmom_idx(nummat, imat),0) = ucons(1,g_mmi%irmin+imat-1,0) &
           * u_fs
      end do !imat
@@ -871,7 +871,7 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,1)/ucons(1,imat,1), u_conv)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),0) = alpha_fs(imat) * pmat
+        uprim(1,apr_idx(nummat, imat),0) = pmat
         uprim(1,mmom_idx(nummat, imat),0) = ucons(1,g_mmi%irmin+imat-1,0) &
           * u_fs
      end do !imat
@@ -901,8 +901,7 @@ associate (nummat=>g_mmi%nummat)
   if (g_rbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
-     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),imax+1) = &
-       ucons(1,1:nummat,imax+1) * pr_fs
+     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),imax+1) = pr_fs
      uprim(1,mmom_idx(nummat,1):mmom_idx(nummat,nummat),imax+1) = &
        ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1) * u_fs
      uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
@@ -927,7 +926,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,imax+1) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),imax+1) = alpha_fs(imat) * pr_fs
+        uprim(1,apr_idx(nummat, imat),imax+1) = pr_fs
         uprim(1,mmom_idx(nummat, imat),imax+1) = ucons(1,g_mmi%irmin+imat-1,imax+1) &
           * u_fs
      end do !imat
@@ -945,7 +944,7 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,imax)/ucons(1,imat,imax), u_conv)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),imax+1) = alpha_fs(imat) * pmat
+        uprim(1,apr_idx(nummat, imat),imax+1) = pmat
         uprim(1,mmom_idx(nummat, imat),imax+1) = ucons(1,g_mmi%irmin+imat-1,imax+1) &
           * u_fs
      end do !imat
