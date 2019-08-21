@@ -161,8 +161,6 @@ real*8  :: rhoavg, drhodx, uface(g_neqns), up_face(g_neqns), &
 
 associate (nummat=>g_mmi%nummat)
 
-  uprim(:,:,1:imax) = 0.0
-
   do ie = 1,imax
 
     !--- 1. cell-average bulk velocity, material pressures and material momenta
@@ -203,6 +201,9 @@ associate (nummat=>g_mmi%nummat)
           + 0.5 * ((-1.0)**ifc) * uface(imat)*up_face(g_mmi%irmin+imat-1)
       end do !imat
 
+      if (g_nsdiscr .eq. 12) &
+        write(*,*) " FATAL: 3rd order dofs not reconstructed for material pressures!"
+
     end do !ifc
 
     drhodx = sum(ucons(2,g_mmi%irmin:g_mmi%irmax,ie))
@@ -221,7 +222,7 @@ associate (nummat=>g_mmi%nummat)
       uprim(3,vel_idx(nummat, 0),ie) = ( ucons(3,g_mmi%imome,ie) &
         - (uprim(1,vel_idx(nummat, 0),ie)*sum(ucons(3,g_mmi%irmin:g_mmi%irmax,ie)) &
         + 2.0*drhodx*uprim(2,vel_idx(nummat, 0),ie)) ) / rhoavg
-      write(*,*) " FATAL: 2nd order dofs not reconstructed for material momenta!"
+      write(*,*) " FATAL: 3rd order dofs not reconstructed for material momenta!"
       stop 1
     end if
     end if
