@@ -40,8 +40,8 @@ subroutine flux_rdg_mm6eq(ucons, uprim, rhsel)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
-real*8  :: riemanngrad(g_mmi%nummat+2,imax), &
-           vriemann(g_mmi%nummat+2,imax+1), &
+real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
+           vriemann(g_mmi%nummat+1,imax+1), &
            rhsel(g_gdof,g_neqns,imax)
 
   riemanngrad = 0.0
@@ -65,9 +65,9 @@ real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag, pstar
+           lplus, lminu, lmag, pplus, pminu, pstar
 
-real*8  :: rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1)
+real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
@@ -131,11 +131,16 @@ associate (nummat=>g_mmi%nummat)
 
   !--- fluxes
 
-  if (i_flux .eq. 2) then
+  if (i_flux .eq. 1) then
+     call llf_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+                    intflux, lplus, lminu, lmag, pplus, pminu)
+  else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
-                         intflux, lplus, lminu, lmag, pstar)
-  else if (i_flux .eq. 3) then
-     call hllc_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
+                         intflux, lplus, lminu, lmag, pplus, pminu)
+  !else if (i_flux .eq. 3) then
+  !   call hllc_mm6eq(ul, ur, up_l, up_r, intflux, lplus, lminu, lmag)
+  !   pplus = lplus
+  !   pminu = lminu
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -149,9 +154,12 @@ associate (nummat=>g_mmi%nummat)
                               ur(imat)*up_r(g_mmi%irmin+imat-1))
                               !pp_l(apr_idx(nummat, imat)), &
                               !pp_r(apr_idx(nummat, imat)))
+    !vriem(imat,ifc) = pplus*ul(imat)*up_l(g_mmi%irmin+imat-1) &
+    !  + pminu*ur(imat)*up_r(g_mmi%irmin+imat-1)
+    !vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
+    !  + pminu*pp_r(apr_idx(nummat, imat))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
-  vriem(nummat+2,ifc) = pstar
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
@@ -163,7 +171,6 @@ associate (nummat=>g_mmi%nummat)
       rgrad(imat,iel) = rgrad(imat,iel) + vriem(imat,ifc)
     end do !imat
     rgrad(nummat+1,iel) = rgrad(nummat+1,iel) + vriem(nummat+1,ifc)
-    rgrad(nummat+2,iel) = rgrad(nummat+2,iel) + vriem(nummat+2,ifc)
 
   end if
 
@@ -177,7 +184,6 @@ associate (nummat=>g_mmi%nummat)
       rgrad(imat,ier) = rgrad(imat,ier) - vriem(imat,ifc)
     end do !imat
     rgrad(nummat+1,ier) = rgrad(nummat+1,ier) - vriem(nummat+1,ifc)
-    rgrad(nummat+2,ier) = rgrad(nummat+2,ier) - vriem(nummat+2,ifc)
 
   end if
 
@@ -204,7 +210,7 @@ real*8  :: dx2, b3, p, hmat, viriem, &
            nflux(g_gdof,g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
 
-real*8, intent(in) :: rgrad(g_mmi%nummat+2,imax), vriem(g_mmi%nummat+2,imax+1), &
+real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
                       ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -265,12 +271,12 @@ associate (nummat=>g_mmi%nummat)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
     end do !imat
 
-    !dapdx = rgrad(nummat+2,ie)
-
     !--- flux terms
     ! momentum flux
     cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) &
       * sum(pp(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) + p
+    !cflux(g_mmi%imome) = up(g_mmi%imome) &
+    !  * sum(pp(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) + p
     nflux(1,g_mmi%imome) = 0.0
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
     do imat = 1,nummat
@@ -280,12 +286,16 @@ associate (nummat=>g_mmi%nummat)
       cflux(imat) = 0.0
       cflux(g_mmi%irmin+imat-1) = pp(vel_idx(nummat, 0)) * u(g_mmi%irmin+imat-1)
       cflux(g_mmi%iemin+imat-1) = pp(vel_idx(nummat, 0)) * hmat
+      !cflux(g_mmi%irmin+imat-1) = up(g_mmi%imome) * u(g_mmi%irmin+imat-1)
+      !cflux(g_mmi%iemin+imat-1) = up(g_mmi%imome) * hmat
 
       ! non-conservative fluxes
       nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
       nflux(1,g_mmi%irmin+imat-1) = 0.0
       nflux(1,g_mmi%iemin+imat-1) = - pp(vel_idx(nummat, 0)) * ( y(imat) * dapdx &
                                                          - rgrad(imat,ie) )
+      !nflux(1,g_mmi%iemin+imat-1) = - up(g_mmi%imome) * ( y(imat) * dapdx &
+      !                                                   - rgrad(imat,ie) )
       if (g_nsdiscr .ge. 11) then
         nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !pp(vel_idx(nummat, 0)) * 2.0
         nflux(2,g_mmi%irmin+imat-1) = 0.0
@@ -313,9 +323,11 @@ end subroutine volumeint_dg
 !----- 2fluid Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------
 
-subroutine llf_mm6eq(ul, ur, up_l, up_r, flux, lplus, lminu, lmag)
+subroutine llf_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+                     flux, lplus, lminu, lmag, pplus, pminu)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim)
 
 integer :: imat
 real*8 :: flux(g_neqns), lplus, lminu, lmag
@@ -325,123 +337,13 @@ real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
                                    arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
                                    am_12,rhom_12,al_12
 
-real*8 :: rhou_l, u_l, rho_l, p_l, &
-          rhou_r, u_r, rho_r, p_r
-real*8 :: rho_12,ac_12
+real*8 :: rhou_l, u_l, rho_l, pi_l, p_l, &
+          rhou_r, u_r, rho_r, pi_r, p_r
+real*8 :: rho_12,ac_12,pplus,pminu
   
 real*8 :: lambda
 
 associate (nummat=>g_mmi%nummat)
-
-  flux(:) = 0.0
-
-  do imat = 1,nummat
-  ! ul
-    al_l(imat)    = ul(imat)
-    arhom_l(imat) = ul(g_mmi%irmin+imat-1)
-    em_l(imat)    = ul(g_mmi%iemin+imat-1)
-  ! ur
-    al_r(imat)    = ur(imat)
-    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
-    em_r(imat)    = ur(g_mmi%iemin+imat-1)
-  end do !imat
-  rhou_l  = ul(g_mmi%imome)
-  rhou_r  = ur(g_mmi%imome)
-
-  rho_l = sum(arhom_l)
-  rho_r = sum(arhom_r)
-  u_l    = rhou_l / rho_l
-  u_r    = rhou_r / rho_r
-
-  do imat = 1,nummat
-    rhom_l(imat) = arhom_l(imat) / al_l(imat)
-    pm_l(imat)   = up_l(g_mmi%irmin+imat-1)
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pm_l(imat))
-    hm_l(imat)   = em_l(imat) + al_l(imat)*pm_l(imat)
-
-    rhom_r(imat) = arhom_r(imat) / al_r(imat)
-    pm_r(imat)   = up_r(g_mmi%irmin+imat-1)
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pm_r(imat))
-    hm_r(imat)   = em_r(imat) + al_r(imat)*pm_r(imat)
-  end do !imat
-  p_l = sum(pm_l)
-  p_r = sum(pm_r)
-
-  ! average states
-  rho_12  = 0.5*(rho_l + rho_r)
-  do imat = 1,nummat
-    rhom_12(imat) = 0.5*(rhom_l(imat) + rhom_r(imat))
-    am_12(imat)   = 0.5*(am_l(imat) + am_r(imat))
-    al_12(imat)   = 0.5*(al_l(imat) + al_r(imat))
-  end do !imat
-
-  ! numerical speed of sound choice:
-  ac_12 = 0.0
-  do imat = 1,nummat
-    ac_12 = ac_12 + ( al_12(imat)*rhom_12(imat)*am_12(imat)*am_12(imat) )
-  end do !imat
-  ac_12 = dsqrt( ac_12 / rho_12 )
-
-  lambda = ac_12 + max(dabs(u_l),dabs(u_r));
-
-  ! flux functions
-  do imat = 1,nummat
-    ffunc_l(imat) = u_l * al_l(imat)
-    ffunc_l(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
-    ffunc_l(g_mmi%iemin+imat-1) = u_l * hm_l(imat)
-
-    ffunc_r(imat) = u_r * al_r(imat)
-    ffunc_r(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
-    ffunc_r(g_mmi%iemin+imat-1) = u_r * hm_r(imat)
-  end do !imat
-  ffunc_l(g_mmi%imome) = u_l * rhou_l + p_l
-  ffunc_r(g_mmi%imome) = u_r * rhou_r + p_r
-
-  flux = 0.5 * ( ffunc_l+ffunc_r - lambda*(ur-ul) )
-
-  lplus = 0.5
-  lminu = 0.5
-
-  lmag = lambda
-
-end associate
-
-end subroutine llf_mm6eq
-
-!-------------------------------------------------------------------------------
-!----- 2fluid AUSM+UP:
-!-------------------------------------------------------------------------------
-
-subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
-                          flux, lambda_plus, lambda_minu, lambda_mag, p_12)
-
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
-                      pp_l(g_nprim), pp_r(g_nprim)
-
-integer :: imat
-real*8 :: flux(g_neqns)
-real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
-                                   arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
-                                   arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
-                                   am_12,rhom_12,al_12
-
-real*8 :: rhou_l, u_l, m_l, rho_l, pi_l, p_l, &
-          rhou_r, u_r, m_r, rho_r, pi_r, p_r
-real*8 :: rho_12, ac_12, &
-          f_a, m_12, p_12, m_p, p_u(g_mmi%nummat)
-real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
-real*8 :: psplus_l,psplus_r,psminu_l,psminu_r
-real*8 :: temp
-
-real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
-
-real*8 :: k_p, k_u
-!real*8 :: mbar2, umag_fs, m_0
-
-associate (nummat=>g_mmi%nummat)
-
-  k_p = 0.5;
-  k_u = 0.5;
 
   flux(:) = 0.0
 
@@ -502,6 +404,136 @@ associate (nummat=>g_mmi%nummat)
   end do !imat
   ac_12 = dsqrt( ac_12 / rho_12 )
 
+  lambda = ac_12 + max(dabs(u_l),dabs(u_r))
+
+  ! flux functions
+  ffunc_l = 0.0
+  ffunc_r = 0.0
+  do imat = 1,nummat
+    ffunc_l(imat) = u_l * al_l(imat)
+    ffunc_l(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
+    ffunc_l(g_mmi%iemin+imat-1) = u_l * hm_l(imat)
+    ffunc_l(g_mmi%imome) = ffunc_l(g_mmi%imome) &
+      + u_l * pp_l(mmom_idx(nummat, imat)) + al_l(imat)*pm_l(imat)
+
+    ffunc_r(imat) = u_r * al_r(imat)
+    ffunc_r(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
+    ffunc_r(g_mmi%iemin+imat-1) = u_r * hm_r(imat)
+    ffunc_r(g_mmi%imome) = ffunc_r(g_mmi%imome) &
+      + u_r * pp_r(mmom_idx(nummat, imat)) + al_r(imat)*pm_r(imat)
+  end do !imat
+
+  flux = 0.5 * ( ffunc_l+ffunc_r - lambda*(ur-ul) )
+
+  lplus = 0.5 * (u_l + lambda)
+  lminu = 0.5 * (u_r - lambda)
+  pplus = 0.5
+  pminu = 0.5
+
+  lmag = dabs(lplus+lminu) + 1.d-16
+  lplus = lplus/lmag
+  lminu = lminu/lmag
+
+end associate
+
+end subroutine llf_mm6eq
+
+!-------------------------------------------------------------------------------
+!----- 2fluid AUSM+UP:
+!-------------------------------------------------------------------------------
+
+subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+  flux, lambda_plus, lambda_minu, lambda_mag, psplus_l, psminu_r)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim)
+
+integer :: imat
+real*8 :: flux(g_neqns)
+real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
+                                   arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
+                                   arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
+                                   am_12,rhom_12,al_12
+
+real*8 :: rhou_l, u_l, m_l, rho_l, pi_l, p_l, &
+          rhou_r, u_r, m_r, rho_r, pi_r, p_r
+real*8 :: rho_12, ac_12, &
+          f_a, m_12, p_12, m_p, p_u(g_mmi%nummat)
+real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
+real*8 :: psplus_l,psplus_r,psminu_l,psminu_r,pplus,pminu
+real*8 :: temp
+
+real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
+
+real*8 :: k_p, k_u
+!real*8 :: mbar2, umag_fs, m_0
+
+associate (nummat=>g_mmi%nummat)
+
+  k_p = 0.5;
+  k_u = 0.5;
+
+  flux(:) = 0.0
+
+  ! material and bulk states
+  p_l = 0.0
+  p_r = 0.0
+  rhou_l = 0.0
+  rhou_r = 0.0
+  do imat = 1,nummat
+  ! ul
+    al_l(imat)    = ul(imat)
+    arhom_l(imat) = ul(g_mmi%irmin+imat-1)
+    em_l(imat)    = ul(g_mmi%iemin+imat-1)
+
+    rhom_l(imat) = arhom_l(imat) / al_l(imat)
+    pi_l         = up_l(g_mmi%irmin+imat-1)
+    !pi_l         = pp_l(apr_idx(nummat, imat)) / al_l(imat)
+    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
+    hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    p_l = p_l + al_l(imat)*pi_l
+    rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
+    pm_l(imat)   = pi_l
+
+  ! ur
+    al_r(imat)    = ur(imat)
+    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
+    em_r(imat)    = ur(g_mmi%iemin+imat-1)
+
+    rhom_r(imat) = arhom_r(imat) / al_r(imat)
+    pi_r         = up_r(g_mmi%irmin+imat-1)
+    !pi_r         = pp_r(apr_idx(nummat, imat)) / al_r(imat)
+    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
+    hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    p_r = p_r + al_r(imat)*pi_r
+    rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
+    pm_r(imat)   = pi_r
+  end do !imat
+
+  rho_l = sum(arhom_l)
+  rho_r = sum(arhom_r)
+  u_l = pp_l(vel_idx(nummat, 0))
+  u_r = pp_r(vel_idx(nummat, 0))
+  !u_l = rhou_l/rho_l
+  !u_r = rhou_r/rho_r
+
+  ! average states
+  rho_12  = 0.5*(rho_l + rho_r)
+  do imat = 1,nummat
+    rhom_12(imat) = 0.5*(rhom_l(imat) + rhom_r(imat))
+    am_12(imat)   = 0.5*(am_l(imat) + am_r(imat))
+    al_12(imat)   = 0.5*(al_l(imat) + al_r(imat))
+  end do !imat
+
+  ! numerical speed of sound choice:
+
+  ! Kapila
+  ac_12 = 0.0
+  do imat = 1,nummat
+    ac_12 = ac_12 + ( al_12(imat)*rhom_12(imat)*am_12(imat)*am_12(imat) )
+  end do !imat
+  ac_12 = dsqrt( ac_12 / rho_12 )
+
   ! Wood
   !ac_12 = 0.0
   !do imat = 1,nummat
@@ -542,10 +574,19 @@ associate (nummat=>g_mmi%nummat)
   lambda_plus = 0.5 * (lambda + dabs(lambda))
   lambda_minu = 0.5 * (lambda - dabs(lambda))
 
+  pplus = psplus_l - k_u* psplus_l* psminu_r* f_a* (u_r-u_l) / ac_12 !0.5
+  pminu = psminu_r - k_u* psplus_l* psminu_r* f_a* (u_r-u_l) / ac_12 !0.5
+
+  !psplus_l = pplus
+  !psminu_r = pminu
+
   do imat = 1,nummat
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
     flux(g_mmi%irmin+imat-1) = lambda_plus*arhom_l(imat) + lambda_minu*arhom_r(imat)
     flux(g_mmi%iemin+imat-1) = lambda_plus*hm_l(imat)    + lambda_minu*hm_r(imat)
+    !flux(g_mmi%iemin+imat-1) = lambda_plus*em_l(imat) + lambda_minu*em_r(imat) &
+    !  + psplus_l*al_l(imat)*pm_l(imat)*u_l &
+    !  + psminu_r*al_r(imat)*pm_r(imat)*u_r
     flux(g_mmi%imome) = flux(g_mmi%imome) &
       + lambda_plus*pp_l(mmom_idx(nummat, imat)) &
       + lambda_minu*pp_r(mmom_idx(nummat, imat)) &

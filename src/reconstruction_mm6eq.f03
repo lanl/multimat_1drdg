@@ -522,10 +522,12 @@ end subroutine boundpreserve_alpha_p2
 
 subroutine min_superbee(ucons, uprim)
 
-integer :: ie, ieqn, ifc
-real*8  :: theta(g_neqns)
+integer :: ie, iamax
+real*8  :: theta(g_neqns), thetac, thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
@@ -536,16 +538,37 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
     ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-     do ieqn = 1,g_neqns
-       theta(ieqn) = minval(theta)
-     end do !ieqn
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    theta(1:nummat) = theta(iamax)
+
+    theta = minval(theta)
+
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    ! monotonicity of primitives
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+    uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+      * uprim(2,vel_idx(nummat, 0),ie)
+
+    ! common for all equations
+    thetac = min(minval(theta), &
+      minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
 
     ! 2. limit 2nd dofs
-    do ieqn = 1,g_neqns
-      ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
-    end do !ieqn
+    uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
+      * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
+
+    ucons(2,:,ie) = thetac * ucons(2,:,ie)
 
   end do !ie
+
+end associate
 
 end subroutine min_superbee
 
@@ -606,9 +629,6 @@ associate (nummat=>g_mmi%nummat)
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
-      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
       !uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
       !  * uprim(2,vel_idx(nummat, 0),ie)
 
@@ -627,13 +647,23 @@ associate (nummat=>g_mmi%nummat)
 
       !--- separate-per-equation
       !ucons(2,1:nummat,ie) = theta(iamax) * ucons(2,1:nummat,ie)
-      !thetac = minval(theta(g_mmi%irmin:))
-      !ucons(2,g_mmi%irmin:,ie) = thetac * ucons(2,g_mmi%irmin:,ie)
+      !thetac = minval(theta(g_mmi%irmin:g_mmi%irmax))
+      !ucons(2,g_mmi%irmin:g_mmi%irmax,ie) = thetac &
+      !  * ucons(2,g_mmi%irmin:g_mmi%irmax,ie)
+      !thetac = minval(theta(g_mmi%iemin:g_mmi%iemax))
+      !ucons(2,g_mmi%iemin:g_mmi%iemax,ie) = thetac &
+      !  * ucons(2,g_mmi%iemin:g_mmi%iemax,ie)
+      !thetac = min(theta(g_mmi%imome), &
+      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !ucons(2,g_mmi%imome,ie) = thetac * ucons(2,g_mmi%imome,ie)
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
+      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
-      !uprim(2,vel_idx(nummat, 0),ie) = thetac * uprim(2,vel_idx(nummat, 0),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+      !  * uprim(2,vel_idx(nummat, 0),ie)
       !---
 
       !--- additional limiting step to check TVD constraints
