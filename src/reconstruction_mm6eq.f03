@@ -41,10 +41,12 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
+  call limiting_p1(ucons, uprim)
+
   !--- reconstruct primitives from second-order solution
   call recons_primitives(ucons, uprim)
 
-  call limiting_p1(ucons, uprim)
+  call limit_primitives_p1(ucons, uprim)
 
 end subroutine reconstruction_p0p1
 
@@ -61,6 +63,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   !--- reconstruct primitives from second-order solution
   call recons_primitives(ucons, uprim)
+
+  call limit_primitives_p1(ucons, uprim)
 
 end subroutine reconstruction_p1
 
@@ -140,10 +144,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   end do !ieqn
 
+  call limiting_p2(ucons, uprim)
+
   !--- reconstruct primitives from third-order solution
   call recons_primitives(ucons, uprim)
-
-  call limiting_p2(ucons, uprim)
 
 end subroutine reconstruction_p1p2
 
@@ -201,8 +205,10 @@ associate (nummat=>g_mmi%nummat)
           + 0.5 * ((-1.0)**ifc) * uface(imat)*up_face(g_mmi%irmin+imat-1)
       end do !imat
 
-      if (g_nsdiscr .eq. 12) &
+      if (g_nsdiscr .eq. 12) then
         write(*,*) " FATAL: 3rd order dofs not reconstructed for material pressures!"
+        stop 1
+      end if
 
     end do !ifc
 
@@ -730,6 +736,78 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine superbee_p1
+
+!-------------------------------------------------------------------------------
+!----- superbee limiter for primitive variable P1 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine limit_primitives_p1(ucons, uprim)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+integer :: ie, iamax
+real*8  :: almax, dalmax, thetap(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: tr_cell(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    ! 1. detect interface/single-material cell
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
+
+    if ( (g_nmatint .eq. 1) .and. &
+         interface_cell(almax, dalmax) ) then
+    ! 2a. Obtain consistent limiter functions for equation system at interface
+
+      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+      !  ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
+      !  * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
+      uprim(2,vel_idx(nummat, 0),ie) = 0.0
+      !---
+
+      !uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+      !uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+      !uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+      !! iv. monotonicity of primitives
+      !call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
+      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+      !  * uprim(2,vel_idx(nummat, 0),ie)
+
+    else
+    ! 2b. Obtain limiter functions for equation system in single-material cell
+
+      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+        thetap(apr_idx(nummat,1):apr_idx(nummat,nummat)) &
+        * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
+      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
+      uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
+        * uprim(2,vel_idx(nummat, 0),ie)
+
+    end if
+
+  end do !ie
+
+end associate
+
+end subroutine limit_primitives_p1
 
 !-------------------------------------------------------------------------------
 !----- system-consistent superbee limiter for P2 dofs:

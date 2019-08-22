@@ -758,6 +758,68 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
+  !--- 3-material cavitation tube problem
+  !----------
+  else if (iprob .eq. 7) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(2) = 0.01
+     alpha_fs(3) = 0.1
+     alpha_fs(1) = 1.0-sum(alpha_fs(2:3))
+     t_fs = 354.0
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = -20.0/a_nd
+     ! right state
+     p1r = pr_fs
+     t1r = t_fs
+     ur  = 20.0/a_nd
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        ucons(1,1,ielem) = alpha_fs(1)
+        ucons(1,2,ielem) = alpha_fs(2)
+        ucons(1,3,ielem) = alpha_fs(3)
+
+        if (xf .le. 0.5) then
+           do imat = 1,g_mmi%nummat
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1l, rhomat_fs(imat), ul)
+           end do !imat
+           ucons(1,g_mmi%imome,ielem) = &
+             sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * ul
+
+        else
+           do imat = 1,g_mmi%nummat
+              ucons(1,g_mmi%irmin+imat-1,ielem) = ucons(1,imat,ielem) * rhomat_fs(imat)
+              ucons(1,g_mmi%iemin+imat-1,ielem) = ucons(1,imat,ielem) &
+                * eos3_rhoe(g_gam(imat), g_pc(imat), p1r, rhomat_fs(imat), ur)
+           end do !imat
+           ucons(1,g_mmi%imome,ielem) = &
+             sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ielem)) * ur
+
+        end if
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -873,7 +935,7 @@ associate (nummat=>g_mmi%nummat)
 
      uconsi = ucons(1,:,ielem)
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,apr_idx(nummat, 1):apr_idx(nummat, nummat),ielem)
+     uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,apr_idx(nummat, 1):apr_idx(nummat, nummat),ielem)
      uprimi(g_mmi%imome) = uprim(1,vel_idx(nummat, 0),ielem)
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
@@ -886,7 +948,6 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
-        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
@@ -994,7 +1055,7 @@ associate (nummat=>g_mmi%nummat)
      uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
+     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
      uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
 
      xp = coord(ielem)
@@ -1007,7 +1068,6 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
-        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
@@ -1063,7 +1123,7 @@ associate (nummat=>g_mmi%nummat)
      uprimp = uprim(1,:,ielem)
      end if
      call get_uprim_mm6eq(uconsi, uprimi)
-     !uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
+     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
      uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
 
      xp = coord(ielem+1)
@@ -1076,7 +1136,6 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
         pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
-        !pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
