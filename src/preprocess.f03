@@ -826,7 +826,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   end if
 
   ! boundary conditions:
-  call recons_primitives(ucons, uprim)
+  call weak_recons_primitives(ucons, uprim)
   call get_bc_mm6eq(ucons, uprim)
   if (g_nsdiscr .ge. 1) call limiting_p1(ucons, uprim)
   call ignore_tinyphase_mm6eq(ucons)
