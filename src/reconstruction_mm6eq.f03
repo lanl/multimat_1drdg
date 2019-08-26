@@ -41,12 +41,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
-  call limiting_p1(ucons, uprim)
-
   !--- reconstruct primitives from second-order solution
   call weak_recons_primitives(ucons, uprim)
 
-  !call limit_primitives_p1(ucons, uprim)
+  call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p0p1
 
@@ -59,12 +57,10 @@ subroutine reconstruction_p1(ucons, uprim)
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
-  call limiting_p1(ucons, uprim)
-
   !--- reconstruct primitives from second-order solution
   call weak_recons_primitives(ucons, uprim)
 
-  !call limit_primitives_p1(ucons, uprim)
+  call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p1
 
@@ -144,12 +140,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   end do !ieqn
 
-  call limiting_p2(ucons, uprim)
-
   !--- reconstruct primitives from third-order solution
   call weak_recons_primitives(ucons, uprim)
 
-  !call limit_primitives_p2(ucons, uprim)
+  call limiting_p2(ucons, uprim)
 
 end subroutine reconstruction_p1p2
 
@@ -605,11 +599,19 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     !--- 1. obtain limiter function for individual unknowns
+    ! conserved quantities
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     !--- 2. detect interface/single-material cell
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -626,25 +628,15 @@ associate (nummat=>g_mmi%nummat)
       ! consistent limiting
       call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
 
-      ! consistent limiting of primitives
-      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
-      uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-        ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
-        * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
-      uprim(2,vel_idx(nummat, 0),ie) = 0.0
+      !! consistent limiting of primitives
+      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
+      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+      !  ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
+      !  * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
+      !uprim(2,vel_idx(nummat, 0),ie) = 0.0
 
-      !! monotonicity of primitives
-      !uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      !uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      !uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      !call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
-
-      !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
-      !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
-      !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
-      !uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
-      !  * uprim(2,vel_idx(nummat, 0),ie)
+      ! monotonicity of primitives
+      uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
       !--- common for all equations
       !thetac = min(minval(theta), &
@@ -706,13 +698,6 @@ associate (nummat=>g_mmi%nummat)
     else
     !--- 3b. Obtain limiter functions for equation system in single-material cell
 
-      ! monotonicity of primitives
-      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
-
       do ieqn = 1,g_neqns
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
       end do !ieqn
@@ -726,57 +711,6 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine superbee_p1
-
-!-------------------------------------------------------------------------------
-!----- superbee limiter for primitive variable P1 dofs:
-!-------------------------------------------------------------------------------
-
-subroutine limit_primitives_p1(ucons, uprim)
-
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-
-integer :: ie, iamax
-real*8  :: almax, dalmax, thetap(g_nprim)
-real*8  :: uneigh(2,g_neqns,-1:1), uprim(g_tdof,g_nprim,0:imax+1)
-logical :: tr_cell(g_neqns)
-
-associate (nummat=>g_mmi%nummat)
-
-  do ie = 1,imax
-
-    !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
-    dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
-
-    if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax, dalmax) ) then
-    !--- 2a. Obtain consistent limiter functions for equation system at interface
-
-      uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      !  ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
-      !  * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
-      uprim(2,vel_idx(nummat, 0),ie) = 0.0
-
-    else
-    !--- 2b. Obtain limiter functions for equation system in single-material cell
-
-      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
-
-      uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
-
-    end if
-
-  end do !ie
-
-end associate
-
-end subroutine limit_primitives_p1
 
 !-------------------------------------------------------------------------------
 !----- system-consistent superbee limiter for P2 dofs:
@@ -798,6 +732,7 @@ associate (nummat=>g_mmi%nummat)
     !--- 1. obtain limiter function for individual unknowns
     ! i. P2 derivative limiting
 
+    ! conserved quantities
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
 
@@ -809,12 +744,33 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
 
+    ! primitive quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
+
     ! ii. P1 derivative limiting
+
+    ! conserved quantities
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
 
     !--- 2. detect interface/single-material cell
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -855,39 +811,25 @@ associate (nummat=>g_mmi%nummat)
 
       call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
 
-      do imat = 1,nummat
-        uprim(2:3,apr_idx(nummat, imat),ie) = 0.0
-      end do !imat
-      uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
+      !! consistent limiting of primitives
+      !do imat = 1,nummat
+      !  uprim(2:3,apr_idx(nummat, imat),ie) = 0.0
+      !end do !imat
+      !uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
+
+      ! monotonicity of primitives
+      do ieqn = 1,g_nprim
+        uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
+        uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
+      end do !ieqn
 
     else
     !--- 3b. Obtain limiter functions for equation system in single-material cell
-
-      ! monotonicity of primitives
-      ! i. P2 derivative limiting
-      dx2 = 0.5 * (coord(ie)-coord(ie-1))
-      uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
-
-      dx2 = 0.5 * (coord(ie+1)-coord(ie))
-      uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
-
-      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
-      uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
-
-      ! ii. P1 derivative limiting
-      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
 
       do ieqn = 1,g_neqns
         ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
         ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
       end do !ieqn
-
 
       do ieqn = 1,g_nprim
         uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
@@ -901,77 +843,6 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine superbee_p2
-
-!-------------------------------------------------------------------------------
-!----- superbee limiter for primitive variable P2 dofs:
-!-------------------------------------------------------------------------------
-
-subroutine limit_primitives_p2(ucons, uprim)
-
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
-
-integer :: ie, ieqn, iamax, imat
-real*8  :: dx2, almax, dalmax, &
-           thetap2(g_nprim), thetap1(g_nprim)
-real*8  :: uneigh(2,g_neqns,-1:1), uprim(g_tdof,g_nprim,0:imax+1)
-
-associate (nummat=>g_mmi%nummat)
-
-  do ie = 1,imax
-
-    dx2 = 0.5 * (coord(ie+1)-coord(ie))
-
-    !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
-    dalmax = max( maxval(dabs(ucons(2,1:nummat,ie) + ucons(3,1:nummat,ie))), &
-                  maxval(dabs(ucons(2,1:nummat,ie) - ucons(3,1:nummat,ie))) ) /dx2
-
-    if ( (g_nmatint .eq. 1) .and. &
-         interface_cell(almax, dalmax) ) then
-    !--- 2a. Obtain consistent limiter functions for equation system at interface
-
-      do imat = 1,nummat
-        uprim(2:3,apr_idx(nummat, imat),ie) = 0.0
-      end do !imat
-      uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
-
-    else
-    !--- 2b. Obtain limiter functions for equation system in single-material cell
-
-      ! i. P2 derivative limiting
-
-      dx2 = 0.5 * (coord(ie)-coord(ie-1))
-      uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
-
-      dx2 = 0.5 * (coord(ie+1)-coord(ie))
-      uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
-
-      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
-      uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
-
-      ! ii. P1 derivative limiting
-
-      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
-
-      do ieqn = 1,g_nprim
-        uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
-        uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
-      end do !ieqn
-
-    end if
-
-  end do !ie
-
-end associate
-
-end subroutine limit_primitives_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent weno limiter for P2:
