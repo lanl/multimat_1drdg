@@ -66,6 +66,8 @@ if (i_system > -1) then
     write(*,*) "   Lax-Friedrichs flux."
   else if (i_flux .eq. 2) then
     write(*,*) "   AUSM+ flux."
+  else if (i_flux .eq. 3) then
+    write(*,*) "   HLL flux."
   else
     write(*,*) "Invalid flux scheme."
     stop

@@ -4,7 +4,7 @@
 2000            / mesh size (imax)
 0    0          / left and right boundary conditions
 0               / initialize from restart file './output/frozen_flow/frozenflow.dat'
-2               / Numerical Flux (1:LLF; 2:AUSM+)
+2               / Numerical Flux (1:LLF; 2:AUSM+; 3:HLL)
 ----------------------------------------------------------------------------------------------
 1       0.01               / pressure relaxation (0: no p-relx) and scaling
 3                          / number of materials: nummat
