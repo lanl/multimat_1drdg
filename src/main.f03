@@ -77,17 +77,7 @@ call gen_mesh()
 !----- Screen output:
 call screen_output()
 
-!----- Initialization:
-if (i_system .eq. -1) then
-   call init_soln_kex(ucons)
-else if (i_system .eq. 1) then
-   call init_soln_mm6eq(ucons, uprim)
-end if
-
 call cpu_time(t_start)
-
-!----- Time-stepping:
-dt = dt_u
 
 !----- Diagnostics file:
 open(33,file='diag.dat',status='unknown')
@@ -116,6 +106,9 @@ if (i_system .eq. -1) then
 
   end select
 
+  ! Initialization
+  call init_soln_kex(ucons)
+  dt = dt_u
   call reconst_mm6eq(ucons, uprim)
   call errorcalc_p1(ucons, 0.0, err_log, linfty)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
@@ -145,7 +138,9 @@ else if (i_system .eq. 1) then
 
   end select
 
-  call reconst_mm6eq(ucons, uprim)
+  ! Initialization
+  call init_soln_mm6eq(reconst_mm6eq, ucons, uprim)
+  dt = dt_u
   call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
 
 end if

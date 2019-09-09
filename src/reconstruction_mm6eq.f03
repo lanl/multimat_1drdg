@@ -36,14 +36,20 @@ subroutine reconstruction_p0p1(ucons, uprim)
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
+  !--- reconstruct primitives from second-order solution
+  call weak_recons_primitives(ucons, uprim)
+
   !--- central difference reconstruction (least-squares for uniform meshes)
   do ie = 1,imax
     ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
   end do !ie
 
-  !--- reconstruct primitives from second-order solution
-  call weak_recons_primitives(ucons, uprim)
+  !--- central difference reconstruction for primitive quantities
+  do ie = 1,imax
+    uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+  end do !ie
 
+  !--- limit second-order solution
   call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p0p1
@@ -60,6 +66,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   !--- reconstruct primitives from second-order solution
   call weak_recons_primitives(ucons, uprim)
 
+  !--- limit second-order solution
   call limiting_p1(ucons, uprim)
 
 end subroutine reconstruction_p1
@@ -70,6 +77,30 @@ end subroutine reconstruction_p1
 
 subroutine reconstruction_p1p2(ucons, uprim)
 
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  !--- reconstruct primitives from second-order solution
+  call weak_recons_primitives(ucons, uprim)
+
+  !--- reconstruct third-order conserved quantities
+  call leastsquares_p1p2(g_neqns, ucons)
+
+  !--- reconstruct third-order primitive quantities
+  call leastsquares_p1p2(g_nprim, uprim)
+
+  !--- limit third-order solution
+  call limiting_p2(ucons, uprim)
+
+end subroutine reconstruction_p1p2
+
+!-------------------------------------------------------------------------------
+!----- Least-squares reconstruction for P1P2:
+!-------------------------------------------------------------------------------
+
+subroutine leastsquares_p1p2(neq, usol)
+
+integer, intent(in) :: neq
+
 integer :: ig, j, ie, je, ieqn, ngauss
 data       ngauss/2/
 
@@ -77,11 +108,11 @@ real*8  :: dxi, dxj, xci, xcj, xg, wi, &
            carea(2), weight(2), &
            b2, b3, b2t, b3t, &
            r1, r2, rhs, lhs
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+real*8  :: usol(g_tdof,neq,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
 
-  do ieqn = 1,g_neqns
+  do ieqn = 1,neq
 
   !--- 2-exact least-squares reconstruction
   do ie = 1,imax
@@ -116,36 +147,31 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
         ! assemble lhs and rhs
         b2 = p1basis(xcj, xci, dxi)
         lhs = lhs + b3t*b3t + b2*b2
-        r1  = ucons(1,ieqn,je) - ( ucons(1,ieqn,ie) + ucons(2,ieqn,ie)*b2t )
-        r2  = ucons(2,ieqn,je)*dxi/dxj - ucons(2,ieqn,ie)
+        r1  = usol(1,ieqn,je) - ( usol(1,ieqn,ie) + usol(2,ieqn,ie)*b2t )
+        r2  = usol(2,ieqn,je)*dxi/dxj - usol(2,ieqn,ie)
         rhs = rhs + b3t*(r1) + b2*(r2)
 
       end if
     end do !j
 
     ! get p2 dof
-    ucons(3,ieqn,ie) = rhs/lhs
+    usol(3,ieqn,ie) = rhs/lhs
 
   end do !ie
 
   !ie = 1
   !dxi = 0.5 * (coord(ie+1)-coord(ie))
   !dxj = 0.5 * (coord(ie+2)-coord(ie+1))
-  !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie+1)/dxj - ucons(2,ieqn,ie)/dxi) / (dxj+dxi)
+  !usol(3,ieqn,ie) = (dxi*dxi)*(usol(2,ieqn,ie+1)/dxj - usol(2,ieqn,ie)/dxi) / (dxj+dxi)
 
   !ie = imax
   !dxi = 0.5 * (coord(ie+1)-coord(ie))
   !dxj = 0.5 * (coord(ie)-coord(ie-1))
-  !ucons(3,ieqn,ie) = (dxi*dxi)*(ucons(2,ieqn,ie)/dxi - ucons(2,ieqn,ie-1)/dxj) / (dxi+dxj)
+  !usol(3,ieqn,ie) = (dxi*dxi)*(usol(2,ieqn,ie)/dxi - usol(2,ieqn,ie-1)/dxj) / (dxi+dxj)
 
   end do !ieqn
 
-  !--- reconstruct primitives from third-order solution
-  call weak_recons_primitives(ucons, uprim)
-
-  call limiting_p2(ucons, uprim)
-
-end subroutine reconstruction_p1p2
+end subroutine leastsquares_p1p2
 
 !-------------------------------------------------------------------------------
 !----- Reconstructing primitives from DG solution:
@@ -160,7 +186,7 @@ data       ngauss/3/
 
 real*8  :: dxi, xci, xg, wi, &
            carea(3), weight(3), &
-           b2, b3, rhs(g_tdof,g_nprim), lhs(g_tdof)
+           b2, b3, rhs(g_gdof,g_nprim), lhs(g_gdof)
 
 real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
            uprim(g_tdof,g_nprim,0:imax+1)
@@ -169,15 +195,15 @@ associate (nummat=>g_mmi%nummat)
 
   call rutope(1, ngauss, carea, weight)
 
-  do ie = 1,imax
+  do ie = 0,imax+1
 
     dxi = coord(ie+1)-coord(ie)
     xci = 0.5*(coord(ie+1)+coord(ie))
 
     ! get lhs
     lhs(1) = dxi
-    if (g_nsdiscr .gt. 0) lhs(2) = lhs(1)/3.0
-    if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+    if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
+    !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
 
     ! quadrature
     rhs = 0.0
@@ -185,26 +211,26 @@ associate (nummat=>g_mmi%nummat)
       xg = carea(ig) * 0.5*dxi + xci
       wi = 0.5 * weight(ig)
       b2 = p1basis(xg, xci, dxi)
-      b3 = p2basis(xg, xci, dxi)
+      !b3 = p2basis(xg, xci, dxi)
 
-      !--- dgp0
-      if (g_nsdiscr .eq. 0) then
+      !--- dgp0 or rdgp0p1
+      if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
         do ieqn = 1,g_neqns
           ug(ieqn) = ucons(1,ieqn,ie)
         end do !ieqn
 
-      !--- rdgp0p1 or dgp1
-      elseif ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
+      !--- dgp1 or rdgp1p2
+      elseif ((g_nsdiscr .ge. 11)) then
         do ieqn = 1,g_neqns
           ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
         end do !ieqn
 
-      !--- rdgp1p2
-      elseif (g_nsdiscr .eq. 12) then
-        do ieqn = 1,g_neqns
-          ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
-            + b3*ucons(3,ieqn,ie)
-        end do !ieqn
+      !!--- rdgp1p2
+      !elseif (g_nsdiscr .eq. 12) then
+      !  do ieqn = 1,g_neqns
+      !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+      !      + b3*ucons(3,ieqn,ie)
+      !  end do !ieqn
 
       end if
 
@@ -222,8 +248,8 @@ associate (nummat=>g_mmi%nummat)
       ! get rhs
       do ieqn = 1,g_nprim
         rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
-        if (g_nsdiscr .gt. 0) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
-        if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
+        if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
+        !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
       end do !ieqn
 
     end do !ig
@@ -231,11 +257,21 @@ associate (nummat=>g_mmi%nummat)
     ! get primitive variable dofs
     do ieqn = 1,g_nprim
       uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
-      if (g_nsdiscr .gt. 0) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
-      if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
+      if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
+      !if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
     end do !ieqn
 
   end do !ie
+
+  if (g_nsdiscr .eq. 1) then
+    uprim(2,:,0) = 0.0
+    uprim(2,:,imax+1) = 0.0
+
+  else if (g_nsdiscr .eq. 12) then
+    uprim(3,:,0) = 0.0
+    uprim(3,:,imax+1) = 0.0
+
+  end if
 
 end associate
 
@@ -271,6 +307,12 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   case(3)
     call oversuperbee(ucons, uprim)
+
+  case(4)
+    call weno_p1(ucons, uprim)
+
+  case(5)
+    call superbee_p1(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
@@ -592,13 +634,17 @@ integer :: ie, ieqn, iamax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_nprim), thetac
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
-logical :: tr_cell(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
-    !--- 1. obtain limiter function for individual unknowns
+    !--- 1. detect interface/single-material cell
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
+
+    !--- 2. obtain limiter function for individual unknowns
     ! conserved quantities
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
@@ -612,11 +658,6 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
-
-    !--- 2. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
-    dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
@@ -713,6 +754,131 @@ end associate
 end subroutine superbee_p1
 
 !-------------------------------------------------------------------------------
+!----- system-consistent weno limiter for P1:
+!-------------------------------------------------------------------------------
+
+subroutine weno_p1(ucons, uprim)
+
+integer :: ie, ieqn, iamax!, imat
+real*8  :: dx2, almax, dalmax, theta(g_neqns)!, thetap(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), &
+           uxlim(g_neqns,0:imax+1), &
+           pxlim(g_nprim,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: trcell
+
+associate (nummat=>g_mmi%nummat)
+
+  uxlim = 0.0
+  pxlim = 0.0
+
+  !--- 1. WENO reconstructed dofs
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    trcell = .false.
+    if ((ie.eq.1) .or. (ie.eq.imax)) then
+      trcell = .true.
+    else
+      do ieqn = g_mmi%irmin, g_mmi%irmax
+        trcell = trcell &
+          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+      end do !ieqn
+    end if
+
+    if (trcell) then
+      if (ie.eq.1) then
+        uneigh(2,:,-1) = 0.0
+      else
+        uneigh(2,:,-1) = (ucons(1,:,ie)-ucons(1,:,ie-2))/(4.0*dx2)
+      end if
+
+      if (ie.eq.imax) then
+        uneigh(2,:,1) = 0.0
+      else
+        uneigh(2,:,1) = (ucons(1,:,ie+2)-ucons(1,:,ie))/(4.0*dx2)
+      end if
+
+      uneigh(2,:,0) = uneigh(2,:,0)/dx2
+      call weno_fn(g_neqns, 100.0, uneigh)
+      uxlim(:,ie) = uneigh(2,:,0) * dx2
+
+    else
+      uxlim(:,ie) = ucons(2,:,ie)
+
+    end if
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    trcell = .false.
+    if ((ie.eq.1) .or. (ie.eq.imax)) then
+      trcell = .true.
+    else
+      do ieqn = 1,g_nprim
+        trcell = trcell &
+          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+      end do !ieqn
+    end if
+
+    if (trcell) then
+      if (ie.eq.1) then
+        uneigh(2,1:g_nprim,-1) = 0.0
+      else
+        uneigh(2,1:g_nprim,-1) = (uprim(1,:,ie)-uprim(1,:,ie-2))/(4.0*dx2)
+      end if
+
+      if (ie.eq.imax) then
+        uneigh(2,1:g_nprim,1) = 0.0
+      else
+        uneigh(2,1:g_nprim,1) = (uprim(1,:,ie+2)-uprim(1,:,ie))/(4.0*dx2)
+      end if
+
+      uneigh(2,1:g_nprim,0) = uneigh(2,1:g_nprim,0)/dx2
+      call weno_fn(g_nprim, 100.0, uneigh(:,1:g_nprim,:))
+      pxlim(:,ie) = uneigh(2,1:g_nprim,0) * dx2
+
+    else
+      pxlim(:,ie) = uprim(2,:,ie)
+
+    end if
+
+  end do !ie
+
+  !--- 2. replace dofs with WENO dofs
+  ucons(2,:,:) = uxlim(:,:)
+  uprim(2,:,:) = pxlim(:,:)
+
+  !--- 3. Obtain consistent limiter at material interface cells
+  do ie = 1,imax
+
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
+
+    if ( (g_nmatint .eq. 1) .and. &
+         interface_cell(almax, dalmax) ) then
+
+      theta = 1.0
+      call intfac_limiting(ucons(:,:,ie), theta, 1.0)
+
+    end if
+
+  end do !ie
+
+end associate
+
+end subroutine weno_p1
+
+!-------------------------------------------------------------------------------
 !----- system-consistent superbee limiter for P2 dofs:
 !-------------------------------------------------------------------------------
 
@@ -724,12 +890,23 @@ real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            thetap2(g_nprim), thetap1(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: is_weno
 
 associate (nummat=>g_mmi%nummat)
 
+  is_weno = .false.
+
   do ie = 1,imax
 
-    !--- 1. obtain limiter function for individual unknowns
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- 1. detect interface/single-material cell
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = max( maxval(dabs(ucons(2,1:nummat,ie) + ucons(3,1:nummat,ie))), &
+                  maxval(dabs(ucons(2,1:nummat,ie) - ucons(3,1:nummat,ie))) ) /dx2
+
+    !--- 2. obtain limiter function for individual unknowns
     ! i. P2 derivative limiting
 
     ! conserved quantities
@@ -772,12 +949,6 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
 
-    !--- 2. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
-    dalmax = max( maxval(dabs(ucons(2,1:nummat,ie) + ucons(3,1:nummat,ie))), &
-                  maxval(dabs(ucons(2,1:nummat,ie) - ucons(3,1:nummat,ie))) ) /dx2
-
     ! use common limiter function for all volume-fractions
     theta1(1:nummat) = theta1(iamax) !minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
@@ -809,7 +980,8 @@ associate (nummat=>g_mmi%nummat)
       !uprim(3,vel_idx(nummat, 0),ie) = theta2c * uprim(3,vel_idx(nummat, 0),ie)
       !---
 
-      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), &
+        theta2(iamax))
 
       !! consistent limiting of primitives
       !do imat = 1,nummat
@@ -856,9 +1028,11 @@ real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: is_weno
 
 associate (nummat=>g_mmi%nummat)
 
+  is_weno = .true.
   uxxlim = 0.0
   theta2 = 1.0
   theta1 = 1.0
@@ -875,7 +1049,7 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
 
-    call weno_fn(uneigh)
+    call weno_fn(g_neqns, 100.0, uneigh)
     uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
 
   end do !ie
@@ -896,7 +1070,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(2,:,0)  = ucons(2,:,ie) / dx2
     uneigh(2,:,1)  = (ucons(2,:,ie+1) - 2.0*ucons(3,:,ie+1)) / dx2
 
-    call weno_fn(uneigh)
+    call weno_fn(g_neqns, 100.0, uneigh)
     uxxlim(:,ie) = uneigh(2,:,0) * dx2
 
   end do !ie
@@ -915,7 +1089,8 @@ associate (nummat=>g_mmi%nummat)
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), theta2(iamax))
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), &
+        theta2(iamax))
 
     end if
 
@@ -932,33 +1107,91 @@ end subroutine weno_p2
 subroutine superbeeweno_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
-real*8  :: dx2, almax, dalmax, theta1(g_neqns)
+real*8  :: dx2, almax, dalmax, theta1(g_neqns), thetap1(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
+           pxxlim(g_nprim,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: trcell, is_weno
 
 associate (nummat=>g_mmi%nummat)
 
+  is_weno = .true.
   uxxlim = 0.0
+  pxxlim = 0.0
 
   !--- 1. P2 derivative limiting
   do ie = 1,imax
 
-    dx2 = 0.5 * (coord(ie)-coord(ie-1))
-    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    dx2 = 0.5 * (coord(ie+1)-coord(ie))
-    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / (dx2*dx2)
+    trcell = .false.
+    if ((ie.eq.1) .or. (ie.eq.imax)) then
+      trcell = .true.
+    else
+      do ieqn = g_mmi%irmin, g_mmi%irmax
+        trcell = trcell &
+          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+      end do !ieqn
+    end if
 
-    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
-    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
+    if (trcell) then
+      dx2 = 0.5 * (coord(ie)-coord(ie-1))
+      uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
 
-    call weno_fn(uneigh)
-    uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
+      dx2 = 0.5 * (coord(ie+1)-coord(ie))
+      uneigh(1:2,:,0)  = ucons(2:3,:,ie) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+      uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
+
+      call weno_fn(g_neqns, 200.0, uneigh)
+      uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
+
+    else
+      uxxlim(:,ie) = ucons(3,:,ie)
+
+    end if
+
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    trcell = .false.
+    if ((ie.eq.1) .or. (ie.eq.imax)) then
+      trcell = .true.
+    else
+      do ieqn = 1,g_nprim
+        trcell = trcell &
+          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+      end do !ieqn
+    end if
+
+    ! primitive quantities
+    if (trcell) then
+      dx2 = 0.5 * (coord(ie)-coord(ie-1))
+      uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+1)-coord(ie))
+      uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+      uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / (dx2*dx2)
+
+      call weno_fn(g_nprim, 200.0, uneigh(:,1:g_nprim,:))
+      pxxlim(:,ie) = uneigh(2,1:g_nprim,0) * dx2 * dx2
+
+    else
+      pxxlim(:,ie) = uprim(3,:,ie)
+
+    end if
 
   end do !ie
 
   ucons(3,:,:) = uxxlim(:,:)
+  uprim(3,:,:) = pxxlim(:,:)
 
   do ie = 1,imax
 
@@ -968,6 +1201,17 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
+
+    do ieqn = 1,g_nprim
+      uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
+    end do !ieqn
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,iamax,ie)
@@ -981,7 +1225,7 @@ associate (nummat=>g_mmi%nummat)
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting_p2(ucons(:,:,ie), theta1(iamax), 1.0)
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), 1.0)
 
     else
 
@@ -1112,22 +1356,24 @@ end subroutine superbee_fn
 !----- WENO limiter function
 !-------------------------------------------------------------------------------
 
-subroutine weno_fn(ucons)
+subroutine weno_fn(neq, wenocp1, ucons)
 
-integer :: ieqn, is, nsten, imat, min_cw
-real*8  :: wi,epsweno,wenocp1,wt, &
-           weight(3), al_weight(g_mmi%nummat,3), &
+integer, intent(in) :: neq
+real*8, intent(in) :: wenocp1
+
+integer :: ieqn, is, nsten, imat
+real*8  :: wi,epsweno,wt, &
+           weight(3), &
            gradv(3),osc(3),gradu, &
-           ulim(2,g_neqns), &
-           ucons(2,g_neqns,-1:1)
+           ulim(2,neq), &
+           ucons(2,neq,-1:1)
 
 associate (nummat=>g_mmi%nummat)
 
   epsweno = 1.d-10
-  wenocp1 = 200.0
   nsten = 3
 
-  do ieqn = 1,g_neqns
+  do ieqn = 1,neq
 
     !--- the nsten stencils
     gradv(1) = ucons(2,ieqn,0)
@@ -1164,24 +1410,11 @@ associate (nummat=>g_mmi%nummat)
       gradu = gradu + weight(is)*gradv(is)
     end do !is
 
-    if (ieqn .lt. g_mmi%irmin) al_weight(ieqn,:) = weight(:)
-
     ulim(2,ieqn) = gradu
 
   end do !ieqn
 
-  min_cw = minloc(al_weight(:,1), 1)
-  al_weight(:,1) = al_weight(min_cw,1)
-  al_weight(:,2) = al_weight(min_cw,2)
-  al_weight(:,3) = al_weight(min_cw,3)
-
-  do imat = 1,nummat
-    ucons(2,imat,0) =   al_weight(imat,1) * ucons(2,imat,0) &
-                      + al_weight(imat,2) * ucons(2,imat,-1) &
-                      + al_weight(imat,3) * ucons(2,imat,1)
-  end do !imat
-
-  ucons(2,g_mmi%irmin:g_neqns,0) = ulim(2,g_mmi%irmin:g_neqns)
+  ucons(2,:,0) = ulim(2,:)
 
 end associate
 
@@ -1275,9 +1508,10 @@ end subroutine intfac_limiting
 !----- near-interface cell
 !-------------------------------------------------------------------------------
 
-subroutine intfac_limiting_p2(ucons, theta1_al, theta2_al)
+subroutine intfac_limiting_p2(ucons, is_weno, theta1_al, theta2_al)
 
 real*8,  intent(in) :: theta1_al, theta2_al
+logical, intent(in) :: is_weno
 
 integer :: imat
 real*8, dimension(g_mmi%nummat) :: rhom, rhoem
@@ -1295,7 +1529,11 @@ associate (nummat=>g_mmi%nummat)
 
   do imat = 1,nummat
   !        Volume fraction: Keep limiter function the same
-    ucons(2,imat,1) = max(theta1_al, theta2_al) * ucons(2,imat,1)
+    if (is_weno) then
+      ucons(2,imat,1) = theta1_al * ucons(2,imat,1)
+    else
+      ucons(2,imat,1) = max(theta1_al, theta2_al) * ucons(2,imat,1)
+    end if
     ucons(3,imat,1) = theta2_al * ucons(3,imat,1)
   !        Continuity:
     ucons(2:3,g_mmi%irmin+imat-1,1) = rhom(imat) * ucons(2:3,imat,1)
@@ -1310,6 +1548,61 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine intfac_limiting_p2
+
+!-------------------------------------------------------------------------------
+!----- Determine reconstruction stencil based on interface and material
+!-------------------------------------------------------------------------------
+
+subroutine recons_stencil(ie, matint_cell, lefte, righte, skew)
+
+integer, intent(in) :: ie
+logical, intent(in) :: matint_cell(-2:2)
+
+integer, intent(out) :: lefte, righte, skew
+
+  ! 0. default central stencil
+  lefte = ie-1
+  righte = ie+1
+  skew = 0
+  ! only for interior cells, try to modify the limiting stencil according to
+  ! material interfaces
+  if ((ie.gt.1) .and. (ie.lt.imax)) then
+    ! 1. for material interface cells
+    if (matint_cell(0)) then
+      ! if this is the only material interface cell in the vicinity, diffuse
+      ! the interface
+      if (.not.matint_cell(-1) .and. .not.matint_cell(1)) then
+        lefte = ie-1
+        righte = ie+1
+        skew = 0
+      ! if the left cell is not an interface cell, extend stencil to right,
+      ! but only if the right cell is an interface cell
+      else if (.not.matint_cell(-1) .and. matint_cell(2)) then
+        lefte = ie+2
+        skew = 1
+      ! if the right cell is not an interface cell, extend stencil to left,
+      ! but only if the left cell is an interface cell
+      else if (.not.matint_cell(1) .and. matint_cell(-2)) then
+        righte = ie-2
+        skew = -1
+      end if
+    ! 2. for 'pure' cells
+    else
+      if (matint_cell(-1) .and. matint_cell(1)) then
+        lefte = ie-1
+        righte = ie+1
+        skew = 0
+      else if (matint_cell(-1) .and. .not.matint_cell(2)) then
+        lefte = ie+2
+        skew = 1
+      else if (matint_cell(1) .and. .not.matint_cell(-2)) then
+        righte = ie-2
+        skew = -1
+      end if
+    end if
+  end if
+
+end subroutine recons_stencil
 
 !-------------------------------------------------------------------------------
 !----- Interface-cell / mixed-cell indicator based on vol-frac gradient
@@ -1362,7 +1655,7 @@ real*8  :: dplus, dminu, difc, a1, a2, a3, mm
     a3 = dminu
 
     ! modified minmod
-    if (dabs(a1) < beta*dx*dx) then
+    if (dabs(a1) <= beta*dx*dx) then
       mm = a1
 
     else
@@ -1374,7 +1667,7 @@ real*8  :: dplus, dminu, difc, a1, a2, a3, mm
 
     end if
 
-    if (dabs(mm-difc) > 1.0e-14) then
+    if (dabs(mm-difc) > 1.0e-12) then
       troubled_cell = troubled_cell .or. .true.
     else
       troubled_cell = troubled_cell .or. .false.

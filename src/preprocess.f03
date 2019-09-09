@@ -274,8 +274,9 @@ end subroutine init_soln_kex
 !----- velocity equilibrium 2fluid model:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_mm6eq(ucons, uprim)
+subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim)
 
+procedure(), pointer :: reconst_mm6eq
 integer :: imat, ielem
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
@@ -828,10 +829,9 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   end if
 
   ! boundary conditions:
-  call weak_recons_primitives(ucons, uprim)
-  call get_bc_mm6eq(ucons, uprim)
-  if (g_nsdiscr .ge. 1) call limiting_p1(ucons, uprim)
+  call get_bc_mm6eq(ucons)
   call ignore_tinyphase_mm6eq(ucons)
+  call reconst_mm6eq(ucons, uprim)
 
   call gnuplot_flow_mm6eq(ucons, uprim, 0)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, 0)

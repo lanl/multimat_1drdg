@@ -765,11 +765,10 @@ end subroutine splitmach_as
 !----- Boundary conditions:
 !-------------------------------------------------------------------------------
 
-subroutine get_bc_mm6eq(ucons, uprim)
+subroutine get_bc_mm6eq(ucons)
 
 integer :: imat
-real*8  :: ucons(g_tdof,g_neqns,0:imax+1), &
-           uprim(g_tdof,g_nprim,0:imax+1)
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 real*8  :: pmat, u_conv
 
 associate (nummat=>g_mmi%nummat)
@@ -779,22 +778,15 @@ associate (nummat=>g_mmi%nummat)
   if (g_lbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
-     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),0) = pr_fs
-     uprim(1,mmom_idx(nummat,1):mmom_idx(nummat,nummat),0) = &
-       ucons(1,g_mmi%irmin:g_mmi%irmax,0) * u_fs
-     uprim(1,vel_idx(nummat, 0),0) = u_fs
 
   else if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
      if (g_nsdiscr .eq. 0) then
        ucons(1,:,0) = ucons(1,:,1)
-       uprim(1,:,0) = uprim(1,:,1)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1)
-       uprim(1,:,0) = uprim(1,:,1) - uprim(2,:,1)
      else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
-       uprim(1,:,0) = uprim(1,:,1) - uprim(2,:,1) + uprim(3,:,1)/3.0
+       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
      end if
 
   else if (g_lbflag .eq. 1) then
@@ -804,11 +796,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,0) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),0) = pr_fs
-        uprim(1,mmom_idx(nummat, imat),0) = ucons(1,g_mmi%irmin+imat-1,0) &
-          * u_fs
      end do !imat
-     uprim(1,vel_idx(nummat, 0),0) = u_fs
      ucons(1,g_mmi%imome,0) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) * u_fs
 
   else if (g_lbflag .eq. 2) then
@@ -822,24 +810,17 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,1)/ucons(1,imat,1), u_conv)
         ucons(1,g_mmi%iemin+imat-1,0) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),0) = pmat
-        uprim(1,mmom_idx(nummat, imat),0) = ucons(1,g_mmi%irmin+imat-1,0) &
-          * u_fs
      end do !imat
-     uprim(1,vel_idx(nummat, 0),0) = u_fs
      ucons(1,g_mmi%imome,0) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,0)) * u_fs
 
   else if (g_lbflag .eq. 3) then
      !--- periodic
      if (g_nsdiscr .eq. 0) then
        ucons(1,:,0) = ucons(1,:,imax)
-       uprim(1,:,0) = uprim(1,:,imax)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax)
-       uprim(1,:,0) = uprim(1,:,imax) + uprim(2,:,imax)
      else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
-       uprim(1,:,0) = uprim(1,:,imax) + uprim(2,:,imax) + uprim(3,:,imax)/3.0
+       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
      end if
 
   else
@@ -852,22 +833,15 @@ associate (nummat=>g_mmi%nummat)
   if (g_rbflag .eq. -1) then
      !--- exact inlet
      ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
-     uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),imax+1) = pr_fs
-     uprim(1,mmom_idx(nummat,1):mmom_idx(nummat,nummat),imax+1) = &
-       ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1) * u_fs
-     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
 
   else if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
      if (g_nsdiscr .eq. 0) then
        ucons(1,:,imax+1) = ucons(1,:,imax)
-       uprim(1,:,imax+1) = uprim(1,:,imax)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
-       ucons(1,:,imax+1) = ucons(1,:,imax) - ucons(2,:,imax)
-       uprim(1,:,imax+1) = uprim(1,:,imax) - uprim(2,:,imax)
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax)
      else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,imax+1) = ucons(1,:,imax) - ucons(2,:,imax) + ucons(3,:,imax)/3.0
-       uprim(1,:,imax+1) = uprim(1,:,imax) - uprim(2,:,imax) + uprim(3,:,imax)/3.0
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
      end if
 
   else if (g_rbflag .eq. 1) then
@@ -877,11 +851,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+imat-1,imax+1) = alpha_fs(imat) * rhomat_fs(imat)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),imax+1) = pr_fs
-        uprim(1,mmom_idx(nummat, imat),imax+1) = ucons(1,g_mmi%irmin+imat-1,imax+1) &
-          * u_fs
      end do !imat
-     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
      ucons(1,g_mmi%imome,imax+1) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1)) * u_fs
 
   else if (g_rbflag .eq. 2) then
@@ -895,24 +865,17 @@ associate (nummat=>g_mmi%nummat)
                        ucons(1,g_mmi%iemin+imat-1,imax)/ucons(1,imat,imax), u_conv)
         ucons(1,g_mmi%iemin+imat-1,imax+1) = alpha_fs(imat) * &
           eos3_rhoe(g_gam(imat), g_pc(imat), pmat, rhomat_fs(imat), u_fs)
-        uprim(1,apr_idx(nummat, imat),imax+1) = pmat
-        uprim(1,mmom_idx(nummat, imat),imax+1) = ucons(1,g_mmi%irmin+imat-1,imax+1) &
-          * u_fs
      end do !imat
-     uprim(1,vel_idx(nummat, 0),imax+1) = u_fs
      ucons(1,g_mmi%imome,imax+1) = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1)) * u_fs
 
   else if (g_rbflag .eq. 3) then
      !--- periodic
      if (g_nsdiscr .eq. 0) then
        ucons(1,:,imax+1) = ucons(1,:,1)
-       uprim(1,:,imax+1) = uprim(1,:,1)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1)
-       uprim(1,:,imax+1) = uprim(1,:,1) - uprim(2,:,1)
      else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
-       uprim(1,:,imax+1) = uprim(1,:,1) - uprim(2,:,1) + uprim(3,:,1)/3.0
+       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
      end if
 
   else
@@ -924,13 +887,9 @@ associate (nummat=>g_mmi%nummat)
   if (g_nsdiscr .ge. 1) then
     ucons(2,:,0) = 0.0
     ucons(2,:,imax+1) = 0.0
-    uprim(2,:,0) = 0.0
-    uprim(2,:,imax+1) = 0.0
       if (g_nsdiscr .ge. 12) then
         ucons(3,:,0) = 0.0
         ucons(3,:,imax+1) = 0.0
-        uprim(3,:,0) = 0.0
-        uprim(3,:,imax+1) = 0.0
       end if
   end if
 

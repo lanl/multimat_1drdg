@@ -69,7 +69,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         end do !ieqn
         end do !ielem
 
-        call get_bc_mm6eq(ucons, uprim)
+        call get_bc_mm6eq(ucons)
         call ignore_tinyphase_mm6eq(ucons)
 
         call reconst_mm6eq(ucons, uprim)
