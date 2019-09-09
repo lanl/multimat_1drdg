@@ -1108,7 +1108,7 @@ subroutine superbeeweno_p2(ucons, uprim)
 
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns), thetap1(g_nprim)
-real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+real*8  :: uneigh(2,g_neqns,-1:1), upneigh(2,g_nprim,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
            pxxlim(g_nprim,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
@@ -1127,6 +1127,10 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
+    upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
+    upneigh(1:2,:,0)  = uprim(1:2,:,ie)
+    upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
+
     trcell = .false.
     if ((ie.eq.1) .or. (ie.eq.imax)) then
       trcell = .true.
@@ -1134,6 +1138,10 @@ associate (nummat=>g_mmi%nummat)
       do ieqn = g_mmi%irmin, g_mmi%irmax
         trcell = trcell &
           .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+      end do !ieqn
+      do ieqn = 1,g_nprim
+        trcell = trcell &
+          .or. troubled_cell(2.0, upneigh(:,ieqn,:), coord(ie+1)-coord(ie))
       end do !ieqn
     end if
 
@@ -1155,33 +1163,19 @@ associate (nummat=>g_mmi%nummat)
 
     end if
 
-    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-    trcell = .false.
-    if ((ie.eq.1) .or. (ie.eq.imax)) then
-      trcell = .true.
-    else
-      do ieqn = 1,g_nprim
-        trcell = trcell &
-          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
-      end do !ieqn
-    end if
-
     ! primitive quantities
     if (trcell) then
       dx2 = 0.5 * (coord(ie)-coord(ie-1))
-      uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / (dx2*dx2)
+      upneigh(1:2,:,-1) = uprim(2:3,:,ie-1) / (dx2*dx2)
 
       dx2 = 0.5 * (coord(ie+1)-coord(ie))
-      uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / (dx2*dx2)
+      upneigh(1:2,:,0)  = uprim(2:3,:,ie) / (dx2*dx2)
 
       dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
-      uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / (dx2*dx2)
+      upneigh(1:2,:,1)  = uprim(2:3,:,ie+1) / (dx2*dx2)
 
-      call weno_fn(g_nprim, 200.0, uneigh(:,1:g_nprim,:))
-      pxxlim(:,ie) = uneigh(2,1:g_nprim,0) * dx2 * dx2
+      call weno_fn(g_nprim, 200.0, upneigh(:,:,:))
+      pxxlim(:,ie) = upneigh(2,:,0) * dx2 * dx2
 
     else
       pxxlim(:,ie) = uprim(3,:,ie)
@@ -1203,11 +1197,11 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
     ! primitive quantities
-    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+    upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
+    upneigh(1:2,:,0)  = uprim(1:2,:,ie)
+    upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
+    call superbee_fn(g_nprim, 2.0, 1.0, upneigh(:,:,:), thetap1)
 
     do ieqn = 1,g_nprim
       uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
@@ -1234,9 +1228,6 @@ associate (nummat=>g_mmi%nummat)
       end do !ieqn
 
     end if
-
-    !if ( dabs(sum(ucons(2,1:nummat,ie))) .gt. 1.0d-12 ) &
-    !  print*, ie, " : ", sum(ucons(2,1:nummat,ie)), minval(ucons(1,1:nummat,ie))
 
   end do !ie
 
