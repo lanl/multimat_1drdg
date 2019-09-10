@@ -94,6 +94,43 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 end subroutine reconstruction_p1p2
 
 !-------------------------------------------------------------------------------
+!----- high-order reconstruction given the basis functions at required point
+!-------------------------------------------------------------------------------
+
+subroutine ho_reconstruction(neq, udof, basis, uho)
+
+integer, intent(in) :: neq
+real*8, intent(in) :: udof(g_tdof,neq), basis(g_tdof)
+
+integer :: ieqn
+real*8, intent(out) :: uho(neq)
+
+  uho = 0.0
+
+  !--- dgp0
+  if (g_nsdiscr .eq. 0) then
+    do ieqn = 1,neq
+      uho(ieqn) = udof(1,ieqn)
+    end do !ieqn
+
+  !--- rdgp0p1 or dgp1
+  elseif ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
+    do ieqn = 1,neq
+      uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn)
+    end do !ieqn
+
+  !--- rdgp1p2
+  elseif (g_nsdiscr .eq. 12) then
+    do ieqn = 1,neq
+      uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn) &
+        + basis(3)*udof(3,ieqn)
+    end do !ieqn
+
+  end if
+
+end subroutine ho_reconstruction
+
+!-------------------------------------------------------------------------------
 !----- Least-squares reconstruction for P1P2:
 !-------------------------------------------------------------------------------
 
@@ -363,7 +400,8 @@ subroutine boundpreserve_alpha_p1(ucons)
 
 integer :: ie, ig, ngauss, imat, iamax
 real*8  :: careap(2), &
-           alm, thal(g_mmi%nummat), thal1, thal2, &
+           xc, dx, xg, basis(g_tdof), &
+           alm(1), thal(g_mmi%nummat), thal1, thal2, &
            alm_min, alm_max, eps, al_eps, diff, &
            !arhom, arhom_min, &
            ucons(g_tdof,g_neqns,0:imax+1)
@@ -387,11 +425,15 @@ associate (nummat=>g_mmi%nummat)
     do ig = 1,ngauss
 
       ! reconstructed volume fraction
-      alm = ucons(1,imat,ie) + careap(ig) * ucons(2,imat,ie)
+      xc = 0.5*(coord(ie+1)+coord(ie))
+      dx = coord(ie+1)-coord(ie)
+      xg = careap(ig) * 0.5*dx + xc
+      call get_basisfns(xg, xc, dx, basis)
+      call ho_reconstruction(1, ucons(:,imat,ie), basis, alm)
       !arhom = ucons(1,g_mmi%irmin+imat-1,ie) + careap(ig) * ucons(2,g_mmi%irmin+imat-1,ie)
 
-      alm_min = min(alm, alm_min)
-      alm_max = max(alm, alm_max)
+      alm_min = min(alm(1), alm_min)
+      alm_max = max(alm(1), alm_max)
       !arhom_min = min(arhom, arhom_min)
 
     end do !ig
@@ -437,16 +479,12 @@ associate (nummat=>g_mmi%nummat)
 
   ucons(2,1:nummat,ie) = thal(1:nummat) * ucons(2,1:nummat,ie)
 
-  !if ( (g_nmatint .eq. 1) .and. &
-  !     (minval(thal) .lt. 1.0) .and. &
-  !     interface_cell(ucons(1,iamax,ie)) ) then
-
+  if (g_nmatint .eq. 1) then
     do imat = 1,nummat
       ucons(2,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%irmin+imat-1,ie)
       ucons(2,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2,g_mmi%iemin+imat-1,ie)
     end do !imat
-
-  !end if
+  end if
 
   end do !ie
 
@@ -461,9 +499,9 @@ end subroutine boundpreserve_alpha_p1
 subroutine boundpreserve_alpha_p2(ucons)
 
 integer :: ie, ig, ngauss, imat, iamax
-real*8  :: b3, &
-           carea(2), weight(2), careap(4), &
-           alm, thal(g_mmi%nummat), thal1, thal2, &
+real*8  :: carea(2), weight(2), careap(4), &
+           xc, dx, xg, basis(g_tdof), &
+           alm(1), thal(g_mmi%nummat), thal1, thal2, &
            alm_min, alm_max, eps, al_eps, diff, &
            !arhom, arhom_min, &
            ucons(g_tdof,g_neqns,0:imax+1)
@@ -492,18 +530,18 @@ associate (nummat=>g_mmi%nummat)
 
     do ig = 1,ngauss
 
-      b3 = 0.5*careap(ig)*careap(ig) - 1.0/6.0
-
       ! reconstructed volume fraction
-      alm = ucons(1,imat,ie) &
-            + careap(ig) * ucons(2,imat,ie) &
-            + b3 * ucons(3,imat,ie)
+      xc = 0.5*(coord(ie+1)+coord(ie))
+      dx = coord(ie+1)-coord(ie)
+      xg = careap(ig) * 0.5*dx + xc
+      call get_basisfns(xg, xc, dx, basis)
+      call ho_reconstruction(1, ucons(:,imat,ie), basis, alm)
       !arhom = ucons(1,g_mmi%irmin+imat-1,ie) &
       !        + careap(ig) * ucons(2,g_mmi%irmin+imat-1,ie) &
       !        + b3 * ucons(3,g_mmi%irmin+imat-1,ie)
 
-      alm_min = min(alm, alm_min)
-      alm_max = max(alm, alm_max)
+      alm_min = min(alm(1), alm_min)
+      alm_max = max(alm(1), alm_max)
       !arhom_min = min(arhom, arhom_min)
 
     end do !ig
@@ -551,16 +589,12 @@ associate (nummat=>g_mmi%nummat)
     ucons(2:3,imat,ie) = thal(imat) * ucons(2:3,imat,ie)
   end do !imat
 
-  !if ( (g_nmatint .eq. 1) .and. &
-  !     (minval(thal) .lt. 1.0) .and. &
-  !     interface_cell(ucons(1,iamax,ie)) ) then
-
+  if (g_nmatint .eq. 1) then
     do imat = 1,nummat
       ucons(2:3,g_mmi%irmin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%irmin+imat-1,ie)
       ucons(2:3,g_mmi%iemin+imat-1,ie) = thal(imat) * ucons(2:3,g_mmi%iemin+imat-1,ie)
     end do !imat
-
-  !end if
+  end if
 
   end do !ie
 
@@ -1109,6 +1143,7 @@ subroutine superbeeweno_p2(ucons, uprim)
 integer :: ie, ieqn, iamax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns), thetap1(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), upneigh(2,g_nprim,-1:1), &
+           ueq(2,-1:1), &
            uxxlim(g_neqns,0:imax+1), &
            pxxlim(g_nprim,0:imax+1), &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
@@ -1123,25 +1158,19 @@ associate (nummat=>g_mmi%nummat)
   !--- 1. P2 derivative limiting
   do ie = 1,imax
 
-    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
-    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
-    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
-
-    upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
-    upneigh(1:2,:,0)  = uprim(1:2,:,ie)
-    upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
-
     trcell = .false.
     if ((ie.eq.1) .or. (ie.eq.imax)) then
       trcell = .true.
     else
       do ieqn = g_mmi%irmin, g_mmi%irmax
+        ueq = ucons(1:2,ieqn,ie-1:ie+1)
         trcell = trcell &
-          .or. troubled_cell(2.0, uneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+          .or. troubled_cell(2.0, ueq, coord(ie+1)-coord(ie))
       end do !ieqn
       do ieqn = 1,g_nprim
+        ueq = uprim(1:2,ieqn,ie-1:ie+1)
         trcell = trcell &
-          .or. troubled_cell(2.0, upneigh(:,ieqn,:), coord(ie+1)-coord(ie))
+          .or. troubled_cell(2.0, ueq, coord(ie+1)-coord(ie))
       end do !ieqn
     end if
 
@@ -1174,7 +1203,7 @@ associate (nummat=>g_mmi%nummat)
       dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
       upneigh(1:2,:,1)  = uprim(2:3,:,ie+1) / (dx2*dx2)
 
-      call weno_fn(g_nprim, 200.0, upneigh(:,:,:))
+      call weno_fn(g_nprim, 200.0, upneigh)
       pxxlim(:,ie) = upneigh(2,:,0) * dx2 * dx2
 
     else
@@ -1201,7 +1230,7 @@ associate (nummat=>g_mmi%nummat)
     upneigh(1:2,:,0)  = uprim(1:2,:,ie)
     upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, upneigh(:,:,:), thetap1)
+    call superbee_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
 
     do ieqn = 1,g_nprim
       uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
@@ -1628,18 +1657,18 @@ end function interface_cell
 
 logical function troubled_cell(beta, u, dx)
 
-real*8, intent(in) :: beta, u(g_tdof,1,-1:1), dx
+real*8, intent(in) :: beta, u(g_tdof,-1:1), dx
 
 integer :: ifc
 real*8  :: dplus, dminu, difc, a1, a2, a3, mm
 
   troubled_cell = .false.
 
-  dplus = u(1,1,0)-u(1,1,-1)
-  dminu = u(1,1,1)-u(1,1,0)
+  dplus = u(1,0)-u(1,-1)
+  dminu = u(1,1)-u(1,0)
 
   do ifc = 1,2
-    difc = ((-1.0)**ifc) * u(2,1,0)
+    difc = ((-1.0)**ifc) * u(2,0)
 
     a1 = difc
     a2 = dplus

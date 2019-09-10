@@ -70,6 +70,27 @@ end function mclim
 
 !-----------------------------------------------------------------------
 
+subroutine get_basisfns(x, xc, dx, basis)
+
+real*8, intent(in) :: x, xc, dx
+
+real*8, intent(out) :: basis(g_tdof)
+
+  basis = 0.0
+
+  !--- dgp0
+  basis(1) = 1.0
+
+  !--- rdgp0p1 or dgp1
+  if (g_nsdiscr .gt. 0) basis(2) = p1basis(x, xc, dx)
+
+  !--- rdgp1p2
+  if (g_nsdiscr .gt. 11) basis(3) = p2basis(x, xc, dx)
+
+end subroutine get_basisfns
+
+!-----------------------------------------------------------------------
+
 real*8 function p1basis(x,xc,dx)
 real*8, intent(in) :: x, xc, dx
 

@@ -61,9 +61,10 @@ end subroutine flux_rdg_mm6eq
 subroutine surfaceint_dg(ucons, uprim, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
-real*8  :: ul(g_neqns), ur(g_neqns), uavgl(g_neqns), uavgr(g_neqns), &
+real*8  :: ul(g_neqns), ur(g_neqns), &
            up_l(g_neqns), up_r(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
+           xc, dx, basis(g_tdof), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
            lplus, lminu, lmag, pplus, pminu, pstar
 
@@ -85,46 +86,22 @@ associate (nummat=>g_mmi%nummat)
   !--- primitive quantities i.e. material partial pressures (alpha_k * p_k)
   !--- and bulk fluid velocity.
 
-  !--- dgp0
-  if (g_nsdiscr .eq. 0) then
-    do ieqn = 1,g_neqns
-      ul(ieqn) = ucons(1,ieqn,iel)
-      ur(ieqn) = ucons(1,ieqn,ier)
-    end do !ieqn
-    do ieqn = 1,g_nprim
-      pp_l(ieqn) = uprim(1,ieqn,iel)
-      pp_r(ieqn) = uprim(1,ieqn,ier)
-    end do !ieqn
+  !--- left element
+  xc = 0.5*(coord(iel+1)+coord(iel))
+  dx = coord(iel+1)-coord(iel)
+  call get_basisfns(coord(ifc), xc, dx, basis)
+  call ho_reconstruction(g_neqns, ucons(:,:,iel), basis, ul)
+  call ho_reconstruction(g_nprim, uprim(:,:,iel), basis, pp_l)
 
-  !--- rdgp0p1 or dgp1
-  elseif ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
-    do ieqn = 1,g_neqns
-      ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel)
-      ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier)
-    end do !ieqn
-    do ieqn = 1,g_nprim
-      pp_l(ieqn) = uprim(1,ieqn,iel) + uprim(2,ieqn,iel)
-      pp_r(ieqn) = uprim(1,ieqn,ier) - uprim(2,ieqn,ier)
-    end do !ieqn
-
-  !--- rdgp1p2
-  elseif (g_nsdiscr .eq. 12) then
-    do ieqn = 1,g_neqns
-      ul(ieqn) = ucons(1,ieqn,iel) + ucons(2,ieqn,iel) + 1.0/3.0*ucons(3,ieqn,iel)
-      ur(ieqn) = ucons(1,ieqn,ier) - ucons(2,ieqn,ier) + 1.0/3.0*ucons(3,ieqn,ier)
-    end do !ieqn
-    do ieqn = 1,g_nprim
-      pp_l(ieqn) = uprim(1,ieqn,iel) + uprim(2,ieqn,iel) + 1.0/3.0*uprim(3,ieqn,iel)
-      pp_r(ieqn) = uprim(1,ieqn,ier) - uprim(2,ieqn,ier) + 1.0/3.0*uprim(3,ieqn,ier)
-    end do !ieqn
-
-  end if
+  !--- right element
+  xc = 0.5*(coord(ier+1)+coord(ier))
+  dx = coord(ier+1)-coord(ier)
+  call get_basisfns(coord(ifc), xc, dx, basis)
+  call ho_reconstruction(g_neqns, ucons(:,:,ier), basis, ur)
+  call ho_reconstruction(g_nprim, uprim(:,:,ier), basis, pp_r)
 
   call check_volfrac(iel, ul)
   call check_volfrac(ier, ur)
-
-  uavgl(:) = ucons(1,:,iel)
-  uavgr(:) = ucons(1,:,ier)
 
   call get_uprim_mm6eq(ul, up_l)
   call get_uprim_mm6eq(ur, up_r)
@@ -204,6 +181,7 @@ integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
+           xg, xc, dx, basis(g_tdof), &
            u(g_neqns), up(g_neqns), pp(g_nprim), &
            rhob, y(g_mmi%nummat), dapdx, &
            carea(2), weight(2), &
@@ -226,35 +204,13 @@ associate (nummat=>g_mmi%nummat)
 
     dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
 
-    !--- dgp0
-    if (g_nsdiscr .eq. 0) then
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie)
-      end do !ieqn
-
-    !--- rdgp0p1 or dgp1
-    elseif ((g_nsdiscr .eq. 11) .or. (g_nsdiscr .eq. 1)) then
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie) + carea(ig) * uprim(2,ieqn,ie)
-      end do !ieqn
-
-    !--- rdgp1p2
-    elseif (g_nsdiscr .eq. 12) then
-      b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie) + carea(ig) * uprim(2,ieqn,ie) + b3 * uprim(3,ieqn,ie)
-      end do !ieqn
-
-    end if
+    !--- reconstruct high-order solution
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    dx = coord(ie+1)-coord(ie)
+    xg = carea(ig) * 0.5*dx + xc
+    call get_basisfns(xg, xc, dx, basis)
+    call ho_reconstruction(g_neqns, ucons(:,:,ie), basis, u)
+    call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pp)
 
     call check_volfrac(ie, u)
 
@@ -907,6 +863,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
 real*8  :: dx, dx2, b3, p_star, rel_time, &
+           xc, xg, basis(g_tdof), &
            rho, p, aimat, nume, deno, &
            carea(2), weight(2)
 real*8  :: u(g_neqns), up(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax)
@@ -923,35 +880,12 @@ associate (nummat=>g_mmi%nummat)
     dx = coord(ie+1)-coord(ie)
     dx2 = weight(ig)/2.0 * dx
 
-    !--- dgp0 or rdgp0p1
-    if ((g_nsdiscr .eq. 0) .or. (g_nsdiscr .eq. 1)) then
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie)
-      end do !ieqn
-
-    !--- dgp1
-    elseif (g_nsdiscr .eq. 11) then
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie) + carea(ig) * uprim(2,ieqn,ie)
-      end do !ieqn
-
-    !--- rdgp1p2
-    elseif (g_nsdiscr .eq. 12) then
-      b3 = 0.5*carea(ig)*carea(ig) - 1.0/6.0
-      do ieqn = 1,g_neqns
-        u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3 * ucons(3,ieqn,ie)
-      end do !ieqn
-      do ieqn = 1,g_nprim
-        pp(ieqn) = uprim(1,ieqn,ie) + carea(ig) * uprim(2,ieqn,ie) + b3 * uprim(3,ieqn,ie)
-      end do !ieqn
-
-    end if
+    !--- reconstruct high-order solution
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    xg = carea(ig) * 0.5*dx + xc
+    call get_basisfns(xg, xc, dx, basis)
+    call ho_reconstruction(g_neqns, ucons(:,:,ie), basis, u)
+    call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pp)
 
     call get_uprim_mm6eq(u, up)
 

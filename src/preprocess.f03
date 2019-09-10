@@ -198,6 +198,9 @@ associate (nummat=>g_mmi%nummat)
   write(*,*)"  Temperature:    ", t_nd
   write(*,*)"  Pressure:       ", p_nd
   write(*,*)"  Density:        ", rho_nd
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-----------------------------------------------"
+  write(*,*)" "
 
   !--- nondimensionalization
   do imat = 1,nummat
@@ -572,8 +575,6 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
      rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
      rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
 
-      print*, rhomat_fs
-
      call nondimen_mm6eq()
 
      ! left state
@@ -647,8 +648,6 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
      rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
      rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
      rhomat_fs(3) = eos3_density(g_gam(3), g_cp(3), g_pc(3), pr_fs, t_fs)
-
-     print*, rhomat_fs
 
      call nondimen_mm6eq()
 
