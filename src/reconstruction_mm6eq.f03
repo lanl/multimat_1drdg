@@ -102,8 +102,9 @@ subroutine ho_reconstruction(neq, udof, basis, uho)
 integer, intent(in) :: neq
 real*8, intent(in) :: udof(g_tdof,neq), basis(g_tdof)
 
-integer :: ieqn
 real*8, intent(out) :: uho(neq)
+
+integer :: ieqn
 
   uho = 0.0
 
@@ -609,7 +610,7 @@ end subroutine boundpreserve_alpha_p2
 subroutine min_superbee(ucons, uprim)
 
 integer :: ie, iamax
-real*8  :: theta(g_neqns), thetac, thetap(g_nprim)
+real*8  :: theta(g_neqns), thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -617,40 +618,38 @@ associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
+    ! 1. compute limiter function
+    ! conserved quantities
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     iamax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(iamax)
 
+    ! min for all equations
     theta = minval(theta)
 
+    ! primitive quantities
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    ! monotonicity of primitives
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+    ! 2. limit 2nd dofs
+    ucons(2,:,ie) = theta(:) * ucons(2,:,ie)
 
     uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
     uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
       * uprim(2,vel_idx(nummat, 0),ie)
-
-    ! common for all equations
-    thetac = min(minval(theta), &
-      minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
-
-    ! 2. limit 2nd dofs
-    uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
+    uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
+      minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
       * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
-
-    ucons(2,:,ie) = thetac * ucons(2,:,ie)
 
   end do !ie
 
@@ -1271,7 +1270,7 @@ end subroutine superbeeweno_p2
 subroutine oversuperbee(ucons, uprim)
 
 integer :: ie, ieqn, iamax
-real*8  :: theta(g_neqns), theta_al, thrho(2)
+real*8  :: theta(g_neqns), thetap(g_nprim), theta_al, thrho(2)
 real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
@@ -1280,25 +1279,37 @@ associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
+    !--- 1. detect interface/single-material cell
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
+
+    !--- 2. obtain limiter function for individual unknowns
+    ! conserved quantities
     uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    ! 1. compute limiter function
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    theta(1:nummat) = theta(iamax)
-    almax = ucons(1,iamax,ie)
-    dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
+    ! compressive limiting for volume fraction
+    call overbee_fn(uneigh(:,iamax,:), theta_al)
 
-    ! 2. Obtain consistent limiter functions for the equation system
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+    ! use common limiter function for all volume-fractions
+    theta(1:nummat) = theta_al !theta(iamax)
+
+    ! 3. Obtain consistent limiter functions for the equation system
     !    Interface detection
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      !   compressive limiting for volume fraction
-      call overbee_fn(uneigh(:,iamax,:), theta_al)
       call intfac_limiting(ucons(:,:,ie), theta, theta_al)
 
     else
@@ -1308,6 +1319,8 @@ associate (nummat=>g_mmi%nummat)
       end do !ieqn
 
     end if
+
+    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
   end do !ie
 
