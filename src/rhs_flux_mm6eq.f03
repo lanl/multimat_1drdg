@@ -62,11 +62,10 @@ subroutine surfaceint_dg(ucons, uprim, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), &
-           up_l(g_neqns), up_r(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
            xc, dx, basis(g_tdof), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           lplus, lminu, lmag, pplus, pminu, pstar
+           ac_l, ac_r, lplus, lminu, lmag, pplus, pminu, pstar
 
 real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
@@ -82,9 +81,16 @@ associate (nummat=>g_mmi%nummat)
   iel = ifc - 1
   ier = ifc
 
+  !--- sound-speeds
+  ul = ucons(1,:,iel)
+  pp_l = uprim(1,:,iel)
+  ur = ucons(1,:,ier)
+  pp_r = uprim(1,:,ier)
+  call get_multimatsoundspeed(ul, pp_l, ac_l)
+  call get_multimatsoundspeed(ur, pp_r, ac_r)
+
   !--- reconstructed and limited values of conserved variables and
-  !--- primitive quantities i.e. material partial pressures (alpha_k * p_k)
-  !--- and bulk fluid velocity.
+  !--- primitive quantities: material pressures (p_k) and bulk fluid velocity.
 
   !--- left element
   xc = 0.5*(coord(iel+1)+coord(iel))
@@ -103,22 +109,19 @@ associate (nummat=>g_mmi%nummat)
   call check_volfrac(iel, ul)
   call check_volfrac(ier, ur)
 
-  call get_uprim_mm6eq(ul, up_l)
-  call get_uprim_mm6eq(ur, up_r)
-
   !--- fluxes
 
   if (i_flux .eq. 1) then
-     call llf_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+     call llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
                     intflux, lplus, lminu, lmag, pplus, pminu)
   else if (i_flux .eq. 2) then
-     call ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+     call ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
                          intflux, lplus, lminu, lmag, pplus, pminu)
      pplus = lplus
      pminu = lminu
   else if (i_flux .eq. 3) then
-     call hll_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, intflux, lplus, lminu, lmag, &
-                    pplus, pminu)
+     call hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, intflux, &
+                    lplus, lminu, lmag, pplus, pminu)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -182,7 +185,7 @@ data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
            xg, xc, dx, basis(g_tdof), &
-           u(g_neqns), up(g_neqns), pp(g_nprim), &
+           u(g_neqns), pp(g_nprim), &
            rhob, y(g_mmi%nummat), dapdx, &
            carea(2), weight(2), &
            cflux(g_neqns), &
@@ -215,8 +218,6 @@ associate (nummat=>g_mmi%nummat)
     call check_volfrac(ie, u)
 
     viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
-
-    call get_uprim_mm6eq(u, up)
 
     p = 0.0
     dapdx = 0.0
@@ -272,26 +273,70 @@ end associate
 end subroutine volumeint_dg
 
 !-------------------------------------------------------------------------------
+!----- multi-material sound-speed:
+!-------------------------------------------------------------------------------
+
+subroutine get_multimatsoundspeed(u, pp, ac)
+
+real*8, intent(in) :: u(g_neqns), pp(g_nprim)
+
+real*8, intent(out) :: ac
+
+integer :: imat
+real*8 :: al(g_mmi%nummat), rhom(g_mmi%nummat), am(g_mmi%nummat), &
+          pr, rhob
+
+associate (nummat=>g_mmi%nummat)
+
+  do imat = 1,nummat
+    al(imat) = u(imat)
+    rhom(imat) = u(g_mmi%irmin+imat-1) / al(imat)
+    pr = pp(apr_idx(nummat, imat))
+    am(imat) = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), al(imat), pr)
+  end do !imat
+
+  rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
+
+  ! numerical speed of sound choice:
+
+  ! Kapila
+  ac = 0.0
+  do imat = 1,nummat
+    ac = ac + ( al(imat)*rhom(imat)*am(imat)*am(imat) )
+  end do !imat
+  ac = dsqrt( ac / rhob )
+
+  ! Wood
+  !ac_12 = 0.0
+  !do imat = 1,nummat
+  !  ac_12 = ac_12 + al_12(imat) / ( rho_12*rhom_12(imat)*am_12(imat)*am_12(imat) )
+  !end do !imat
+  !ac_12 = dsqrt( 1.0 / ac_12 ) / rho_12
+
+end associate
+
+end subroutine get_multimatsoundspeed
+
+!-------------------------------------------------------------------------------
 !----- 2fluid Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------
 
-subroutine llf_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+subroutine llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
                      flux, lplus, lminu, lmag, pplus, pminu)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
-                      pp_l(g_nprim), pp_r(g_nprim)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
 
 integer :: imat
 real*8 :: flux(g_neqns), lplus, lminu, lmag
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
-                                   arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
-                                   arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
-                                   am_12,rhom_12,al_12
+                                   arhom_l,hm_l,pm_l, &
+                                   arhom_r,hm_r,pm_r
 
-real*8 :: rhou_l, u_l, rho_l, pi_l, p_l, &
-          rhou_r, u_r, rho_r, pi_r, p_r
-real*8 :: rho_12,ac_12,pplus,pminu
+real*8 :: rhou_l, em_l, u_l, rho_l, pi_l, p_l, &
+          rhou_r, em_r, u_r, rho_r, pi_r, p_r
+real*8 :: ac_12,pplus,pminu
   
 real*8 :: lambda
 
@@ -308,13 +353,11 @@ associate (nummat=>g_mmi%nummat)
   ! ul
     al_l(imat)    = ul(imat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
-    em_l(imat)    = ul(g_mmi%iemin+imat-1)
+    em_l          = ul(g_mmi%iemin+imat-1)
 
-    rhom_l(imat) = arhom_l(imat) / al_l(imat)
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
-    hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
     !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
@@ -322,13 +365,11 @@ associate (nummat=>g_mmi%nummat)
   ! ur
     al_r(imat)    = ur(imat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
-    em_r(imat)    = ur(g_mmi%iemin+imat-1)
+    em_r          = ur(g_mmi%iemin+imat-1)
 
-    rhom_r(imat) = arhom_r(imat) / al_r(imat)
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
-    hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
     !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
@@ -341,22 +382,8 @@ associate (nummat=>g_mmi%nummat)
   u_l = pp_l(vel_idx(nummat, 0))
   u_r = pp_r(vel_idx(nummat, 0))
 
-  ! average states
-  rho_12  = 0.5*(rho_l + rho_r)
-  do imat = 1,nummat
-    rhom_12(imat) = 0.5*(rhom_l(imat) + rhom_r(imat))
-    am_12(imat)   = 0.5*(am_l(imat) + am_r(imat))
-    al_12(imat)   = 0.5*(al_l(imat) + al_r(imat))
-  end do !imat
-
-  ! numerical speed of sound choice:
-
-  ! Kapila
-  ac_12 = 0.0
-  do imat = 1,nummat
-    ac_12 = ac_12 + ( al_12(imat)*rhom_12(imat)*am_12(imat)*am_12(imat) )
-  end do !imat
-  ac_12 = dsqrt( ac_12 / rho_12 )
+  ! numerical speed of sound:
+  ac_12 = 0.5 * (ac_l+ac_r)
 
   lambda = ac_12 + max(dabs(u_l),dabs(u_r))
 
@@ -398,21 +425,20 @@ end subroutine llf_mm6eq
 !----- 2fluid AUSM+UP:
 !-------------------------------------------------------------------------------
 
-subroutine ausmplus_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+subroutine ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
   flux, lambda_plus, lambda_minu, lambda_mag, psplus_l, psminu_r)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
-                      pp_l(g_nprim), pp_r(g_nprim)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
 
 integer :: imat
 real*8 :: flux(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
-                                   arhom_l,rhom_l,em_l,am_l,hm_l,pm_l, &
-                                   arhom_r,rhom_r,em_r,am_r,hm_r,pm_r, &
-                                   am_12,rhom_12,al_12
+                                   arhom_l,hm_l,pm_l, &
+                                   arhom_r,hm_r,pm_r
 
-real*8 :: rhou_l, u_l, m_l, rho_l, pi_l, p_l, &
-          rhou_r, u_r, m_r, rho_r, pi_r, p_r
+real*8 :: rhou_l, em_l, u_l, m_l, rho_l, pi_l, p_l, &
+          rhou_r, em_r, u_r, m_r, rho_r, pi_r, p_r
 real*8 :: rho_12, ac_12, &
           f_a, m_12, p_12, m_p, p_u(g_mmi%nummat)
 real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
@@ -440,13 +466,11 @@ associate (nummat=>g_mmi%nummat)
   ! ul
     al_l(imat)    = ul(imat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
-    em_l(imat)    = ul(g_mmi%iemin+imat-1)
+    em_l          = ul(g_mmi%iemin+imat-1)
 
-    rhom_l(imat) = arhom_l(imat) / al_l(imat)
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
-    hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
     !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
@@ -454,13 +478,11 @@ associate (nummat=>g_mmi%nummat)
   ! ur
     al_r(imat)    = ur(imat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
-    em_r(imat)    = ur(g_mmi%iemin+imat-1)
+    em_r          = ur(g_mmi%iemin+imat-1)
 
-    rhom_r(imat) = arhom_r(imat) / al_r(imat)
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
-    hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
     !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
@@ -475,27 +497,9 @@ associate (nummat=>g_mmi%nummat)
 
   ! average states
   rho_12  = 0.5*(rho_l + rho_r)
-  do imat = 1,nummat
-    rhom_12(imat) = 0.5*(rhom_l(imat) + rhom_r(imat))
-    am_12(imat)   = 0.5*(am_l(imat) + am_r(imat))
-    al_12(imat)   = 0.5*(al_l(imat) + al_r(imat))
-  end do !imat
 
-  ! numerical speed of sound choice:
-
-  ! Kapila
-  ac_12 = 0.0
-  do imat = 1,nummat
-    ac_12 = ac_12 + ( al_12(imat)*rhom_12(imat)*am_12(imat)*am_12(imat) )
-  end do !imat
-  ac_12 = dsqrt( ac_12 / rho_12 )
-
-  ! Wood
-  !ac_12 = 0.0
-  !do imat = 1,nummat
-  !  ac_12 = ac_12 + al_12(imat) / ( rho_12*rhom_12(imat)*am_12(imat)*am_12(imat) )
-  !end do !imat
-  !ac_12 = dsqrt( 1.0 / ac_12 ) / rho_12
+  ! numerical speed of sound:
+  ac_12 = 0.5 * (ac_l+ac_r)
 
   m_l = u_l/ac_12
   m_r = u_r/ac_12
@@ -558,20 +562,20 @@ end subroutine ausmplus_mm6eq
 !----- Numerical flux by HLL:
 !------------------------------------------------------------------------------
 
-subroutine hll_mm6eq(ul, ur, up_l, up_r, pp_l, pp_r, &
+subroutine hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
   flux, lambda_plus, lambda_minu, lambda_mag, pplus, pminu)
 
-real*8, intent(in) :: ul(g_neqns), ur(g_neqns), up_l(g_neqns), up_r(g_neqns), &
-                      pp_l(g_nprim), pp_r(g_nprim)
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
 
 integer :: imat
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), flux(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
-                                   arhom_l,rhom_l,em_l,am_l,hm_l, &
-                                   arhom_r,rhom_r,em_r,am_r,hm_r
+                                   arhom_l,hm_l, &
+                                   arhom_r,hm_r
 
-real*8 :: rhou_l, u_l, rho_l, pi_l, p_l, ac_l, &
-          rhou_r, u_r, rho_r, pi_r, p_r, ac_r
+real*8 :: rhou_l, em_l, u_l, rho_l, pi_l, p_l, &
+          rhou_r, em_r, u_r, rho_r, pi_r, p_r
 
 real*8 :: sl, sr
 
@@ -588,25 +592,21 @@ associate (nummat=>g_mmi%nummat)
   ! ul
     al_l(imat)    = ul(imat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
-    em_l(imat)    = ul(g_mmi%iemin+imat-1)
+    em_l          = ul(g_mmi%iemin+imat-1)
 
-    rhom_l(imat) = arhom_l(imat) / al_l(imat)
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    am_l(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_l(imat), al_l(imat), pi_l)
-    hm_l(imat)   = em_l(imat) + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + al_l(imat)*pi_l
     p_l = p_l + al_l(imat)*pi_l
 
   ! ur
     al_r(imat)    = ur(imat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
-    em_r(imat)    = ur(g_mmi%iemin+imat-1)
+    em_r          = ur(g_mmi%iemin+imat-1)
 
-    rhom_r(imat) = arhom_r(imat) / al_r(imat)
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    am_r(imat)   = eos3_ss(g_gam(imat), g_pc(imat), rhom_r(imat), al_r(imat), pi_r)
-    hm_r(imat)   = em_r(imat) + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + al_r(imat)*pi_r
     p_r = p_r + al_r(imat)*pi_r
   end do !imat
 
@@ -618,16 +618,6 @@ associate (nummat=>g_mmi%nummat)
   rho_r = sum(arhom_r)
   u_l = pp_l(vel_idx(nummat, 0))
   u_r = pp_r(vel_idx(nummat, 0))
-
-  ! numerical speed of sound choice:
-  ac_l = 0.0
-  ac_r = 0.0
-  do imat = 1,nummat
-    ac_l = ac_l + ( al_l(imat)*rhom_l(imat)*am_l(imat)*am_l(imat) )
-    ac_r = ac_r + ( al_r(imat)*rhom_r(imat)*am_r(imat)*am_r(imat) )
-  end do !imat
-  ac_l = dsqrt( ac_l / rho_l )
-  ac_r = dsqrt( ac_r / rho_r )
 
   ! signal velocities
   sl = min((u_l-ac_l), (u_r-ac_r))
