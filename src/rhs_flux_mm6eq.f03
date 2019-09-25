@@ -852,22 +852,24 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
 integer :: ig, ie, ieqn, ngauss, imat
 data       ngauss/2/
-real*8  :: dx, dx2, b3, p_star, rel_time, &
+real*8  :: dx, dx2, b3, p_star, rel_time, rhorat, s_lim, &
            xc, xg, basis(g_tdof), &
            rho, p, aimat, nume, deno, &
            carea(2), weight(2)
 real*8  :: u(g_neqns), up(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax)
 
-real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp
+real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp, s_max
 
 associate (nummat=>g_mmi%nummat)
 
   call rutope(1, ngauss, carea, weight)
 
   do ie = 1,imax
+
+  dx = coord(ie+1)-coord(ie)
+
   do ig = 1,ngauss
 
-    dx = coord(ie+1)-coord(ie)
     dx2 = weight(ig)/2.0 * dx
 
     !--- reconstruct high-order solution
@@ -883,10 +885,12 @@ associate (nummat=>g_mmi%nummat)
     p = 0.0
     do imat = 1,nummat
       rhom(imat) = u(g_mmi%irmin+imat-1) / u(imat)
-      pm(imat)   = up(g_mmi%irmin+imat-1)
-      !pm(imat)   = pp(apr_idx(nummat, imat))
+      !pm(imat)   = up(g_mmi%irmin+imat-1)
+      pm(imat)   = pp(apr_idx(nummat, imat))
       p = p + u(imat)*pm(imat)
     end do !imat
+
+    rhorat = 0.2 * minval(rhom)/maxval(rhom)
 
     ! relaxed pressure calculations
     rel_time = 0.0
@@ -894,16 +898,23 @@ associate (nummat=>g_mmi%nummat)
     deno = 0.0
     do imat = 1,nummat
       aimat = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), u(imat), pm(imat))
+      s_max(imat) = u(imat) /dt !* (aimat+dabs(pp(vel_idx(nummat, 0))))/dx
       km(imat) = rhom(imat) * aimat*aimat
-      rel_time = max( rel_time, g_prelct * dx/aimat )
+      rel_time = max( rel_time, rhorat * g_prelct * dx/aimat )
       nume = nume + pm(imat)*u(imat)/km(imat)
       deno = deno +          u(imat)/km(imat)
     end do !imat
     p_star = nume/deno
 
+    s_lim = 1.0d14
     do imat = 1,nummat
       s_alp(imat) = 1.0/rel_time * (pm(imat)-p_star)*(u(imat)/km(imat))
+      s_lim = min(s_lim, s_max(imat)/(dabs(s_alp(imat))+1.0d-12))
     end do !imat
+
+    if (s_lim .lt. 1.0) then
+      s_alp = s_lim * s_alp
+    end if
 
     do imat = 1,nummat
       rhsel(1,imat,ie) = rhsel(1,imat,ie) + dx2 * s_alp(imat)

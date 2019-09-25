@@ -43,8 +43,12 @@ else if (i_system .eq. 1) then
   write(*,*) "  # equations:", g_neqns
 end if
 
+if (g_nprelx .eq. 1) then
+  write(*,*) " "
+  write(*,*) " Pressure relaxation time-scale: ", g_prelct
+end if
+
 write(*,*) " "
-write(*,*) "PREPROCESSING FINISHED."
 write(*,*) " nelem = ", imax
 write(*,*) " dt =    ", dt_u
 write(*,*) " "
