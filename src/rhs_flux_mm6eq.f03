@@ -910,7 +910,7 @@ associate (nummat=>g_mmi%nummat)
 
     s_lim = 1.0d14
     do imat = 1,nummat
-      s_alp(imat) = 1.0/rel_time * (pm(imat)/u(imat)-p_star)*(u(imat)*u(imat)/km(imat))
+      s_alp(imat) = 1.0/rel_time * (pm(imat)-p_star*u(imat))*(u(imat)/km(imat))
       s_lim = min(s_lim, s_max(imat)/(dabs(s_alp(imat))+1.0d-12))
     end do !imat
 
