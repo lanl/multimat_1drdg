@@ -952,7 +952,7 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
@@ -1072,7 +1072,7 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
@@ -1140,7 +1140,7 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(imat)*uprimi(g_mmi%irmin+imat-1)
+        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
         tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &

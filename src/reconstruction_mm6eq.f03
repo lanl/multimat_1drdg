@@ -276,10 +276,10 @@ associate (nummat=>g_mmi%nummat)
       upg = 0.0
       upg(vel_idx(nummat, 0)) = ug(g_mmi%imome)/sum(ug(g_mmi%irmin:g_mmi%irmax))
       do imat = 1,nummat
-        rhomat = ug(g_mmi%irmin+imat-1)/ug(imat)
-        rhoemat = ug(g_mmi%iemin+imat-1)/ug(imat)
+        rhomat = ug(g_mmi%irmin+imat-1)
+        rhoemat = ug(g_mmi%iemin+imat-1)
         upg(apr_idx(nummat, imat)) = &
-          eos3_pr(g_gam(imat), g_pc(imat), rhomat, rhoemat, &
+          eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
             upg(vel_idx(nummat, 0)))
       end do !imat
 

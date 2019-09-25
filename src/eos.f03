@@ -97,6 +97,20 @@ real*8  :: eos3_pr
 end function
 
 !----------------------------------------------------------------------------------------------
+!----- Vol-frac times pressure from total energy and density using sgeos
+!----------------------------------------------------------------------------------------------
+
+function eos3_alphapr(gam, p_c, alpha, arho, arhoe, u)
+
+real*8, intent(in) :: gam, p_c, alpha, arho, arhoe, u
+
+real*8  :: eos3_alphapr
+
+    eos3_alphapr = (gam - 1.0) * (arhoe - 0.5*arho*u*u - alpha*p_c) - alpha*p_c;
+
+end function
+
+!----------------------------------------------------------------------------------------------
 !----- Temperature from total energy and density using stiffened gas eos
 !----------------------------------------------------------------------------------------------
 
@@ -114,23 +128,23 @@ end function
 !----- speed of sound from density and pressure using stiffened gas eos
 !----------------------------------------------------------------------------------------------
 
-function eos3_ss(gam, p_c, rho, al, pr)
+function eos3_ss(gam, p_c, arho, al, apr)
 
-real*8, intent(in) :: gam, p_c, rho, al, pr
+real*8, intent(in) :: gam, p_c, arho, al, apr
 
 real*8  :: pre, eos3_ss
 
-    pre = max(pr+p_c, 1.0d-14);
-    if (rho .lt. 1.0d-16) then
+    pre = max(apr+al*p_c, 1.0d-14);
+    if (arho .lt. 1.0d-16) then
       if (al .le. 100.0*g_alphamin) then
         eos3_ss = 0.0
       else
-        write(*,*) "Error: zero/negative density encountered in speed of sound calculation: ", rho
+        write(*,*) "Error: zero/negative density encountered in speed of sound calculation: ", arho
         write(*,*) "  Volume-fraction: ", al
         call exit
       end if
     else
-      eos3_ss = dsqrt(gam *pre/rho);
+      eos3_ss = dsqrt(gam *pre/arho);
     end if
 
 end function

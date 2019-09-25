@@ -137,8 +137,10 @@ associate (nummat=>g_mmi%nummat)
     !                          ur(imat)*pp_r(apr_idx(nummat, imat)))
     !vriem(imat,ifc) = pplus*ul(imat)*up_l(g_mmi%irmin+imat-1) &
     !  + pminu*ur(imat)*up_r(g_mmi%irmin+imat-1)
-    vriem(imat,ifc) = pplus*ul(imat)*pp_l(apr_idx(nummat, imat)) &
-      + pminu*ur(imat)*pp_r(apr_idx(nummat, imat))
+    !vriem(imat,ifc) = pplus*ul(imat)*pp_l(apr_idx(nummat, imat)) &
+    !  + pminu*ur(imat)*pp_r(apr_idx(nummat, imat))
+    vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
+      + pminu*pp_r(apr_idx(nummat, imat))
   end do !imat
   vriem(nummat+1,ifc) = lmag*(lplus+lminu)
 
@@ -224,7 +226,7 @@ associate (nummat=>g_mmi%nummat)
     rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
     do imat = 1,nummat
       !p = p + u(imat)*up(g_mmi%irmin+imat-1)
-      p = p + u(imat)*pp(apr_idx(nummat, imat))
+      p = p + pp(apr_idx(nummat, imat))
       dapdx = dapdx + rgrad(imat,ie)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
     end do !imat
@@ -237,7 +239,7 @@ associate (nummat=>g_mmi%nummat)
     nflux(1,g_mmi%imome) = 0.0
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
     do imat = 1,nummat
-      hmat = u(g_mmi%iemin+imat-1) + u(imat)*pp(apr_idx(nummat, imat))
+      hmat = u(g_mmi%iemin+imat-1) + pp(apr_idx(nummat, imat))
       !hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
       ! other conservative fluxes
       cflux(imat) = 0.0
@@ -290,7 +292,7 @@ associate (nummat=>g_mmi%nummat)
 
   do imat = 1,nummat
     al(imat) = u(imat)
-    rhom(imat) = u(g_mmi%irmin+imat-1) / al(imat)
+    rhom(imat) = u(g_mmi%irmin+imat-1)
     pr = pp(apr_idx(nummat, imat))
     am(imat) = eos3_ss(g_gam(imat), g_pc(imat), rhom(imat), al(imat), pr)
   end do !imat
@@ -302,7 +304,7 @@ associate (nummat=>g_mmi%nummat)
   ! Kapila
   ac = 0.0
   do imat = 1,nummat
-    ac = ac + ( al(imat)*rhom(imat)*am(imat)*am(imat) )
+    ac = ac + ( rhom(imat)*am(imat)*am(imat) )
   end do !imat
   ac = dsqrt( ac / rhob )
 
@@ -357,8 +359,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    hm_l(imat)   = em_l + al_l(imat)*pi_l
-    p_l = p_l + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + pi_l
+    p_l = p_l + pi_l
     !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
 
@@ -369,8 +371,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    hm_r(imat)   = em_r + al_r(imat)*pi_r
-    p_r = p_r + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + pi_r
+    p_r = p_r + pi_r
     !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
   end do !imat
@@ -395,13 +397,13 @@ associate (nummat=>g_mmi%nummat)
     ffunc_l(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
     ffunc_l(g_mmi%iemin+imat-1) = u_l * hm_l(imat)
     !ffunc_l(g_mmi%imome) = ffunc_l(g_mmi%imome) &
-    !  + u_l * pp_l(mmom_idx(nummat, imat)) + al_l(imat)*pm_l(imat)
+    !  + u_l * pp_l(mmom_idx(nummat, imat)) + pm_l(imat)
 
     ffunc_r(imat) = u_r * al_r(imat)
     ffunc_r(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
     ffunc_r(g_mmi%iemin+imat-1) = u_r * hm_r(imat)
     !ffunc_r(g_mmi%imome) = ffunc_r(g_mmi%imome) &
-    !  + u_r * pp_r(mmom_idx(nummat, imat)) + al_r(imat)*pm_r(imat)
+    !  + u_r * pp_r(mmom_idx(nummat, imat)) + pm_r(imat)
   end do !imat
   ffunc_l(g_mmi%imome) = u_l * rhou_l + p_l
   ffunc_r(g_mmi%imome) = u_r * rhou_r + p_r
@@ -470,8 +472,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    hm_l(imat)   = em_l + al_l(imat)*pi_l
-    p_l = p_l + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + pi_l
+    p_l = p_l + pi_l
     !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
 
@@ -482,8 +484,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    hm_r(imat)   = em_r + al_r(imat)*pi_r
-    p_r = p_r + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + pi_r
+    p_r = p_r + pi_r
     !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
   end do !imat
@@ -544,8 +546,8 @@ associate (nummat=>g_mmi%nummat)
     !flux(g_mmi%imome) = flux(g_mmi%imome) &
     !  + lambda_plus*pp_l(mmom_idx(nummat, imat)) &
     !  + lambda_minu*pp_r(mmom_idx(nummat, imat)) &
-    !  + psplus_l*al_l(imat)*pm_l(imat) &
-    !  + psminu_r*al_r(imat)*pm_r(imat) + p_u(imat)
+    !  + psplus_l*pm_l(imat) &
+    !  + psminu_r*pm_r(imat) + p_u(imat)
   end do !imat
   flux(g_mmi%imome) = lambda_plus*rhou_l + lambda_minu*rhou_r + p_12
 
@@ -596,8 +598,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
-    hm_l(imat)   = em_l + al_l(imat)*pi_l
-    p_l = p_l + al_l(imat)*pi_l
+    hm_l(imat)   = em_l + pi_l
+    p_l = p_l + pi_l
 
   ! ur
     al_r(imat)    = ur(imat)
@@ -606,8 +608,8 @@ associate (nummat=>g_mmi%nummat)
 
     !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
-    hm_r(imat)   = em_r + al_r(imat)*pi_r
-    p_r = p_r + al_r(imat)*pi_r
+    hm_r(imat)   = em_r + pi_r
+    p_r = p_r + pi_r
   end do !imat
 
   ! bulk state
@@ -884,13 +886,13 @@ associate (nummat=>g_mmi%nummat)
     rho  = sum(u(g_mmi%irmin:g_mmi%irmax))
     p = 0.0
     do imat = 1,nummat
-      rhom(imat) = u(g_mmi%irmin+imat-1) / u(imat)
+      rhom(imat) = u(g_mmi%irmin+imat-1)
       !pm(imat)   = up(g_mmi%irmin+imat-1)
       pm(imat)   = pp(apr_idx(nummat, imat))
-      p = p + u(imat)*pm(imat)
+      p = p + pm(imat)
     end do !imat
 
-    rhorat = 0.2 * minval(rhom)/maxval(rhom)
+    rhorat = 1.0 !0.2 * minval(rhom)/maxval(rhom)
 
     ! relaxed pressure calculations
     rel_time = 0.0
@@ -902,13 +904,13 @@ associate (nummat=>g_mmi%nummat)
       km(imat) = rhom(imat) * aimat*aimat
       rel_time = max( rel_time, rhorat * g_prelct * dx/aimat )
       nume = nume + pm(imat)*u(imat)/km(imat)
-      deno = deno +          u(imat)/km(imat)
+      deno = deno +  u(imat)*u(imat)/km(imat)
     end do !imat
     p_star = nume/deno
 
     s_lim = 1.0d14
     do imat = 1,nummat
-      s_alp(imat) = 1.0/rel_time * (pm(imat)-p_star)*(u(imat)/km(imat))
+      s_alp(imat) = 1.0/rel_time * (pm(imat)/u(imat)-p_star)*(u(imat)*u(imat)/km(imat))
       s_lim = min(s_lim, s_max(imat)/(dabs(s_alp(imat))+1.0d-12))
     end do !imat
 
