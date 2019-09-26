@@ -1648,13 +1648,13 @@ real*8  :: scale_al
 
 logical :: al, dal
 
-  scale_al = 1.0d-2
+  scale_al = 0.1
   dal = dabs(dalcell) .gt. scale_al
 
-  scale_al = 1.0d-4 !10000.0*g_alphamin
+  scale_al = 0.1 !10000.0*g_alphamin
   al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
 
-  if (al .or. dal) then
+  if (al .and. dal) then
     interface_cell = .true.
 
   else
