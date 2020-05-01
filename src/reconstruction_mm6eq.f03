@@ -352,6 +352,9 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(5)
     call superbee_p1(ucons, uprim)
 
+  case(6)
+    call superbee_p1(ucons, uprim)
+
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
     call exit
@@ -1497,6 +1500,67 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta, thetal
   end do !ifc
 
 end subroutine overbee_fn
+
+!-------------------------------------------------------------------------------
+!----- LINC reconstruction for volume fraction
+!-------------------------------------------------------------------------------
+
+subroutine linc_reconstruction(neq, udof, basis, uho, dx, xc)
+
+integer, intent(in) :: neq
+real*8, intent(in) :: udof(g_tdof,neq), basis(g_tdof), dx, xc
+
+real*8, intent(out) :: uho(neq)
+
+integer :: imat
+real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, d, vel
+
+associate (nummat=>g_mmi%nummat)
+
+  beta_linc = 1.0
+
+  lolim = 2.0*(dble(nummat-1)*g_alphamin)
+  hilim = 1.0 - lolim
+
+  almax = maxval(udof(1,1:nummat))
+
+  if ((g_nlim==6) .and. (almax > lolim) .and. (almax < hilim)) then
+
+    x = (0.5*dx*basis(2)) + xc
+
+    do imat = 1,nummat
+      alm = udof(1,imat)
+
+      nx = udof(2,imat)/(dabs(udof(2,imat))+1e-12)
+      xt = (1.0 + 0.5*nx*beta_linc - 2.0*alm) / (nx*beta_linc)
+      al_reco = 0.5 * (1.0 + nx * beta_linc * ((x-(xc-0.5*dx))/dx - xt))
+
+      if (al_reco > hilim) then
+        al_reco = hilim
+      else if (al_reco < lolim) then
+        al_reco = lolim
+      end if
+
+      ! volfrac
+      uho(imat) = al_reco
+      ! density
+      uho(g_mmi%irmin+imat-1) = udof(1,g_mmi%irmin+imat-1)/alm * uho(imat)
+      ! energy
+      uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
+    end do !imat
+
+    vel  = udof(1,g_mmi%imome)/sum( udof(1,g_mmi%irmin:g_mmi%irmax) )
+    ! bulk-momentum
+    uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
+
+  else
+    call ho_reconstruction(neq, udof, basis, uho)
+
+  end if
+
+end associate
+
+end subroutine linc_reconstruction
 
 !-------------------------------------------------------------------------------
 !----- Function that consistently applies limiter for near-interface cell

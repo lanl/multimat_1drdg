@@ -100,6 +100,8 @@ if (i_system > -1) then
     write(*,*) "   WENO."
   else if (g_nlim .eq. 5) then
     write(*,*) "   Superbee+WENO."
+  else if (g_nlim .eq. 6) then
+    write(*,*) "   LINC+Superbee."
   else
     write(*,*) "Invalid limiter."
     stop
