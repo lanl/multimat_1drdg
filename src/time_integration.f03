@@ -70,8 +70,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         end do !ielem
 
         call get_bc_mm6eq(ucons)
-        call ignore_tinyphase_mm6eq(ucons)
-
+        call weak_recons_primitives(ucons, uprim)
+        call ignore_tinyphase_mm6eq(ucons, uprim)
         call reconst_mm6eq(ucons, uprim)
 
      end do !istage
@@ -101,7 +101,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
      end if
 
      if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
-     call gnuplot_diagnostics_mm6eq(cons_err, itstep)
+     call gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, g_time)
      end if
 
   end do !itstep
@@ -110,7 +110,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
   call gnuplot_flow_mm6eq(ucons, uprim, itstep)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
-  call gnuplot_diagnostics_mm6eq(cons_err, itstep)
+  call gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, g_time)
 
   !----- compute L2-error-norm
   call errorcalc_p1(ucons, g_time*a_nd, err_log, linfty)

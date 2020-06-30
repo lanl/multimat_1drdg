@@ -193,66 +193,87 @@ end subroutine get_uprim_mm6eq
 !----- ignore it
 !----------------------------------------------------------------------------------------------
 
-subroutine ignore_tinyphase_mm6eq(ucons)
+subroutine ignore_tinyphase_mm6eq(ucons, uprim)
 
 integer :: ie, i, iamax
 real*8  :: almat(g_mmi%nummat), pmax, tmax, &
            rhomat, rhoemat, &
-           al_eps, rho, u, alsum, &
-           ucons(g_tdof,g_neqns,0:imax+1)
+           al_eps, rho, u, alsum, d_al, d_are, are_new, &
+           apk, ak, kmat(g_mmi%nummat), &
+           p_target, ratio, &
+           ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_nprim,0:imax+1)
 
 associate (nummat=>g_mmi%nummat)
 
-  al_eps = 0.01*g_alphamin
+  al_eps = 1d-2
 
   do ie = 1,imax
 
+    !--- find material in largest quantity
     almat = ucons(1,g_mmi%iamin:g_mmi%iamax,ie)
     iamax = maxloc(almat, 1)
 
     rhomat  = ucons(1,g_mmi%irmin+iamax-1,ie)/almat(iamax)
     rhoemat = ucons(1,g_mmi%iemin+iamax-1,ie)/almat(iamax)
     rho     = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
-    u       = ucons(1,g_mmi%imome,ie)/rho
-    pmax = eos3_pr(g_gam(iamax), g_pc(iamax), rhomat, rhoemat, u)
+    u       = uprim(1,vel_idx(nummat, 0),ie)
+    pmax = uprim(1,apr_idx(nummat, iamax),ie)/almat(iamax)
     tmax = eos3_t(g_gam(iamax), g_cp(iamax), g_pc(iamax), rhomat, rhoemat, u)
 
-    alsum = 0.0
+    !--- get equilibrium pressure
+    p_target = 0.0
+    ratio = 0.0
     do i = 1,nummat
       rhomat = ucons(1,g_mmi%irmin+i-1,ie)
-      !--- phase-i disappearing
-      if (almat(i) .le. al_eps) then
+      apk = uprim(1,apr_idx(nummat, i),ie)
+      ak = eos3_ss(g_gam(i), g_pc(i), rhomat, almat(i), apk)
+      kmat(i) = rhomat * ak * ak / almat(i)
 
-        ! consistently update derived quantities
-        rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), pmax, tmax)
-        rhoemat = eos3_rhoe(g_gam(i), g_pc(i), pmax, rhomat, u)
-
-        almat(i) = al_eps
-
-        ! update conserved variables
-        ucons(1,i,ie) = almat(i)
-        ucons(1,g_mmi%irmin+i-1,ie) = almat(i)*rhomat
-        ucons(1,g_mmi%iemin+i-1,ie) = almat(i)*rhoemat
-
-        if (g_nsdiscr .ge. 11) then
-          ucons(2,i,ie) = 0.0
-          ucons(2,g_mmi%irmin+i-1,ie) = 0.0
-          ucons(2,g_mmi%iemin+i-1,ie) = 0.0
-          if (g_nsdiscr .ge. 12) then
-            ucons(3,i,ie) = 0.0
-            ucons(3,g_mmi%irmin+i-1,ie) = 0.0
-            ucons(3,g_mmi%iemin+i-1,ie) = 0.0
-          end if
-        end if
-
-      end if
-
-      alsum = alsum+almat(i)
+      p_target = p_target + (almat(i) * apk / kmat(i))
+      ratio = ratio + (almat(i) * almat(i) / kmat(i))
     end do !i
-    almat = ucons(1,1:nummat,ie)/alsum
+    p_target = p_target / ratio
+    p_target = max(p_target, 1d-14)
 
-    !if (dabs(alsum-1.0) .gt. al_eps) write(*,*) &
-    !  "WARNING: volumefraction sum =", alsum, " element:", ie
+    !--- correct minority materials and store volume/energy changes
+    d_al = 0.0
+    d_are = 0.0
+    alsum = 0.0
+    do i = 1,nummat
+      apk = uprim(1,apr_idx(nummat, i),ie)/almat(i)
+      ! positive volfrac
+      if (almat(i) > 0.0) then
+        ! pressure relaxation
+        if ((almat(i) <= al_eps .and. dabs(apk-pmax)/pmax > 1e-4) &
+          .or. (apk+g_pc(i) < 0.0)) then
+          rhomat = ucons(1,g_mmi%irmin+i-1,ie) / almat(i)
+          are_new = almat(i) * eos3_rhoe(g_gam(i), g_pc(i), p_target, rhomat, u)
+          d_are = d_are + ucons(1,g_mmi%iemin+i-1,ie) - are_new
+
+          ucons(1,g_mmi%iemin+i-1,ie) = are_new
+          uprim(1,apr_idx(nummat, i),ie) = almat(i) * p_target
+        end if
+      ! negative volfrac
+      else if (almat(i) < 0.0) then
+        rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), p_target, tmax)
+        d_al = d_al + (almat(i) - 1d-12)
+
+        ucons(1,g_mmi%iamin+i-1,ie) = 1d-12
+        ucons(1,g_mmi%irmin+i-1,ie) = 1d-12 * rhomat
+        ucons(1,g_mmi%iemin+i-1,ie) = 1d-12 * eos3_rhoe(g_gam(i), g_pc(i), &
+          p_target, rhomat, u)
+        uprim(1,apr_idx(nummat, i),ie) = 1d-12 * p_target
+      end if
+    end do !i
+
+    !--- update state of majority material
+    ucons(1,g_mmi%iamin+iamax-1,ie) = ucons(1,g_mmi%iamin+iamax-1,ie) + d_al
+    almat(iamax) = ucons(1,g_mmi%iamin+iamax-1,ie)
+    ucons(1,g_mmi%iemin+iamax-1,ie) = ucons(1,g_mmi%iemin+iamax-1,ie) + d_are
+    uprim(1,apr_idx(nummat, iamax),ie) = almat(iamax) * eos3_pr(g_gam(iamax), &
+      g_pc(iamax), ucons(1,g_mmi%irmin+iamax-1,ie)/almat(iamax), &
+      ucons(1,g_mmi%iemin+iamax-1,ie)/almat(iamax), u)
 
   end do !ie
 

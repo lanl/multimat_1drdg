@@ -835,7 +835,8 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
-  call ignore_tinyphase_mm6eq(ucons)
+  call weak_recons_primitives(ucons, uprim)
+  call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
 
   call gnuplot_flow_mm6eq(ucons, uprim, 0)
@@ -1189,14 +1190,52 @@ end subroutine gnuplot_flow_p1_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine gnuplot_diagnostics_mm6eq(cons_err, itstep)
+subroutine gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, time)
 
-integer, intent(in) :: itstep
-real*8,  intent(in) :: cons_err(2)
+real*8,  intent(in) :: time, ucons(g_tdof,g_neqns,0:imax+1), &
+                       uprim(g_tdof,g_nprim,0:imax+1), cons_err(2)
 
-  write(33,*) itstep, &       !1
-              cons_err(1), &  !2
-              cons_err(2)     !3
+logical :: mixed_cell
+integer :: ie, k
+real*8 :: alk, apk, pb, denob, pavg(g_mmi%nummat), deno(g_mmi%nummat)
+
+associate (nummat=>g_mmi%nummat)
+
+  pavg = 0.0
+  deno = 0.0
+  pb = 0.0
+  denob = 0.0
+  do ie=1,imax
+    mixed_cell = .false.
+    do k = 1,nummat
+      alk = ucons(1,g_mmi%iamin+k-1,ie)
+      apk = uprim(1,apr_idx(nummat, k),ie)
+      if ((alk > 1d-2) .and. (alk < 1.0-1d-2)) then
+        mixed_cell = .true.
+        pavg(k) = pavg(k) + apk
+        deno(k) = deno(k) + alk
+      end if
+    end do !k
+    if (mixed_cell) then
+      pb = pb + sum(uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie))
+      denob = denob + 1.0
+    end if
+  end do !ie
+
+  do k = 1,nummat
+  pavg(k) = pavg(k) / max(1d-14, deno(k))
+  end do !k
+  pb = pb / max(1d-14, denob)
+
+  write(33,'(3E16.6)',advance='no') time, & !1
+    cons_err(1), &                          !2
+    cons_err(2)                             !3
+  do k = 1,nummat
+     write(33,'(E16.6)',advance='no') pavg(k)*p_nd
+  end do !k
+  write(33,*) pb*p_nd
+
+end associate
 
 end subroutine gnuplot_diagnostics_mm6eq
 

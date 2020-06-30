@@ -22,9 +22,6 @@ subroutine reconstruction_p0(ucons, uprim)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
-  !--- reconstruct primitives from first-order solution
-  call weak_recons_primitives(ucons, uprim)
-
 end subroutine reconstruction_p0
 
 !-------------------------------------------------------------------------------
@@ -35,9 +32,6 @@ subroutine reconstruction_p0p1(ucons, uprim)
 
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
-
-  !--- reconstruct primitives from second-order solution
-  call weak_recons_primitives(ucons, uprim)
 
   !--- central difference reconstruction (least-squares for uniform meshes)
   do ie = 1,imax
@@ -63,9 +57,6 @@ subroutine reconstruction_p1(ucons, uprim)
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
-  !--- reconstruct primitives from second-order solution
-  call weak_recons_primitives(ucons, uprim)
-
   !--- limit second-order solution
   call limiting_p1(ucons, uprim)
 
@@ -78,9 +69,6 @@ end subroutine reconstruction_p1
 subroutine reconstruction_p1p2(ucons, uprim)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
-
-  !--- reconstruct primitives from second-order solution
-  call weak_recons_primitives(ucons, uprim)
 
   !--- reconstruct third-order conserved quantities
   call leastsquares_p1p2(g_neqns, ucons)

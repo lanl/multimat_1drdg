@@ -18,6 +18,7 @@ USE time_integration
 implicit none
 
 !----- Local variable definitions:
+integer :: imat
 real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end, linfty
 
@@ -82,13 +83,13 @@ call cpu_time(t_start)
 !----- Diagnostics file:
 open(33,file='diag.dat',status='unknown')
 
-write(33,'(7A12)') "# tstep,", &   !1
-                   "mass1,", &     !2
-                   "mass2,", &     !3
-                   "massmix," , &  !4
-                   "tenergy1,", &  !5
-                   "tenergy2,", &  !6
-                   "tenergymix"    !7
+write(33,'(3A12)',advance='no') "# time,", & !1
+  "massmix," , &                              !2
+  "tenergymix"                                !3
+do imat = 1,g_mmi%nummat
+  write(33,'(A12)',advance='no') "pkavg,"
+end do !imat
+write(33,*) "pbavg"
 
 !--- Explicit TVD-RK3:
 if (i_system .eq. -1) then
