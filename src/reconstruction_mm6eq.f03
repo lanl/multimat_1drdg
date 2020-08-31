@@ -341,7 +341,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
     call superbee_p1(ucons, uprim)
 
   case(6)
-    call superbee_p1(ucons, uprim)
+    call thincsuperbee_p1(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
@@ -349,7 +349,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   end select
 
-  call boundpreserve_alpha_p1(ucons)
+  if (g_nlim /= 6) call boundpreserve_alpha_p1(ucons)
 
 end subroutine limiting_p1
 
@@ -776,6 +776,59 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine superbee_p1
+
+!-------------------------------------------------------------------------------
+!----- system-consistent superbee limiter for P1 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine thincsuperbee_p1(ucons, uprim)
+
+integer :: ie, ieqn, iamax, imat
+real*8  :: almax, theta(g_neqns), thetap(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    !--- 1. detect interface/single-material cell
+    iamax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,iamax,ie)
+
+    if (.not.intrecons_cell(almax)) then
+
+      !--- 2. obtain limiter function for individual unknowns
+      ! conserved quantities
+      uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+      uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+      uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+      call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+
+      ! primitive quantities
+      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+      ! use common limiter function for all volume-fractions
+      theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
+
+      do ieqn = 1,g_neqns
+        ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
+      end do !ieqn
+
+      uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+
+    end if
+
+  end do !ie
+
+end associate
+
+end subroutine thincsuperbee_p1
 
 !-------------------------------------------------------------------------------
 !----- system-consistent weno limiter for P1:
@@ -1493,41 +1546,50 @@ end subroutine overbee_fn
 !----- LINC reconstruction for volume fraction
 !-------------------------------------------------------------------------------
 
-subroutine linc_reconstruction(neq, udof, basis, uho, dx, xc)
+subroutine linc_reconstruction(udof, pdof, basis, uho, pho, dx, xc)
 
-integer, intent(in) :: neq
-real*8, intent(in) :: udof(g_tdof,neq), basis(g_tdof), dx, xc
+real*8, intent(in) :: udof(g_tdof,g_neqns), pdof(g_tdof,g_nprim), basis(g_tdof), &
+  dx, xc
 
-real*8, intent(out) :: uho(neq)
+real*8, intent(out) :: uho(g_neqns), pho(g_nprim)
 
 integer :: imat
-real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, d, vel
+real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel
 
 associate (nummat=>g_mmi%nummat)
 
-  beta_linc = 1.0
+  beta_linc = 2.0
 
-  lolim = 2.0*(dble(nummat-1)*g_alphamin)
+  lolim = 2.0*1e-8 !(dble(nummat-1)*g_alphamin)
   hilim = 1.0 - lolim
 
   almax = maxval(udof(1,1:nummat))
 
-  if ((g_nlim==6) .and. (almax > lolim) .and. (almax < hilim)) then
+  if ((g_nlim==6) .and. intrecons_cell(almax)) then
 
     x = (0.5*dx*basis(2)) + xc
 
     do imat = 1,nummat
       alm = udof(1,imat)
+      sig = dsign(1.0,udof(2,imat))
 
       nx = udof(2,imat)/(dabs(udof(2,imat))+1e-12)
-      xt = (1.0 + 0.5*nx*beta_linc - 2.0*alm) / (nx*beta_linc)
-      al_reco = 0.5 * (1.0 + nx * beta_linc * ((x-(xc-0.5*dx))/dx - xt))
 
-      if (al_reco > hilim) then
-        al_reco = hilim
-      else if (al_reco < lolim) then
-        al_reco = lolim
-      end if
+      !! LINC reconstruction
+      !xt = (1.0 + 0.5*nx*beta_linc - 2.0*alm) / (nx*beta_linc)
+      !al_reco = 0.5 * (1.0 + nx * beta_linc * ((x-(xc-0.5*dx))/dx - xt))
+
+      !if (al_reco > hilim) then
+      !  al_reco = hilim
+      !else if (al_reco < lolim) then
+      !  al_reco = lolim
+      !end if
+
+      ! THINC reconstruction
+      xt = dlog( dexp(beta_linc*(1.0+sig-2.0*alm)/sig) &
+        / (1.0-dexp(beta_linc*(1.0-sig-2.0*alm)/sig)) ) &
+        / (2.0*beta_linc)
+      al_reco = 0.5 * (1.0 + sig*dtanh( beta_linc*((x-(xc-0.5*dx))/dx-xt) ))
 
       ! volfrac
       uho(imat) = al_reco
@@ -1535,14 +1597,19 @@ associate (nummat=>g_mmi%nummat)
       uho(g_mmi%irmin+imat-1) = udof(1,g_mmi%irmin+imat-1)/alm * uho(imat)
       ! energy
       uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
+      ! pressure
+      pho(apr_idx(nummat, imat)) = uho(imat) * pdof(1,apr_idx(nummat, imat))/alm
     end do !imat
 
     vel  = udof(1,g_mmi%imome)/sum( udof(1,g_mmi%irmin:g_mmi%irmax) )
     ! bulk-momentum
     uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
+    ! velocity
+    pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
 
   else
-    call ho_reconstruction(neq, udof, basis, uho)
+    call ho_reconstruction(g_neqns, udof, basis, uho)
+    call ho_reconstruction(g_nprim, pdof, basis, pho)
 
   end if
 
@@ -1700,13 +1767,13 @@ real*8  :: scale_al
 
 logical :: al, dal
 
-  scale_al = 0.1
+  scale_al = 0.0001
   dal = dabs(dalcell) .gt. scale_al
 
-  scale_al = 0.1 !10000.0*g_alphamin
+  scale_al = 0.0001 !10000.0*g_alphamin
   al = ( (alcell .gt. scale_al) .and. (alcell .lt. 1.0-scale_al) )
 
-  if (al .and. dal) then
+  if (al .or. dal) then
     interface_cell = .true.
 
   else
@@ -1760,6 +1827,27 @@ real*8  :: dplus, dminu, difc, a1, a2, a3, mm
   end do !ifc
 
 end function troubled_cell
+
+!-------------------------------------------------------------------------------
+!----- Detect cells for algebraic interface reconstruction
+!-------------------------------------------------------------------------------
+
+logical function intrecons_cell(almax)
+
+real*8, intent(in) :: almax
+
+real*8 :: lolim, hilim
+
+  lolim = 2.0*1e-8 !(dble(nummat-1)*g_alphamin)
+  hilim = 1.0 - lolim
+
+  if ((almax > lolim) .and. (almax < hilim)) then
+    intrecons_cell = .true.
+  else
+    intrecons_cell = .false.
+  end if
+
+end function intrecons_cell
 
 !-------------------------------------------------------------------------------
 

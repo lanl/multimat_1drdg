@@ -222,19 +222,20 @@ associate (nummat=>g_mmi%nummat)
     tmax = eos3_t(g_gam(iamax), g_cp(iamax), g_pc(iamax), rhomat, rhoemat, u)
 
     !--- get equilibrium pressure
-    p_target = 0.0
-    ratio = 0.0
-    do i = 1,nummat
-      rhomat = ucons(1,g_mmi%irmin+i-1,ie)
-      apk = uprim(1,apr_idx(nummat, i),ie)
-      ak = eos3_ss(g_gam(i), g_pc(i), rhomat, almat(i), apk)
-      kmat(i) = rhomat * ak * ak / almat(i)
+    !p_target = 0.0
+    !ratio = 0.0
+    !do i = 1,nummat
+    !  rhomat = ucons(1,g_mmi%irmin+i-1,ie)
+    !  apk = uprim(1,apr_idx(nummat, i),ie)
+    !  ak = eos3_ss(g_gam(i), g_pc(i), rhomat, almat(i), apk)
+    !  kmat(i) = rhomat * ak * ak / almat(i)
 
-      p_target = p_target + (almat(i) * apk / kmat(i))
-      ratio = ratio + (almat(i) * almat(i) / kmat(i))
-    end do !i
-    p_target = p_target / ratio
-    p_target = max(p_target, 1d-14)
+    !  p_target = p_target + (almat(i) * apk / kmat(i))
+    !  ratio = ratio + (almat(i) * almat(i) / kmat(i))
+    !end do !i
+    !p_target = p_target / ratio
+    !p_target = max(p_target, 1d-14)
+    p_target = pmax
 
     !--- correct minority materials and store volume/energy changes
     d_al = 0.0
@@ -245,7 +246,7 @@ associate (nummat=>g_mmi%nummat)
       ! positive volfrac
       if (almat(i) > 0.0) then
         ! pressure relaxation
-        if ((almat(i) <= al_eps .and. dabs(apk-pmax)/pmax > 1e-4) &
+        if ((almat(i) <= al_eps) &! .and. dabs(apk-pmax)/pmax > 1e-4) &
           .or. (apk+g_pc(i) < 0.0)) then
           rhomat = ucons(1,g_mmi%irmin+i-1,ie) / almat(i)
           are_new = almat(i) * eos3_rhoe(g_gam(i), g_pc(i), p_target, rhomat, u)

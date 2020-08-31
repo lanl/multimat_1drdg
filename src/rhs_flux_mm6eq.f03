@@ -96,15 +96,13 @@ associate (nummat=>g_mmi%nummat)
   xc = 0.5*(coord(iel+1)+coord(iel))
   dx = coord(iel+1)-coord(iel)
   call get_basisfns(coord(ifc), xc, dx, basis)
-  call linc_reconstruction(g_neqns, ucons(:,:,iel), basis, ul, dx, xc)
-  call ho_reconstruction(g_nprim, uprim(:,:,iel), basis, pp_l)
+  call linc_reconstruction(ucons(:,:,iel), uprim(:,:,iel), basis, ul, pp_l, dx, xc)
 
   !--- right element
   xc = 0.5*(coord(ier+1)+coord(ier))
   dx = coord(ier+1)-coord(ier)
   call get_basisfns(coord(ifc), xc, dx, basis)
-  call linc_reconstruction(g_neqns, ucons(:,:,ier), basis, ur, dx, xc)
-  call ho_reconstruction(g_nprim, uprim(:,:,ier), basis, pp_r)
+  call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
 
   call check_volfrac(iel, ul)
   call check_volfrac(ier, ur)
@@ -214,8 +212,7 @@ associate (nummat=>g_mmi%nummat)
     dx = coord(ie+1)-coord(ie)
     xg = carea(ig) * 0.5*dx + xc
     call get_basisfns(xg, xc, dx, basis)
-    call linc_reconstruction(g_neqns, ucons(:,:,ie), basis, u, dx, xc)
-    call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pp)
+    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
 
     call check_volfrac(ie, u)
 
@@ -878,8 +875,7 @@ associate (nummat=>g_mmi%nummat)
     xc = 0.5*(coord(ie+1)+coord(ie))
     xg = carea(ig) * 0.5*dx + xc
     call get_basisfns(xg, xc, dx, basis)
-    call linc_reconstruction(g_neqns, ucons(:,:,ie), basis, u, dx, xc)
-    call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pp)
+    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
 
     call get_uprim_mm6eq(u, up)
 
