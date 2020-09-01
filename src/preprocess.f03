@@ -1004,8 +1004,8 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xp, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_nprim)
+real*8  :: dx, xc, xp, pmix, tmix, rhomix, emix, temix, trcell
+real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_nprim), basis(g_tdof)
 
 character(len=100) :: filename2,filename3
 
@@ -1048,22 +1048,18 @@ associate (nummat=>g_mmi%nummat)
 
   do ielem = 1,imax
 
+     ! cell geometry
+     dx = coord(ielem+1) - coord(ielem)
+     xc = coord(ielem) + 0.5 * dx
+
      ! left face
-     if (g_nsdiscr .gt. 12) then
-     uconsi = ucons(1,:,ielem) - ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
-     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem) + 1.0/3.0*uprim(3,:,ielem)
-     else if (g_nsdiscr .gt. 0) then
-     uconsi = ucons(1,:,ielem) - ucons(2,:,ielem)
-     uprimp = uprim(1,:,ielem) - uprim(2,:,ielem)
-     else
-     uconsi = ucons(1,:,ielem)
-     uprimp = uprim(1,:,ielem)
-     end if
+     xp = coord(ielem)
+     call get_basisfns(xp, xc, dx, basis)
+     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
+     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
      call get_uprim_mm6eq(uconsi, uprimi)
      uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
      uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
-
-     xp = coord(ielem)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1117,21 +1113,13 @@ associate (nummat=>g_mmi%nummat)
      !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
 
      ! right face
-     if (g_nsdiscr .gt. 12) then
-     uconsi = ucons(1,:,ielem) + ucons(2,:,ielem) + 1.0/3.0*ucons(3,:,ielem)
-     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem) + 1.0/3.0*uprim(3,:,ielem)
-     else if (g_nsdiscr .gt. 0) then
-     uconsi = ucons(1,:,ielem) + ucons(2,:,ielem)
-     uprimp = uprim(1,:,ielem) + uprim(2,:,ielem)
-     else
-     uconsi = ucons(1,:,ielem)
-     uprimp = uprim(1,:,ielem)
-     end if
+     xp = coord(ielem+1)
+     call get_basisfns(xp, xc, dx, basis)
+     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
+     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
      call get_uprim_mm6eq(uconsi, uprimi)
      uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
      uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
-
-     xp = coord(ielem+1)
 
      rhomix = 0.0
      pmix = 0.0
