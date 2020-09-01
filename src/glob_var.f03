@@ -69,6 +69,8 @@ real*8,intent(in) :: a,b,c
 end function mclim
 
 !-----------------------------------------------------------------------
+!----- Normalized Taylor basis function calculation
+!-----------------------------------------------------------------------
 
 subroutine get_basisfns(x, xc, dx, basis)
 
@@ -108,6 +110,25 @@ real*8 :: hdx
   p2basis = (x-xc)*(x-xc)/(2.0*hdx*hdx) - 1.0/6.0
 
 end function p2basis
+
+!-----------------------------------------------------------------------
+!----- Number of quadrature points for volume integral
+!-----------------------------------------------------------------------
+
+pure integer function get_numqpoints(ndiscr)
+integer, intent(in) :: ndiscr
+
+  !--- dgp0 or rdgp0p1
+  if ((ndiscr == 0) .or. (ndiscr == 1)) then
+    get_numqpoints = 1
+
+  !--- dgp1 or rdgp1p2
+  else if ((ndiscr == 11) .or. (ndiscr == 12)) then
+    get_numqpoints = 2
+
+  end if
+
+end function get_numqpoints
 
 !-----------------------------------------------------------------------
 !----- Functions used to index into uprim

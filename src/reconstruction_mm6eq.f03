@@ -220,7 +220,6 @@ subroutine weak_recons_primitives(ucons, uprim)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ig, ie, ieqn, imat, ngauss
-data       ngauss/3/
 
 real*8  :: dxi, xci, xg, wi, &
            carea(3), weight(3), &
@@ -231,6 +230,7 @@ real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
 
 associate (nummat=>g_mmi%nummat)
 
+  ngauss = get_numqpoints(g_nsdiscr)
   call rutope(1, ngauss, carea, weight)
 
   do ie = 0,imax+1

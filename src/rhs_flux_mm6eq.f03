@@ -183,7 +183,6 @@ end subroutine surfaceint_dg
 subroutine volumeint_dg(ucons, uprim, rgrad, vriem, rhsel)
 
 integer :: ig, ie, ieqn, ngauss, imat
-data       ngauss/2/
 
 real*8  :: dx2, b3, p, hmat, viriem, &
            xg, xc, dx, basis(g_tdof), &
@@ -200,6 +199,7 @@ real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), 
 
 associate (nummat=>g_mmi%nummat)
 
+  ngauss = get_numqpoints(g_nsdiscr)
   call rutope(1, ngauss, carea, weight)
 
   do ie = 1,imax
@@ -853,7 +853,6 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ig, ie, ieqn, ngauss, imat
-data       ngauss/2/
 real*8  :: dx, dx2, b3, p_star, rel_time, rhorat, s_lim, &
            xc, xg, basis(g_tdof), &
            rho, p, aimat, nume, deno, &
@@ -864,6 +863,7 @@ real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp, s_max
 
 associate (nummat=>g_mmi%nummat)
 
+  ngauss = get_numqpoints(g_nsdiscr)
   call rutope(1, ngauss, carea, weight)
 
   do ie = 1,imax
