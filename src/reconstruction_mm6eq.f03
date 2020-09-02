@@ -390,7 +390,7 @@ end subroutine limiting_p2
 
 subroutine boundpreserve_alpha_p1(ucons)
 
-integer :: ie, ig, ngauss, imat, iamax
+integer :: ie, ig, ngauss, imat, mmax
 real*8  :: careap(2), &
            xc, dx, xg, basis(g_tdof), &
            alm(1), thal(g_mmi%nummat), thal1, thal2, &
@@ -466,7 +466,7 @@ associate (nummat=>g_mmi%nummat)
 
   end do !imat
 
-  iamax = maxloc(ucons(1,1:nummat,ie), 1)
+  mmax = maxloc(ucons(1,1:nummat,ie), 1)
   thal(1:nummat) = minval(thal)
 
   ucons(2,1:nummat,ie) = thal(1:nummat) * ucons(2,1:nummat,ie)
@@ -490,7 +490,7 @@ end subroutine boundpreserve_alpha_p1
 
 subroutine boundpreserve_alpha_p2(ucons)
 
-integer :: ie, ig, ngauss, imat, iamax
+integer :: ie, ig, ngauss, imat, mmax
 real*8  :: carea(2), weight(2), careap(4), &
            xc, dx, xg, basis(g_tdof), &
            alm(1), thal(g_mmi%nummat), thal1, thal2, &
@@ -574,7 +574,7 @@ associate (nummat=>g_mmi%nummat)
 
   end do !imat
 
-  iamax = maxloc(ucons(1,1:nummat,ie), 1)
+  mmax = maxloc(ucons(1,1:nummat,ie), 1)
   thal(1:nummat) = minval(thal)
 
   do imat = 1,nummat
@@ -600,7 +600,7 @@ end subroutine boundpreserve_alpha_p2
 
 subroutine min_superbee(ucons, uprim)
 
-integer :: ie, iamax
+integer :: ie, mmax
 real*8  :: theta(g_neqns), thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
@@ -617,8 +617,8 @@ associate (nummat=>g_mmi%nummat)
 
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    theta(1:nummat) = theta(iamax)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    theta(1:nummat) = theta(mmax)
 
     ! min for all equations
     theta = minval(theta)
@@ -654,7 +654,7 @@ end subroutine min_superbee
 
 subroutine superbee_p1(ucons, uprim)
 
-integer :: ie, ieqn, iamax, imat
+integer :: ie, ieqn, mmax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_nprim), thetac
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
@@ -664,8 +664,8 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = maxval(dabs(ucons(2,1:nummat,ie))/(0.5 * (coord(ie+1)-coord(ie))))
 
     !--- 2. obtain limiter function for individual unknowns
@@ -684,14 +684,14 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
+    theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
     !--- 3a. Obtain consistent limiter functions for equation system at interface
 
       ! consistent limiting
-      call intfac_limiting(ucons(:,:,ie), theta, theta(iamax))
+      call intfac_limiting(ucons(:,:,ie), theta, theta(mmax))
 
       !! consistent limiting of primitives
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
@@ -712,12 +712,12 @@ associate (nummat=>g_mmi%nummat)
 
       !uprim(2,1:nummat,ie) = minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
-      !uprim(2,vel_idx(nummat, 0),ie) = min(theta(iamax), minval(theta(nummat+1:))) &
+      !uprim(2,vel_idx(nummat, 0),ie) = min(theta(mmax), minval(theta(nummat+1:))) &
       !  * uprim(2,vel_idx(nummat, 0),ie)
       !---
 
       !--- separate-per-equation
-      !ucons(2,1:nummat,ie) = theta(iamax) * ucons(2,1:nummat,ie)
+      !ucons(2,1:nummat,ie) = theta(mmax) * ucons(2,1:nummat,ie)
       !thetac = minval(theta(g_mmi%irmin:g_mmi%irmax))
       !ucons(2,g_mmi%irmin:g_mmi%irmax,ie) = thetac &
       !  * ucons(2,g_mmi%irmin:g_mmi%irmax,ie)
@@ -783,7 +783,7 @@ end subroutine superbee_p1
 
 subroutine thincsuperbee_p1(ucons, uprim)
 
-integer :: ie, ieqn, iamax, imat
+integer :: ie, ieqn, mmax, imat
 real*8  :: almax, theta(g_neqns), thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
@@ -793,8 +793,8 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
 
     if (.not.intrecons_cell(almax)) then
 
@@ -814,7 +814,7 @@ associate (nummat=>g_mmi%nummat)
       call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
       ! use common limiter function for all volume-fractions
-      theta(1:nummat) = theta(iamax) !minval(theta(1:nummat))
+      theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
 
       do ieqn = 1,g_neqns
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
@@ -836,7 +836,7 @@ end subroutine thincsuperbee_p1
 
 subroutine weno_p1(ucons, uprim)
 
-integer :: ie, ieqn, iamax!, imat
+integer :: ie, ieqn, mmax!, imat
 real*8  :: dx2, almax, dalmax, theta(g_neqns)!, thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), &
            uxlim(g_neqns,0:imax+1), &
@@ -937,8 +937,8 @@ associate (nummat=>g_mmi%nummat)
   !--- 3. Obtain consistent limiter at material interface cells
   do ie = 1,imax
 
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
 
     if ( (g_nmatint .eq. 1) .and. &
@@ -961,7 +961,7 @@ end subroutine weno_p1
 
 subroutine superbee_p2(ucons, uprim)
 
-integer :: ie, ieqn, iamax, imat
+integer :: ie, ieqn, mmax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            theta1c, theta2c, &
            thetap2(g_nprim), thetap1(g_nprim)
@@ -978,8 +978,8 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+1)-coord(ie))
 
     !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = max( maxval(dabs(ucons(2,1:nummat,ie) + ucons(3,1:nummat,ie))), &
                   maxval(dabs(ucons(2,1:nummat,ie) - ucons(3,1:nummat,ie))) ) /dx2
 
@@ -1027,7 +1027,7 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
 
     ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = theta1(iamax) !minval(theta1(1:nummat))
+    theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
@@ -1035,9 +1035,9 @@ associate (nummat=>g_mmi%nummat)
     !--- 3a. Obtain consistent limiter functions for equation system at interface
 
       !--- separate-per-equation
-      !ucons(2,1:nummat,ie) = max(theta1(iamax), theta2(iamax)) &
+      !ucons(2,1:nummat,ie) = max(theta1(mmax), theta2(mmax)) &
       !  * ucons(2,1:nummat,ie)
-      !ucons(3,1:nummat,ie) = theta2(iamax) * ucons(3,1:nummat,ie)
+      !ucons(3,1:nummat,ie) = theta2(mmax) * ucons(3,1:nummat,ie)
 
       !theta1c = minval(theta1(g_mmi%irmin:))
       !theta2c = minval(theta2(g_mmi%irmin:))
@@ -1057,8 +1057,8 @@ associate (nummat=>g_mmi%nummat)
       !uprim(3,vel_idx(nummat, 0),ie) = theta2c * uprim(3,vel_idx(nummat, 0),ie)
       !---
 
-      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), &
-        theta2(iamax))
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(mmax), &
+        theta2(mmax))
 
       !! consistent limiting of primitives
       !do imat = 1,nummat
@@ -1099,7 +1099,7 @@ end subroutine superbee_p2
 
 subroutine weno_p2(ucons, uprim)
 
-integer :: ie, ieqn, iamax, imat
+integer :: ie, ieqn, mmax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
            thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
@@ -1157,8 +1157,8 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     dx2 = 0.5 * (coord(ie+1)-coord(ie))
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
 
     !--- 3. Obtain consistent limiter functions for the equation system
@@ -1166,8 +1166,8 @@ associate (nummat=>g_mmi%nummat)
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), &
-        theta2(iamax))
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(mmax), &
+        theta2(mmax))
 
     end if
 
@@ -1183,7 +1183,7 @@ end subroutine weno_p2
 
 subroutine superbeeweno_p2(ucons, uprim)
 
-integer :: ie, ieqn, iamax, imat
+integer :: ie, ieqn, mmax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns), thetap1(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), upneigh(2,g_nprim,-1:1), &
            ueq(2,-1:1), &
@@ -1279,19 +1279,19 @@ associate (nummat=>g_mmi%nummat)
       uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
     end do !ieqn
 
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/dx2)
 
     ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = theta1(iamax)
+    theta1(1:nummat) = theta1(mmax)
 
     !--- 3. Obtain consistent limiter functions for the equation system
     !       with interface detection
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
 
-      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(iamax), 1.0)
+      call intfac_limiting_p2(ucons(:,:,ie), is_weno, theta1(mmax), 1.0)
 
     else
 
@@ -1313,7 +1313,7 @@ end subroutine superbeeweno_p2
 
 subroutine oversuperbee(ucons, uprim)
 
-integer :: ie, ieqn, iamax
+integer :: ie, ieqn, mmax
 real*8  :: theta(g_neqns), thetap(g_nprim), theta_al, thrho(2)
 real*8  :: almax, dalmax, rho1, rho2, vel, rhoe1, rhoe2
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
@@ -1324,8 +1324,8 @@ associate (nummat=>g_mmi%nummat)
   do ie = 1,imax
 
     !--- 1. detect interface/single-material cell
-    iamax = maxloc(ucons(1,1:nummat,ie), 1)
-    almax = ucons(1,iamax,ie)
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
     dalmax = maxval(ucons(2,1:nummat,ie)/(0.5 * (coord(ie+1)-coord(ie))))
 
     !--- 2. obtain limiter function for individual unknowns
@@ -1337,7 +1337,7 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     ! compressive limiting for volume fraction
-    call overbee_fn(uneigh(:,iamax,:), theta_al)
+    call overbee_fn(uneigh(:,mmax,:), theta_al)
 
     ! primitive quantities
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
@@ -1347,7 +1347,7 @@ associate (nummat=>g_mmi%nummat)
     call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta_al !theta(iamax)
+    theta(1:nummat) = theta_al !theta(mmax)
 
     ! 3. Obtain consistent limiter functions for the equation system
     !    Interface detection
@@ -1553,21 +1553,26 @@ real*8, intent(in) :: udof(g_tdof,g_neqns), pdof(g_tdof,g_nprim), basis(g_tdof),
 
 real*8, intent(out) :: uho(g_neqns), pho(g_nprim)
 
-integer :: imat
-real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel
+integer :: imat, mmax
+real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel, &
+  alsum, almat(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
-  beta_linc = 2.0
+  beta_linc = 2.3
 
   lolim = 2.0*1e-8 !(dble(nummat-1)*g_alphamin)
   hilim = 1.0 - lolim
 
-  almax = maxval(udof(1,1:nummat))
+  almat = udof(1,g_mmi%iamin:g_mmi%iamax)
+  mmax = maxloc(almat, 1)
+  almax = maxval(almat)
 
   if ((g_nlim==6) .and. intrecons_cell(almax)) then
 
     x = (0.5*dx*basis(2)) + xc
+
+    alsum = 0.0
 
     do imat = 1,nummat
       alm = udof(1,imat)
@@ -1586,22 +1591,35 @@ associate (nummat=>g_mmi%nummat)
       !end if
 
       ! THINC reconstruction
-      xt = dlog( dexp(beta_linc*(1.0+sig-2.0*alm)/sig) &
-        / (1.0-dexp(beta_linc*(1.0-sig-2.0*alm)/sig)) ) &
+      !xt = dlog( dexp(beta_linc*(1.0+sig-2.0*alm)/sig) &
+      !  / (1.0-dexp(beta_linc*(1.0-sig-2.0*alm)/sig)) ) &
+      !  / (2.0*beta_linc)
+      xt = dlog( (dexp(2.0*sig*beta_linc*alm) - 1.0) &
+        / (dexp(2.0*sig*beta_linc) - dexp(2.0*sig*beta_linc*alm)) ) &
         / (2.0*beta_linc)
-      al_reco = 0.5 * (1.0 + sig*dtanh( beta_linc*((x-(xc-0.5*dx))/dx-xt) ))
+      al_reco = 0.5 * (1.0 + dtanh( beta_linc*(sig*(x-(xc-0.5*dx))/dx+xt) ))
 
       ! volfrac
-      uho(imat) = al_reco
+      uho(imat) = min(1.0-1e-14, max(1e-14, al_reco))
+      alsum = alsum + uho(imat)
+    end do !imat
+
+    ! enforce unit sum
+    uho(mmax) = uho(mmax) + (1.0 - alsum)
+    alsum = 1.0
+
+    ! consistent reconstruction
+    do imat = 1, nummat
+      alm = udof(1,imat)
       ! density
       uho(g_mmi%irmin+imat-1) = udof(1,g_mmi%irmin+imat-1)/alm * uho(imat)
       ! energy
       uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
       ! pressure
-      pho(apr_idx(nummat, imat)) = uho(imat) * pdof(1,apr_idx(nummat, imat))/alm
+      pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm * uho(imat)
     end do !imat
 
-    vel  = udof(1,g_mmi%imome)/sum( udof(1,g_mmi%irmin:g_mmi%irmax) )
+    vel = udof(1,g_mmi%imome)/sum( udof(1,g_mmi%irmin:g_mmi%irmax) )
     ! bulk-momentum
     uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
     ! velocity

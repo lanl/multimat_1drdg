@@ -910,9 +910,9 @@ associate (nummat=>g_mmi%nummat)
       s_lim = min(s_lim, s_max(imat)/(dabs(s_alp(imat))+1.0d-12))
     end do !imat
 
-    if (s_lim .lt. 1.0) then
-      s_alp = s_lim * s_alp
-    end if
+    !if (s_lim .lt. 1.0) then
+    !  s_alp = s_lim * s_alp
+    !end if
 
     do imat = 1,nummat
       rhsel(1,imat,ie) = rhsel(1,imat,ie) + dx2 * s_alp(imat)
