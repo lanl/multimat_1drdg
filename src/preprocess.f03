@@ -283,10 +283,10 @@ end subroutine init_soln_kex
 !----- velocity equilibrium 2fluid model:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim)
+subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
 
 procedure(), pointer :: reconst_mm6eq
-integer :: imat, ielem
+integer :: matint_el(0:imax+1), imat, ielem
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
@@ -835,12 +835,13 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
+  call fill_matintel(ucons, matint_el)
   call weak_recons_primitives(ucons, uprim)
   call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
 
-  call gnuplot_flow_mm6eq(ucons, uprim, 0)
-  call gnuplot_flow_p1_mm6eq(ucons, uprim, 0)
+  call gnuplot_flow_mm6eq(ucons, uprim, matint_el, 0)
+  call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, 0)
 
 end subroutine init_soln_mm6eq
 
@@ -903,9 +904,9 @@ end function
 
 !----------------------------------------------------------------------------------------------
 
-subroutine gnuplot_flow_mm6eq(ucons, uprim, itstep)
+subroutine gnuplot_flow_mm6eq(ucons, uprim, matint_el, itstep)
 
-integer, intent(in) :: itstep
+integer, intent(in) :: matint_el(0:imax+1), itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -965,11 +966,7 @@ associate (nummat=>g_mmi%nummat)
      emix = emix/rhomix
      temix = temix/rhomix
 
-     if ( interface_cell(uprimi(1), 0.0) ) then
-       trcell = 1.0
-     else
-       trcell = 0.0
-     end if
+     trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
      write(23,'(E16.6)',advance='no') xcc
@@ -1000,9 +997,9 @@ end subroutine gnuplot_flow_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
+subroutine gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, itstep)
 
-integer, intent(in) :: itstep
+integer, intent(in) :: matint_el(0:imax+1), itstep
 real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -1081,11 +1078,7 @@ associate (nummat=>g_mmi%nummat)
      emix = emix/rhomix
      temix = temix/rhomix
 
-     if ( interface_cell(uconsi(1), 0.0) ) then
-       trcell = 1.0
-     else
-       trcell = 0.0
-     end if
+     trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
      write(24,'(E16.6)',advance='no') xp
@@ -1141,11 +1134,7 @@ associate (nummat=>g_mmi%nummat)
      emix = emix/rhomix
      temix = temix/rhomix
 
-     if ( interface_cell(uconsi(1), 0.0) ) then
-       trcell = 1.0
-     else
-       trcell = 0.0
-     end if
+     trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
      write(24,'(E16.6)',advance='no') xp

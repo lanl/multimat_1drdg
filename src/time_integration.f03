@@ -16,10 +16,11 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
+subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
 
 procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
+integer  :: matint_el(0:imax+1)
 real*8   :: mm(g_tdof), err_log(g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uprim(g_tdof,g_nprim,0:imax+1), &
@@ -49,7 +50,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_rdg_mm6eq(ucons, uprim, rhsel)
+        call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el)
 
         do ielem = 1,imax
 
@@ -70,6 +71,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         end do !ielem
 
         call get_bc_mm6eq(ucons)
+        call fill_matintel(ucons, matint_el)
         call weak_recons_primitives(ucons, uprim)
         call ignore_tinyphase_mm6eq(ucons, uprim)
         call reconst_mm6eq(ucons, uprim)
@@ -96,8 +98,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
      !----- File-output:
      if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
-     call gnuplot_flow_mm6eq(ucons, uprim, itstep)
-     call gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
+     call gnuplot_flow_mm6eq(ucons, uprim, matint_el, itstep)
+     call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, itstep)
      end if
 
      if ((mod(itstep,10).eq.0) .or. (itstep.eq.1)) then
@@ -108,8 +110,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
   itstep = itstep - 1
 
-  call gnuplot_flow_mm6eq(ucons, uprim, itstep)
-  call gnuplot_flow_p1_mm6eq(ucons, uprim, itstep)
+  call gnuplot_flow_mm6eq(ucons, uprim, matint_el, itstep)
+  call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, itstep)
   call gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, g_time)
 
   !----- compute L2-error-norm

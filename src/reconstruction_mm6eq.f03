@@ -783,46 +783,58 @@ end subroutine superbee_p1
 
 subroutine thincsuperbee_p1(ucons, uprim)
 
-integer :: ie, ieqn, mmax, imat
+integer :: ie, ieqn, mmax, imat, matint(g_mmi%nummat)
 real*8  :: almax, theta(g_neqns), thetap(g_nprim)
 real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
            uprim(g_tdof,g_nprim,0:imax+1)
+logical :: is_intcell
 
 associate (nummat=>g_mmi%nummat)
 
   do ie = 1,imax
 
-    !--- 1. detect interface/single-material cell
+    !--- 1. obtain limiter function for individual unknowns
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+
+    !--- 2. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
     almax = ucons(1,mmax,ie)
 
-    if (.not.intrecons_cell(almax)) then
+    is_intcell = intrecons_cell(ucons(1,1:nummat,ie), matint)
 
-      !--- 2. obtain limiter function for individual unknowns
-      ! conserved quantities
-      uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
-      uneigh(1:2,:,0)  = ucons(1:2,:,ie)
-      uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
-
-      call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
-
-      ! primitive quantities
-      uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
-      uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
-      uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
-
-      call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+    !--- 3. determine limiting appropriately
+    if (.not.is_intcell) then
 
       ! use common limiter function for all volume-fractions
       theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
 
-      do ieqn = 1,g_neqns
-        ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
-      end do !ieqn
+    else
 
-      uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+      ! no limiter for volume fractions in interface cells
+      do imat = 1,nummat
+        if (matint(imat) == 1) theta(imat) = 1.0
+      end do !imat
 
     end if
+
+    !--- 4. apply limiting
+    do ieqn = 1,g_neqns
+      ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
+    end do !ieqn
+
+    uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
   end do !ie
 
@@ -1553,54 +1565,65 @@ real*8, intent(in) :: udof(g_tdof,g_neqns), pdof(g_tdof,g_nprim), basis(g_tdof),
 
 real*8, intent(out) :: uho(g_neqns), pho(g_nprim)
 
-integer :: imat, mmax
+integer :: imat, mmax, matint(g_mmi%nummat)
 real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel, &
   alsum, almat(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
-  beta_linc = 2.3
+  !--- TVD reconstruction
+  call ho_reconstruction(g_neqns, udof, basis, uho)
+  call ho_reconstruction(g_nprim, pdof, basis, pho)
 
-  lolim = 2.0*1e-8 !(dble(nummat-1)*g_alphamin)
+  beta_linc = 2.5
+
+  lolim = 2.0*1e-8
   hilim = 1.0 - lolim
 
   almat = udof(1,g_mmi%iamin:g_mmi%iamax)
   mmax = maxloc(almat, 1)
   almax = maxval(almat)
 
-  if ((g_nlim==6) .and. intrecons_cell(almax)) then
+  !--- algebraic interface reconstruction, if required and appropriate
+  if ((g_nlim==6) .and. intrecons_cell(udof(1,g_mmi%iamin:g_mmi%iamax), matint)) then
 
     x = (0.5*dx*basis(2)) + xc
 
     alsum = 0.0
 
     do imat = 1,nummat
-      alm = udof(1,imat)
-      sig = dsign(1.0,udof(2,imat))
+      if (matint(imat) == 1) then
+      ! THINC reconstruction for materials with interface in cell
+      ! TVD reconstruction for materials without interface in cell
+        alm = udof(1,imat)
+        sig = dsign(1.0,udof(2,imat))
 
-      nx = udof(2,imat)/(dabs(udof(2,imat))+1e-12)
+        nx = udof(2,imat)/(dabs(udof(2,imat))+1e-12)
 
-      !! LINC reconstruction
-      !xt = (1.0 + 0.5*nx*beta_linc - 2.0*alm) / (nx*beta_linc)
-      !al_reco = 0.5 * (1.0 + nx * beta_linc * ((x-(xc-0.5*dx))/dx - xt))
+        !! LINC reconstruction
+        !xt = (1.0 + 0.5*nx*beta_linc - 2.0*alm) / (nx*beta_linc)
+        !al_reco = 0.5 * (1.0 + nx * beta_linc * ((x-(xc-0.5*dx))/dx - xt))
 
-      !if (al_reco > hilim) then
-      !  al_reco = hilim
-      !else if (al_reco < lolim) then
-      !  al_reco = lolim
-      !end if
+        !if (al_reco > hilim) then
+        !  al_reco = hilim
+        !else if (al_reco < lolim) then
+        !  al_reco = lolim
+        !end if
 
-      ! THINC reconstruction
-      !xt = dlog( dexp(beta_linc*(1.0+sig-2.0*alm)/sig) &
-      !  / (1.0-dexp(beta_linc*(1.0-sig-2.0*alm)/sig)) ) &
-      !  / (2.0*beta_linc)
-      xt = dlog( (dexp(2.0*sig*beta_linc*alm) - 1.0) &
-        / (dexp(2.0*sig*beta_linc) - dexp(2.0*sig*beta_linc*alm)) ) &
-        / (2.0*beta_linc)
-      al_reco = 0.5 * (1.0 + dtanh( beta_linc*(sig*(x-(xc-0.5*dx))/dx+xt) ))
+        ! THINC reconstruction
+        !xt = dlog( dexp(beta_linc*(1.0+sig-2.0*alm)/sig) &
+        !  / (1.0-dexp(beta_linc*(1.0-sig-2.0*alm)/sig)) ) &
+        !  / (2.0*beta_linc)
+        xt = dlog( (dexp(2.0*sig*beta_linc*alm) - 1.0) &
+          / (dexp(2.0*sig*beta_linc) - dexp(2.0*sig*beta_linc*alm)) ) &
+          / (2.0*beta_linc)
+        al_reco = 0.5 * (1.0 + dtanh( beta_linc*(sig*(x-(xc-0.5*dx))/dx+xt) ))
 
-      ! volfrac
-      uho(imat) = min(1.0-1e-14, max(1e-14, al_reco))
+        ! volfrac
+        uho(imat) = min(1.0-1e-14, max(1e-14, al_reco))
+
+      end if
+
       alsum = alsum + uho(imat)
     end do !imat
 
@@ -1610,13 +1633,15 @@ associate (nummat=>g_mmi%nummat)
 
     ! consistent reconstruction
     do imat = 1, nummat
-      alm = udof(1,imat)
-      ! density
-      uho(g_mmi%irmin+imat-1) = udof(1,g_mmi%irmin+imat-1)/alm * uho(imat)
-      ! energy
-      uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
-      ! pressure
-      pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm * uho(imat)
+      if (matint(imat) == 1) then
+        alm = udof(1,imat)
+        ! density
+        uho(g_mmi%irmin+imat-1) = udof(1,g_mmi%irmin+imat-1)/alm * uho(imat)
+        ! energy
+        uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
+        ! pressure
+        pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm * uho(imat)
+      end if
     end do !imat
 
     vel = udof(1,g_mmi%imome)/sum( udof(1,g_mmi%irmin:g_mmi%irmax) )
@@ -1624,10 +1649,6 @@ associate (nummat=>g_mmi%nummat)
     uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
     ! velocity
     pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
-
-  else
-    call ho_reconstruction(g_neqns, udof, basis, uho)
-    call ho_reconstruction(g_nprim, pdof, basis, pho)
 
   end if
 
@@ -1850,14 +1871,23 @@ end function troubled_cell
 !----- Detect cells for algebraic interface reconstruction
 !-------------------------------------------------------------------------------
 
-logical function intrecons_cell(almax)
+logical function intrecons_cell(almat, matint)
 
-real*8, intent(in) :: almax
+real*8, intent(in) :: almat(g_mmi%nummat)
+integer, intent(out) :: matint(g_mmi%nummat)
 
-real*8 :: lolim, hilim
+integer :: imat
+real*8 :: lolim, hilim, almax
 
-  lolim = 2.0*1e-8 !(dble(nummat-1)*g_alphamin)
+  lolim = 2.0*1e-8
   hilim = 1.0 - lolim
+
+  almax = maxval(almat)
+  matint = 0
+
+  do imat = 1, g_mmi%nummat
+    if ((almat(imat) > lolim) .and. (almat(imat) < hilim)) matint(imat) = 1
+  end do !imat
 
   if ((almax > lolim) .and. (almax < hilim)) then
     intrecons_cell = .true.
@@ -1866,6 +1896,28 @@ real*8 :: lolim, hilim
   end if
 
 end function intrecons_cell
+
+!-------------------------------------------------------------------------------
+!----- Fill array of cells indicating material interface cells
+!-------------------------------------------------------------------------------
+
+subroutine fill_matintel(ucons, matint_el)
+
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
+
+integer :: matint_el(0:imax+1), matint(g_mmi%nummat), ie
+real*8 :: almax
+
+  matint_el = 0
+
+  do ie = 0, imax+1
+    almax = maxval(ucons(1,g_mmi%iamin:g_mmi%iamax,ie))
+    ! use indicator for algebraic reconstruction to determine interface cells
+    if (intrecons_cell(ucons(1,g_mmi%iamin:g_mmi%iamax,ie), matint)) &
+      matint_el(ie) = 1
+  end do !ie
+
+end subroutine fill_matintel
 
 !-------------------------------------------------------------------------------
 

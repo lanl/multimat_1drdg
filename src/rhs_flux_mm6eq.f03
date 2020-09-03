@@ -16,10 +16,11 @@ CONTAINS
 !----- rDG RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_rdg_mm6eq(ucons, uprim, rhsel)
+subroutine rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el)
 
 real*8  :: rhsel(g_gdof,g_neqns,imax)
 
+integer, intent(in) :: matint_el(0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 

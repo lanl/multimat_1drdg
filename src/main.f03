@@ -19,6 +19,7 @@ implicit none
 
 !----- Local variable definitions:
 integer :: imat
+integer, allocatable :: matint_el(:)
 real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end, linfty
 
@@ -68,6 +69,7 @@ end if
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          uprim(g_tdof,g_nprim,0:imax+1), &
+         matint_el(0:imax+1), &
          err_log(g_neqns))
 
 allocate(coord(0:imax+2))
@@ -140,9 +142,9 @@ else if (i_system .eq. 1) then
   end select
 
   ! Initialization
-  call init_soln_mm6eq(reconst_mm6eq, ucons, uprim)
+  call init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
   dt = dt_u
-  call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim)
+  call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
 
 end if
 
@@ -160,6 +162,7 @@ write(*,*)
 !----- Cleanup:
 deallocate(ucons, &
            uprim, &
+           matint_el, &
            err_log)
 
 deallocate(g_gam, g_cp, g_pc, &
