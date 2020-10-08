@@ -1906,12 +1906,10 @@ subroutine fill_matintel(ucons, matint_el)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: matint_el(0:imax+1), matint(g_mmi%nummat), ie
-real*8 :: almax
 
   matint_el = 0
 
   do ie = 0, imax+1
-    almax = maxval(ucons(1,g_mmi%iamin:g_mmi%iamax,ie))
     ! use indicator for algebraic reconstruction to determine interface cells
     if (intrecons_cell(ucons(1,g_mmi%iamin:g_mmi%iamax,ie), matint)) &
       matint_el(ie) = 1

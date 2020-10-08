@@ -1001,5 +1001,41 @@ function al_star(lplus, lminu, al, ar)
 end function al_star
 
 !-------------------------------------------------------------------------------
+!----- Evaluate degrees of freedom for element based on whether the cell
+!----- contains a material interface, and initialize higher degrees of freedom
+!----- for cells refined from FV2 to DGP1
+!-------------------------------------------------------------------------------
+
+subroutine fill_ndofel(ucons, ndof_el)
+
+integer :: ndof_el(0:imax+1), matint(g_mmi%nummat), ie, new_ndof_el
+
+real*8 :: ucons(g_tdof,g_neqns,0:imax+1)
+
+  ! only applicable to DG(P1)/rDG(P1P2)
+  if (g_gdof > 1) then
+
+    do ie = 0, imax+1
+
+      ! use indicator for algebraic reconstruction to determine interface cells
+      if (intrecons_cell(ucons(1,g_mmi%iamin:g_mmi%iamax,ie), matint)) then
+        new_ndof_el = 1
+      else
+        new_ndof_el = g_gdof
+      end if
+
+      ! if cell is refined from FV2 to DGP1 initialize the high-order DOFs to 0
+      if (new_ndof_el > ndof_el(ie)) then
+        ucons(2,:,ie) = 0.0
+      end if
+
+      ndof_el(ie) = new_ndof_el
+    end do !ie
+
+  end if
+
+end subroutine fill_ndofel
+
+!-------------------------------------------------------------------------------
 
 END MODULE rhs_flux_mm6eq

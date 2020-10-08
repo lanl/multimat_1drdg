@@ -16,12 +16,12 @@ CONTAINS
 !----- Explicit TVD-RK3 time-stepping:
 !----------------------------------------------------------------------------------------------
 
-subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
+subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-integer  :: matint_el(0:imax+1)
-real*8   :: mm(g_tdof), err_log(g_neqns), linfty
+integer  :: matint_el(0:imax+1), ndof_el(0:imax+1)
+real*8   :: mm(g_tdof), err_log(2,g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uprim(g_tdof,g_nprim,0:imax+1), &
             k1(3),k2(3)
@@ -79,6 +79,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
      end do !istage
      !---------------------------------------------------------
 
+     call fill_ndofel(ucons, ndof_el)
+
      g_time = g_time + (dt/a_nd)
 
      !----- Diagnostics:
@@ -125,7 +127,8 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   write(*,*) "  Conservation: "
   write(*,*) "  Mass:         ", cons_err(1)
   write(*,*) "  Total-energy: ", cons_err(2)
-  write(*,*) "  log(||e||): ", err_log(1), 10.0**err_log(1)
+  write(*,*) "  log(|e|):   ", err_log(1,1), 10.0**err_log(1,1)
+  write(*,*) "  log(||e||): ", err_log(2,1), 10.0**err_log(2,1)
   write(*,*) "  |e|_inf:    ", linfty
   write(*,*) "-----------------------------------------------"
   write(*,*) "-----------------------------------------------"

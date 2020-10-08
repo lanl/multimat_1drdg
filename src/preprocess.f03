@@ -283,10 +283,10 @@ end subroutine init_soln_kex
 !----- velocity equilibrium 2fluid model:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el)
+subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 procedure(), pointer :: reconst_mm6eq
-integer :: matint_el(0:imax+1), imat, ielem
+integer :: matint_el(0:imax+1), ndof_el(0:imax+1), imat, ielem
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
@@ -839,6 +839,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   call weak_recons_primitives(ucons, uprim)
   call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
+  call fill_ndofel(ucons, ndof_el)
 
   call gnuplot_flow_mm6eq(ucons, uprim, matint_el, 0)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, 0)
@@ -1241,7 +1242,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
            u(g_neqns), ulow(g_neqns), &
            carea(3), weight(3), &
            s(g_neqns), &
-           err, linfty, err_log(g_neqns), &
+           err, linfty, err_log(2,g_neqns), &
            errlow_log(g_neqns)
 
   call rutope(1, ngauss, carea, weight)
@@ -1285,7 +1286,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
 
       do ieqn = 1,g_neqns
         err = u(ieqn) - s(ieqn)
-        err_log(ieqn) = err_log(ieqn) + wi*err*err
+        err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
+        err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
         err = ulow(ieqn) - s(ieqn)
         errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
       end do !ieqn
@@ -1295,8 +1297,9 @@ real*8  :: dx, xg, wi, xc, b3i, &
     end do !ie
 
     do ieqn = 1,g_neqns
-      err_log(ieqn) = dsqrt(err_log(ieqn))
-      err_log(ieqn) = dlog10(err_log(ieqn))
+      err_log(1,ieqn) = dlog10(err_log(1,ieqn))
+      err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
+      err_log(2,ieqn) = dlog10(err_log(2,ieqn))
       errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
       errlow_log(ieqn) = dlog10(errlow_log(ieqn))
     end do !ieqn
