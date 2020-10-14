@@ -20,7 +20,7 @@ subroutine ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 procedure(), pointer :: reconst_mm6eq
 integer  :: itstep, ielem, idof, ieqn, istage
-integer  :: matint_el(0:imax+1), ndof_el(0:imax+1)
+integer  :: matint_el(0:imax+1), ndof_el(2,0:imax+1)
 real*8   :: mm(g_tdof), err_log(2,g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uprim(g_tdof,g_nprim,0:imax+1), &
@@ -50,7 +50,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         rhsel(:,:,:) = 0.d0
 
-        call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el)
+        call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el, ndof_el)
 
         do ielem = 1,imax
 
@@ -58,7 +58,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         if (g_nsdiscr .gt. 0) mm(2) = mm(1) / 3.0
 
         do ieqn = 1,g_neqns
-        do idof = 1,g_gdof
+        do idof = 1,ndof_el(1,ielem) !g_gdof
 
           ucons(idof, ieqn,ielem) = &
               k1(istage) *   uconsn(idof,ieqn,ielem) &
@@ -72,14 +72,15 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         call get_bc_mm6eq(ucons)
         call fill_matintel(ucons, matint_el)
-        call weak_recons_primitives(ucons, uprim)
+        call weak_recons_primitives(ucons, uprim, ndof_el)
         call ignore_tinyphase_mm6eq(ucons, uprim)
-        call reconst_mm6eq(ucons, uprim)
+        call reconst_mm6eq(ucons, uprim, ndof_el)
 
      end do !istage
      !---------------------------------------------------------
 
-     call fill_ndofel(ucons, ndof_el)
+     !----- p-refinement for interface reconstruction
+     if (g_intreco > 0) call fill_ndofel(ucons, ndof_el)
 
      g_time = g_time + (dt/a_nd)
 

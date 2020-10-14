@@ -102,6 +102,8 @@ if (i_system > -1) then
     write(*,*) "   Superbee+WENO."
   else if (g_nlim .eq. 6) then
     write(*,*) "   LINC+Superbee."
+  else if (g_nlim .eq. 7) then
+    write(*,*) "   LINC+Superbee+WENO."
   else
     write(*,*) "Invalid limiter."
     stop
@@ -227,9 +229,9 @@ end subroutine nondimen_mm6eq
 !----- Solution initialization for k-exactness check:
 !----------------------------------------------------------------------------------------------
 
-subroutine init_soln_kex(ucons)
+subroutine init_soln_kex(ucons, ndof_el)
 
-integer :: ig, ie, ngauss, ieqn
+integer :: ig, ie, ngauss, ieqn, ndof_el(2,0:imax+1)
 data       ngauss/3/
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), rhs(g_gdof,g_neqns), s(g_neqns)
 real*8  :: dx, xg, wi, xc, &
@@ -276,6 +278,9 @@ real*8  :: dx, xg, wi, xc, &
 
   end if
 
+  ndof_el(1,:) = g_gdof
+  ndof_el(2,:) = 0
+
 end subroutine init_soln_kex
 
 !----------------------------------------------------------------------------------------------
@@ -286,7 +291,7 @@ end subroutine init_soln_kex
 subroutine init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 procedure(), pointer :: reconst_mm6eq
-integer :: matint_el(0:imax+1), ndof_el(0:imax+1), imat, ielem
+integer :: matint_el(0:imax+1), ndof_el(2,0:imax+1), imat, ielem
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
            ul, ur, p2l, p2r, t2l, t2r, rho1, rho2
@@ -833,13 +838,17 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
   end if
 
+  ! set ndof indicators
+  ndof_el(1,:) = g_gdof
+  ndof_el(2,:) = 0
+  if (g_intreco > 0) call fill_ndofel(ucons, ndof_el)
+
   ! boundary conditions:
   call get_bc_mm6eq(ucons)
   call fill_matintel(ucons, matint_el)
-  call weak_recons_primitives(ucons, uprim)
+  call weak_recons_primitives(ucons, uprim, ndof_el)
   call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
-  call fill_ndofel(ucons, ndof_el)
 
   call gnuplot_flow_mm6eq(ucons, uprim, matint_el, 0)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, 0)

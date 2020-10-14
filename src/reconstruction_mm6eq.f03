@@ -18,8 +18,9 @@ CONTAINS
 !----- P0 reconstruction (does nothing):
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p0(ucons, uprim)
+subroutine reconstruction_p0(ucons, uprim, ndof_el)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
 end subroutine reconstruction_p0
@@ -28,7 +29,9 @@ end subroutine reconstruction_p0
 !----- P0P1 reconstruction:
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p0p1(ucons, uprim)
+subroutine reconstruction_p0p1(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
 
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
@@ -52,10 +55,24 @@ end subroutine reconstruction_p0p1
 !----- P1 reconstruction (only limiting):
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p1(ucons, uprim)
+subroutine reconstruction_p1(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
 
 integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  !--- if interface reconstruction is active, check if any cells are FV2
+  if (g_intreco > 0) then
+    ! central difference reconstruction (least-squares for uniform meshes)
+    ! for FV2 cells
+    do ie = 1,imax
+      if (ndof_el(1,ie) == 1) then
+        ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+        uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+      end if
+    end do !ie
+  end if
 
   !--- limit second-order solution
   call limiting_p1(ucons, uprim)
@@ -66,9 +83,24 @@ end subroutine reconstruction_p1
 !----- P1P2 reconstruction:
 !-------------------------------------------------------------------------------
 
-subroutine reconstruction_p1p2(ucons, uprim)
+subroutine reconstruction_p1p2(ucons, uprim, ndof_el)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
+
+integer :: ie
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  !--- if interface reconstruction is active, check if any cells are FV2
+  if (g_intreco > 0) then
+    ! central difference reconstruction (least-squares for uniform meshes)
+    ! for FV2 cells
+    do ie = 1,imax
+      if (ndof_el(1,ie) == 1) then
+        ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+        uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+      end if
+    end do !ie
+  end if
 
   !--- reconstruct third-order conserved quantities
   call leastsquares_p1p2(g_neqns, ucons)
@@ -203,8 +235,9 @@ end subroutine leastsquares_p1p2
 !----- Reconstructing primitives from DG solution:
 !-------------------------------------------------------------------------------
 
-subroutine weak_recons_primitives(ucons, uprim)
+subroutine weak_recons_primitives(ucons, uprim, ndof_el)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 
 integer :: ig, ie, ieqn, imat, ngauss
@@ -349,7 +382,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   end select
 
-  if (g_nlim /= 6) call boundpreserve_alpha_p1(ucons)
+  if (g_intreco == 0) call boundpreserve_alpha_p1(ucons)
 
 end subroutine limiting_p1
 
@@ -374,13 +407,19 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(5)
     call superbeeweno_p2(ucons, uprim)
 
+  !case(6)
+  !  call thincsuperbee_p2(ucons, uprim)
+
+  case(7)
+    call thincsuperbeeweno_p2(ucons, uprim)
+
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
     call exit
 
   end select
 
-  call boundpreserve_alpha_p2(ucons)
+  if (g_intreco == 0) call boundpreserve_alpha_p2(ucons)
 
 end subroutine limiting_p2
 
@@ -1320,6 +1359,145 @@ end associate
 end subroutine superbeeweno_p2
 
 !-------------------------------------------------------------------------------
+!----- system-consistent superbee+weno+thinc limiter for P1P2:
+!-------------------------------------------------------------------------------
+
+subroutine thincsuperbeeweno_p2(ucons, uprim)
+
+integer :: ie, ieqn, mmax, imat, matint(g_mmi%nummat)
+real*8  :: dx2, almax, theta1(g_neqns), thetap1(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), upneigh(2,g_nprim,-1:1), &
+           ueq(2,-1:1), &
+           uxxlim(g_neqns,0:imax+1), &
+           pxxlim(g_nprim,0:imax+1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: trcell, is_intcell
+
+associate (nummat=>g_mmi%nummat)
+
+  uxxlim = 0.0
+  pxxlim = 0.0
+
+  !--- 1. P2 derivative limiting
+  do ie = 1,imax
+
+    !--- i. detect troubled-cell
+    trcell = .false.
+    if ((ie.eq.1) .or. (ie.eq.imax)) then
+      trcell = .true.
+    else
+      do ieqn = g_mmi%irmin, g_mmi%irmax
+        ueq = ucons(1:2,ieqn,ie-1:ie+1)
+        trcell = trcell &
+          .or. troubled_cell(2.0, ueq, coord(ie+1)-coord(ie))
+      end do !ieqn
+      do ieqn = 1,g_nprim
+        ueq = uprim(1:2,ieqn,ie-1:ie+1)
+        trcell = trcell &
+          .or. troubled_cell(2.0, ueq, coord(ie+1)-coord(ie))
+      end do !ieqn
+    end if
+
+    !--- ii. determine limiting appropriately
+    ! conserved quantities
+    if (trcell) then
+      dx2 = 0.5 * (coord(ie)-coord(ie-1))
+      uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+1)-coord(ie))
+      uneigh(1:2,:,0)  = ucons(2:3,:,ie) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+      uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / (dx2*dx2)
+
+      call weno_fn(g_neqns, 200.0, uneigh)
+      uxxlim(:,ie) = uneigh(2,:,0) * dx2 * dx2
+
+    else
+      uxxlim(:,ie) = ucons(3,:,ie)
+
+    end if
+
+    ! primitive quantities
+    if (trcell) then
+      dx2 = 0.5 * (coord(ie)-coord(ie-1))
+      upneigh(1:2,:,-1) = uprim(2:3,:,ie-1) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+1)-coord(ie))
+      upneigh(1:2,:,0)  = uprim(2:3,:,ie) / (dx2*dx2)
+
+      dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+      upneigh(1:2,:,1)  = uprim(2:3,:,ie+1) / (dx2*dx2)
+
+      call weno_fn(g_nprim, 200.0, upneigh)
+      pxxlim(:,ie) = upneigh(2,:,0) * dx2 * dx2
+
+    else
+      pxxlim(:,ie) = uprim(3,:,ie)
+
+    end if
+
+  end do !ie
+
+  ucons(3,:,:) = uxxlim(:,:)
+  uprim(3,:,:) = pxxlim(:,:)
+
+  !--- 2. P1 derivative limiting
+  do ie = 1,imax
+
+    !--- i. obtain limiter function for individial unknowns
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    ! primitive quantities
+    upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
+    upneigh(1:2,:,0)  = uprim(1:2,:,ie)
+    upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
+
+    call superbee_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
+
+    !--- ii. detect interface/single-material cell
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
+    is_intcell = intrecons_cell(ucons(1,1:nummat,ie), matint)
+
+    !--- iii. determine limiting appropriately
+    if (.not.is_intcell) then
+
+      ! use common limiter function for all volume-fractions
+      theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
+
+    else
+
+      ! no limiter for volume fractions in interface cells
+      do imat = 1,nummat
+        if (matint(imat) == 1) then
+          theta1(imat) = 1.0
+        end if
+      end do !imat
+
+    end if
+
+    !--- iv. apply limiting
+    do ieqn = 1,g_neqns
+      ucons(2,ieqn,ie) = theta1(ieqn) * ucons(2,ieqn,ie)
+    end do !ieqn
+
+    do ieqn = 1,g_nprim
+      uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
+    end do !ieqn
+
+  end do !ie
+
+end associate
+
+end subroutine thincsuperbeeweno_p2
+
+!-------------------------------------------------------------------------------
 !----- system-consistent overbee+superbee limiter:
 !-------------------------------------------------------------------------------
 
@@ -1585,7 +1763,7 @@ associate (nummat=>g_mmi%nummat)
   almax = maxval(almat)
 
   !--- algebraic interface reconstruction, if required and appropriate
-  if ((g_nlim==6) .and. intrecons_cell(udof(1,g_mmi%iamin:g_mmi%iamax), matint)) then
+  if ((g_intreco==1) .and. intrecons_cell(udof(1,g_mmi%iamin:g_mmi%iamax), matint)) then
 
     x = (0.5*dx*basis(2)) + xc
 

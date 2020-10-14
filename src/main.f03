@@ -19,7 +19,7 @@ implicit none
 
 !----- Local variable definitions:
 integer :: imat
-integer, allocatable :: matint_el(:), ndof_el(:)
+integer, allocatable :: matint_el(:), ndof_el(:,:)
 real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end, linfty
 
@@ -66,11 +66,18 @@ else
    write(*,*) "Error: Incorrect discretization scheme selected:", g_nsdiscr
 end if
 
+!----- Interface reconstruction option:
+if (g_nlim == 6 .or. g_nlim == 7) then
+  g_intreco = 1
+else
+  g_intreco = 0
+end if
+
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          uprim(g_tdof,g_nprim,0:imax+1), &
          matint_el(0:imax+1), &
-         ndof_el(0:imax+1), &
+         ndof_el(2,0:imax+1), &
          err_log(g_neqns))
 
 allocate(coord(0:imax+2))
@@ -111,9 +118,9 @@ if (i_system .eq. -1) then
   end select
 
   ! Initialization
-  call init_soln_kex(ucons)
+  call init_soln_kex(ucons, ndof_el)
   dt = dt_u
-  call reconst_mm6eq(ucons, uprim)
+  call reconst_mm6eq(ucons, uprim, ndof_el)
   call errorcalc_p1(ucons, 0.0, err_log, linfty)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "      cubic: log(||e||): ", err_log(2), 10.0**err_log(2)

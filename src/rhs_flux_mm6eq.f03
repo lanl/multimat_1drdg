@@ -16,18 +16,18 @@ CONTAINS
 !----- rDG RHS:
 !-------------------------------------------------------------------------------
 
-subroutine rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el)
+subroutine rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el, ndof_el)
 
 real*8  :: rhsel(g_gdof,g_neqns,imax)
 
-integer, intent(in) :: matint_el(0:imax+1)
+integer, intent(in) :: matint_el(0:imax+1), ndof_el(2,0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
-  call flux_rdg_mm6eq(ucons, uprim, rhsel)
+  call flux_rdg_mm6eq(ucons, uprim, ndof_el, rhsel)
 
   if (g_nprelx .eq. 1) then
-    call relaxpressure_rdg(ucons, uprim, rhsel)
+    call relaxpressure_rdg(ucons, uprim, ndof_el, rhsel)
   end if
 
 end subroutine rhs_rdg_mm6eq
@@ -36,8 +36,9 @@ end subroutine rhs_rdg_mm6eq
 !----- rDG Advective-flux contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine flux_rdg_mm6eq(ucons, uprim, rhsel)
+subroutine flux_rdg_mm6eq(ucons, uprim, ndof_el, rhsel)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -49,9 +50,9 @@ real*8  :: riemanngrad(g_mmi%nummat+1,imax), &
   vriemann = 0.0
 
   !--- surface integration
-  call surfaceint_dg(ucons, uprim, riemanngrad, vriemann, rhsel)
+  call surfaceint_dg(ucons, uprim, ndof_el, riemanngrad, vriemann, rhsel)
   !--- volume integration
-  call volumeint_dg(ucons, uprim, riemanngrad, vriemann, rhsel)
+  call volumeint_dg(ucons, uprim, ndof_el, riemanngrad, vriemann, rhsel)
 
 end subroutine flux_rdg_mm6eq
 
@@ -59,7 +60,7 @@ end subroutine flux_rdg_mm6eq
 !----- DG surface contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine surfaceint_dg(ucons, uprim, rgrad, vriem, rhsel)
+subroutine surfaceint_dg(ucons, uprim, ndof_el, rgrad, vriem, rhsel)
 
 integer :: ifc, iel, ier, ieqn, imat
 real*8  :: ul(g_neqns), ur(g_neqns), &
@@ -70,6 +71,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
 
 real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -145,8 +147,9 @@ associate (nummat=>g_mmi%nummat)
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
-          rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
-          if (g_nsdiscr .ge. 11) rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
+      rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,iel) >= 2)) &
+        rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -158,8 +161,9 @@ associate (nummat=>g_mmi%nummat)
 
   if (ier .lt. (imax+1)) then
     do ieqn = 1,g_neqns
-          rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
-          if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
+      rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ier) >= 2)) &
+        rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -179,7 +183,7 @@ end subroutine surfaceint_dg
 !----- DG volume contribution to RHS:
 !-------------------------------------------------------------------------------
 
-subroutine volumeint_dg(ucons, uprim, rgrad, vriem, rhsel)
+subroutine volumeint_dg(ucons, uprim, ndof_el, rgrad, vriem, rhsel)
 
 integer :: ig, ie, ieqn, ngauss, imat
 
@@ -192,6 +196,7 @@ real*8  :: dx2, b3, p, hmat, viriem, &
            nflux(g_gdof,g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
                       ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
@@ -257,12 +262,14 @@ associate (nummat=>g_mmi%nummat)
     end do !imat
 
     do ieqn = 1,g_neqns
-      if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
+        rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
     end do !ieqn
 
     do ieqn = 1,g_neqns
       rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
-      if (g_nsdiscr .ge. 11) rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
+        rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
     end do !ieqn
 
   end do !ig
@@ -845,8 +852,9 @@ end subroutine get_bc_mm6eq
 
 !-------------------------------------------------------------------------------
 
-subroutine relaxpressure_rdg(ucons, uprim, rhsel)
+subroutine relaxpressure_rdg(ucons, uprim, ndof_el, rhsel)
 
+integer, intent(in) :: ndof_el(2,0:imax+1)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                       uprim(g_tdof,g_nprim,0:imax+1)
 
@@ -919,7 +927,7 @@ associate (nummat=>g_mmi%nummat)
       rhsel(1,imat,ie) = rhsel(1,imat,ie) + dx2 * s_alp(imat)
       rhsel(1,g_mmi%iemin+imat-1,ie) = rhsel(1,g_mmi%iemin+imat-1,ie) - dx2 * p*s_alp(imat)
 
-      if (g_nsdiscr .ge. 11) then
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
         rhsel(2,imat,ie) = rhsel(2,imat,ie) + dx2 * carea(ig) * s_alp(imat)
         rhsel(2,g_mmi%iemin+imat-1,ie) = rhsel(2,g_mmi%iemin+imat-1,ie) - dx2 * carea(ig) * p*s_alp(imat)
       end if
@@ -1008,12 +1016,12 @@ end function al_star
 
 subroutine fill_ndofel(ucons, ndof_el)
 
-integer :: ndof_el(0:imax+1), matint(g_mmi%nummat), ie, new_ndof_el
+integer :: ndof_el(2,0:imax+1), matint(g_mmi%nummat), ie, new_ndof_el
 
 real*8 :: ucons(g_tdof,g_neqns,0:imax+1)
 
   ! only applicable to DG(P1)/rDG(P1P2)
-  if (g_gdof > 1) then
+  if (g_nsdiscr > 1) then
 
     do ie = 0, imax+1
 
@@ -1024,12 +1032,18 @@ real*8 :: ucons(g_tdof,g_neqns,0:imax+1)
         new_ndof_el = g_gdof
       end if
 
-      ! if cell is refined from FV2 to DGP1 initialize the high-order DOFs to 0
-      if (new_ndof_el > ndof_el(ie)) then
+      ! if cell is refined from FV2 to DGP1 initialize the high-order DOFs
+      if (new_ndof_el > ndof_el(1,ie)) then
+        ndof_el(2,ie) = 1
         ucons(2,:,ie) = 0.0
+      else if (new_ndof_el == ndof_el(1,ie)) then
+        ndof_el(2,ie) = 0
+      else if (new_ndof_el < ndof_el(1,ie)) then
+        ndof_el(2,ie) = -1
+        !ucons(2,:,ie) = 0.0
       end if
 
-      ndof_el(ie) = new_ndof_el
+      ndof_el(1,ie) = new_ndof_el
     end do !ie
 
   end if
