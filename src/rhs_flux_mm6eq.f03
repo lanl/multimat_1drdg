@@ -993,6 +993,39 @@ real*8  :: xc, al1, rho1, rho2, contact(g_neqns)
 end function
 
 !-------------------------------------------------------------------------------
+!----- 2-material Gaussian function in volume-fraction
+!-------------------------------------------------------------------------------
+
+function shockentropywave(x, t)
+
+real*8, intent(in) :: x, t
+real*8 :: rho1, rho2, shockentropywave(g_neqns)
+
+  if (x < -4.0) then
+     rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     shockentropywave(1) = alpha_fs(1)
+     shockentropywave(2) = alpha_fs(2)
+     shockentropywave(3) = shockentropywave(1) * rho1
+     shockentropywave(4) = shockentropywave(2) * rho2
+     shockentropywave(5) = (shockentropywave(3)+shockentropywave(4)) * u_fs
+     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
+     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+  else
+     rho1 = (1.0+0.2*dsin(5.0*x))/rho_nd
+     rho2 = (1.0+0.2*dsin(5.0*x))/rho_nd
+     shockentropywave(1) = alpha_fs(1)
+     shockentropywave(2) = alpha_fs(2)
+     shockentropywave(3) = shockentropywave(1) * rho1
+     shockentropywave(4) = shockentropywave(2) * rho2
+     shockentropywave(5) = 0.0
+     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), 1.0/p_nd, rho1, 0.0)
+     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), 1.0/p_nd, rho2, 0.0)
+  end if
+
+end function
+
+!-------------------------------------------------------------------------------
 
 function al_star(lplus, lminu, al, ar)
   real*8, intent(in) :: al, ar, lplus, lminu

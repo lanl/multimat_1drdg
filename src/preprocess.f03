@@ -21,10 +21,6 @@ subroutine screen_output()
 write(*,*) " "
 if (i_system .eq. -1) then
   write(*,*) " k-exactness check for least-squares reconstruction "
-else if (i_system .eq. 0) then
-  write(*,*) " Isothermal single-pressure two-fluid system: "
-  write(*,*) " Pressure equilibrium " 
-  write(*,*) " Velocity non-equilibrium "
 else if (i_system .eq. 1) then
   write(*,*) " Multi-material system: "
   write(*,*) " Pressure non-equilibrium " 
@@ -41,6 +37,8 @@ else if (i_system .eq. 1) then
   write(*,*) "    iemax: ", g_mmi%iemax
   write(*,*) " "
   write(*,*) "  # equations:", g_neqns
+else
+  write(*,*) " System not configured; i_system: ", i_system
 end if
 
 if (g_nprelx .eq. 1) then
@@ -168,15 +166,16 @@ subroutine gen_mesh()
 integer :: ipoin
 real*8  :: ldomn, dx
 
-        if ((iprob.eq.2) .and. (i_system.eq.0)) then
-                ldomn = 12.0
+        if ((iprob==8) .and. (i_system==1)) then
+          ldomn = 10.0
+          coord(1) = -5.0
         else
-                ldomn = 1.0
+          ldomn = 1.0
+          coord(1)  = 0.d0
         end if
 
         dx = ldomn/imax
-        coord(0)  = -dx
-        coord(1)  = 0.d0
+        coord(0)  = coord(1)-dx
 
         do ipoin = 2,imax+1
            coord(ipoin) = coord(ipoin-1) + dx
@@ -833,6 +832,37 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
+  !--- Shu-Osher shock-entropy wave interaction
+  !----------
+  else if (iprob .eq. 8) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(2) = g_alphamin
+     alpha_fs(1) = 1.0-alpha_fs(2)
+     u_fs = 2.629369
+     pr_fs = 10.3333
+     t_fs = 9.33450733d-3
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = shockentropywave(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -880,7 +910,11 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
       wi = 0.5 * weight(ig) * vol
       x = carea(ig) * 0.5 * vol + xc
-      s = gaussian(x,0.0)
+      if (iprob == -1) then
+        s = gaussian(x,0.0)
+      else if (iprob == 8) then
+        s = shockentropywave(x, 0.0)
+      end if
 
       do ieqn = 1,g_neqns
         rhs(1,ieqn) = rhs(1,ieqn) + wi * s(ieqn)
