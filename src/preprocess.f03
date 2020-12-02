@@ -89,19 +89,19 @@ if (i_system > -1) then
   if (g_nlim .eq. 0) then
     write(*,*) "   None."
   else if (g_nlim .eq. 1) then
-    write(*,*) "   Min: Superbee."
+    write(*,*) "   Min: Vertex-based."
   else if (g_nlim .eq. 2) then
-    write(*,*) "   Superbee."
+    write(*,*) "   Vertex-based."
   else if (g_nlim .eq. 3) then
-    write(*,*) "   Overbee+Superbee."
+    write(*,*) "   Overbee+Vertex-based."
   else if (g_nlim .eq. 4) then
     write(*,*) "   WENO."
   else if (g_nlim .eq. 5) then
-    write(*,*) "   Superbee+WENO."
+    write(*,*) "   Vertex-based+WENO."
   else if (g_nlim .eq. 6) then
-    write(*,*) "   LINC+Superbee."
+    write(*,*) "   LINC+Vertex-based."
   else if (g_nlim .eq. 7) then
-    write(*,*) "   LINC+Superbee+WENO."
+    write(*,*) "   LINC+Vertex-based+WENO."
   else
     write(*,*) "Invalid limiter."
     stop
@@ -838,13 +838,20 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      g_alphamin = 1.d-12
 
-     alpha_fs(2) = g_alphamin
-     alpha_fs(1) = 1.0-alpha_fs(2)
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 2) then
+       write(*,*) " Error: shock-entropy wave interaction not configured for &
+         more than two materials"
+       stop
+     end if
      u_fs = 2.629369
      pr_fs = 10.3333
      t_fs = 9.33450733d-3
-     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
-     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
 
      call nondimen_mm6eq()
 

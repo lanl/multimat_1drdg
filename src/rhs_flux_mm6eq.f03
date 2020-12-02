@@ -999,29 +999,68 @@ end function
 function shockentropywave(x, t)
 
 real*8, intent(in) :: x, t
-real*8 :: rho1, rho2, shockentropywave(g_neqns)
 
+integer :: i
+real*8 :: p_loc, u_loc, al_loc(g_mmi%nummat), rhomat, shockentropywave(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  al_loc(:) = g_alphamin
   if (x < -4.0) then
-     rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
-     rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
-     shockentropywave(1) = alpha_fs(1)
-     shockentropywave(2) = alpha_fs(2)
-     shockentropywave(3) = shockentropywave(1) * rho1
-     shockentropywave(4) = shockentropywave(2) * rho2
-     shockentropywave(5) = (shockentropywave(3)+shockentropywave(4)) * u_fs
-     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
-     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+    p_loc = pr_fs
+    u_loc = u_fs
+    al_loc(1) = alpha_fs(1)
   else
-     rho1 = (1.0+0.2*dsin(5.0*x))/rho_nd
-     rho2 = (1.0+0.2*dsin(5.0*x))/rho_nd
-     shockentropywave(1) = alpha_fs(1)
-     shockentropywave(2) = alpha_fs(2)
-     shockentropywave(3) = shockentropywave(1) * rho1
-     shockentropywave(4) = shockentropywave(2) * rho2
-     shockentropywave(5) = 0.0
-     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), 1.0/p_nd, rho1, 0.0)
-     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), 1.0/p_nd, rho2, 0.0)
+    p_loc = 1.0 / p_nd
+    u_loc = 0.0
+    if (nummat == 1) then
+      al_loc(1) = alpha_fs(1)
+    else
+      al_loc(2) = alpha_fs(1)
+    end if
   end if
+
+  ! material states
+  do i = 1,nummat
+    if (x < -4.0) then
+      rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), p_loc, t_fs)
+    else
+      rhomat = (1.0+0.2*dsin(5.0*x))/rho_nd
+    end if
+
+    shockentropywave(i) = al_loc(i)
+    shockentropywave(g_mmi%irmin+i-1) = shockentropywave(i) * rhomat
+    shockentropywave(g_mmi%iemin+i-1) = shockentropywave(i) * &
+      eos3_rhoe(g_gam(i), g_pc(i), p_loc, rhomat, u_loc)
+  end do !i
+
+  ! bulk momentum
+  shockentropywave(g_mmi%imome) = &
+    sum(shockentropywave(g_mmi%irmin:g_mmi%irmax)) * u_loc
+
+end associate
+
+!  if (x < -4.0) then
+!     rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+!     rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+!     shockentropywave(1) = alpha_fs(1)
+!     shockentropywave(2) = alpha_fs(2)
+!     shockentropywave(3) = shockentropywave(1) * rho1
+!     shockentropywave(4) = shockentropywave(2) * rho2
+!     shockentropywave(5) = (shockentropywave(3)+shockentropywave(4)) * u_fs
+!     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
+!     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+!  else
+!     rho1 = (1.0+0.2*dsin(5.0*x))/rho_nd
+!     rho2 = (1.0+0.2*dsin(5.0*x))/rho_nd
+!     shockentropywave(1) = alpha_fs(2)
+!     shockentropywave(2) = alpha_fs(1)
+!     shockentropywave(3) = shockentropywave(1) * rho1
+!     shockentropywave(4) = shockentropywave(2) * rho2
+!     shockentropywave(5) = 0.0
+!     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), 1.0/p_nd, rho1, 0.0)
+!     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), 1.0/p_nd, rho2, 0.0)
+!  end if
 
 end function
 

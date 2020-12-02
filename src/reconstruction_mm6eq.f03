@@ -359,22 +359,19 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(0)
 
   case(1)
-    call min_superbee(ucons, uprim)
+    call min_vertexbased(ucons, uprim)
 
   case(2)
-    call superbee_p1(ucons, uprim)
+    call vertexbased_p1(ucons, uprim)
 
   case(3)
-    call oversuperbee(ucons, uprim)
+    call oververtexbased(ucons, uprim)
 
   case(4)
     call weno_p1(ucons, uprim)
 
-  case(5)
-    call superbee_p1(ucons, uprim)
-
   case(6)
-    call thincsuperbee_p1(ucons, uprim)
+    call thincvertexbased_p1(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
@@ -399,19 +396,19 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(0)
 
   case(2)
-    call superbee_p2(ucons, uprim)
+    call vertexbased_p2(ucons, uprim)
 
   case(4)
     call weno_p2(ucons, uprim)
 
   case(5)
-    call superbeeweno_p2(ucons, uprim)
+    call vertexbasedweno_p2(ucons, uprim)
 
-  !case(6)
-  !  call thincsuperbee_p2(ucons, uprim)
+  case(6)
+    call thincvertexbased_p2(ucons, uprim)
 
   case(7)
-    call thincsuperbeeweno_p2(ucons, uprim)
+    call thincvertexbasedweno_p2(ucons, uprim)
 
   case default
     write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
@@ -634,10 +631,10 @@ end associate
 end subroutine boundpreserve_alpha_p2
 
 !-------------------------------------------------------------------------------
-!----- superbee limiter:
+!----- vertexbased limiter:
 !-------------------------------------------------------------------------------
 
-subroutine min_superbee(ucons, uprim)
+subroutine min_vertexbased(ucons, uprim)
 
 integer :: ie, mmax
 real*8  :: theta(g_neqns), thetap(g_nprim)
@@ -654,7 +651,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(mmax)
@@ -667,7 +664,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     ! 2. limit 2nd dofs
     ucons(2,:,ie) = theta(:) * ucons(2,:,ie)
@@ -685,13 +682,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine min_superbee
+end subroutine min_vertexbased
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee limiter for P1 dofs:
+!----- system-consistent vertexbased limiter for P1 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine superbee_p1(ucons, uprim)
+subroutine vertexbased_p1(ucons, uprim)
 
 integer :: ie, ieqn, mmax, imat
 real*8  :: almax, dalmax, theta(g_neqns), thetap(g_nprim), thetac
@@ -713,14 +710,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     ! primitive quantities
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
@@ -789,7 +786,7 @@ associate (nummat=>g_mmi%nummat)
       !end do !ieqn
 
       !if (any(tr_cell)) then
-      !  call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+      !  call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
       !  theta(g_mmi%irmin:g_mmi%irmax) = minval(theta(g_mmi%irmin:g_mmi%irmax))
       !  theta(g_mmi%iemin:g_mmi%iemax) = minval(theta(g_mmi%iemin:g_mmi%iemax))
 
@@ -814,13 +811,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine superbee_p1
+end subroutine vertexbased_p1
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee limiter for P1 dofs:
+!----- system-consistent vertexbased limiter for P1 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine thincsuperbee_p1(ucons, uprim)
+subroutine thincvertexbased_p1(ucons, uprim)
 
 integer :: ie, ieqn, mmax, imat, matint(g_mmi%nummat)
 real*8  :: almax, theta(g_neqns), thetap(g_nprim)
@@ -838,14 +835,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     ! primitive quantities
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     !--- 2. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -879,7 +876,7 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine thincsuperbee_p1
+end subroutine thincvertexbased_p1
 
 !-------------------------------------------------------------------------------
 !----- system-consistent weno limiter for P1:
@@ -1007,10 +1004,10 @@ end associate
 end subroutine weno_p1
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee limiter for P2 dofs:
+!----- system-consistent vertexbased limiter for P2 dofs:
 !-------------------------------------------------------------------------------
 
-subroutine superbee_p2(ucons, uprim)
+subroutine vertexbased_p2(ucons, uprim)
 
 integer :: ie, ieqn, mmax, imat
 real*8  :: dx2, almax, dalmax, theta2(g_neqns), theta1(g_neqns), &
@@ -1047,7 +1044,7 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
 
     ! primitive quantities
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
@@ -1059,7 +1056,7 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
 
     ! ii. P1 derivative limiting
 
@@ -1068,14 +1065,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
     ! primitive quantities
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
 
     ! use common limiter function for all volume-fractions
     theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
@@ -1142,7 +1139,109 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine superbee_p2
+end subroutine vertexbased_p2
+
+!-------------------------------------------------------------------------------
+!----- system-consistent THINC+vertexbased limiter for P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine thincvertexbased_p2(ucons, uprim)
+
+integer :: ie, ieqn, mmax, imat, matint(g_mmi%nummat)
+real*8  :: dx2, almax, theta2(g_neqns), theta1(g_neqns), &
+           thetap2(g_nprim), thetap1(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+logical :: is_intcell
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- i. obtain limiter function for individual unknowns
+
+    ! 1. P2 derivative limiting
+    ! conserved quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
+
+    ! primitive quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap2)
+
+    ! 2. P1 derivative limiting
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap1)
+
+    !--- ii. detect interface/single-material cell
+    mmax = maxloc(ucons(1,1:nummat,ie), 1)
+    almax = ucons(1,mmax,ie)
+    is_intcell = intrecons_cell(ucons(1,1:nummat,ie), matint)
+
+    !--- iii. determine limiting appropriately
+    if (.not.is_intcell) then
+
+      ! use common limiter function for all volume-fractions
+      theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
+      theta2(1:nummat) = minval(theta2(1:nummat))
+
+    else
+
+      ! no limiter for volume fractions in interface cells
+      do imat = 1,nummat
+        if (matint(imat) == 1) then
+          theta1(imat) = 1.0
+          theta2(imat) = 1.0
+        end if
+      end do !imat
+
+    end if
+
+    !--- iv. apply limiting
+    do ieqn = 1,g_neqns
+      ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
+      ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
+    end do !ieqn
+
+    do ieqn = 1,g_nprim
+      uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
+      uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
+    end do !ieqn
+
+  end do !ie
+
+end associate
+
+end subroutine thincvertexbased_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent weno limiter for P2:
@@ -1229,10 +1328,10 @@ end associate
 end subroutine weno_p2
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee+weno limiter for P1P2:
+!----- system-consistent vertexbased+weno limiter for P1P2:
 !-------------------------------------------------------------------------------
 
-subroutine superbeeweno_p2(ucons, uprim)
+subroutine vertexbasedweno_p2(ucons, uprim)
 
 integer :: ie, ieqn, mmax, imat
 real*8  :: dx2, almax, dalmax, theta1(g_neqns), thetap1(g_nprim)
@@ -1317,14 +1416,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
     ! primitive quantities
     upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
     upneigh(1:2,:,0)  = uprim(1:2,:,ie)
     upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
 
     do ieqn = 1,g_nprim
       uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
@@ -1356,13 +1455,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine superbeeweno_p2
+end subroutine vertexbasedweno_p2
 
 !-------------------------------------------------------------------------------
-!----- system-consistent superbee+weno+thinc limiter for P1P2:
+!----- system-consistent vertexbased+weno+thinc limiter for P1P2:
 !-------------------------------------------------------------------------------
 
-subroutine thincsuperbeeweno_p2(ucons, uprim)
+subroutine thincvertexbasedweno_p2(ucons, uprim)
 
 integer :: ie, ieqn, mmax, imat, matint(g_mmi%nummat)
 real*8  :: dx2, almax, theta1(g_neqns), thetap1(g_nprim)
@@ -1451,14 +1550,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
 
     ! primitive quantities
     upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
     upneigh(1:2,:,0)  = uprim(1:2,:,ie)
     upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, upneigh, thetap1)
 
     !--- ii. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -1495,13 +1594,13 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine thincsuperbeeweno_p2
+end subroutine thincvertexbasedweno_p2
 
 !-------------------------------------------------------------------------------
-!----- system-consistent overbee+superbee limiter:
+!----- system-consistent overbee+vertexbased limiter:
 !-------------------------------------------------------------------------------
 
-subroutine oversuperbee(ucons, uprim)
+subroutine oververtexbased(ucons, uprim)
 
 integer :: ie, ieqn, mmax
 real*8  :: theta(g_neqns), thetap(g_nprim), theta_al, thrho(2)
@@ -1524,7 +1623,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     ! compressive limiting for volume fraction
     call overbee_fn(uneigh(:,mmax,:), theta_al)
@@ -1534,7 +1633,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call superbee_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, 2.0, 1.0, uneigh(:,1:g_nprim,:), thetap)
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta_al !theta(mmax)
@@ -1560,21 +1659,21 @@ associate (nummat=>g_mmi%nummat)
 
 end associate
 
-end subroutine oversuperbee
+end subroutine oververtexbased
 
 !-------------------------------------------------------------------------------
-!----- Superbee limiter for n equations individually
-!----- this sub actually calculates the limiter function according to superbee.
+!----- Vertex-based limiter for n equations individually
+!----- this sub actually calculates the limiter function according to vertexbased.
 !----- the input to this function can be modified to limit P1 or P2 dofs, refer
-!----- to superbee_p1 and superbee_p2 respectively
+!----- to vertexbased_p1 and vertexbased_p2 respectively
 !-------------------------------------------------------------------------------
 
-subroutine superbee_fn(neq,beta_lim,ascale,ucons,theta)
+subroutine vertexbased_fn(neq,beta_lim,ascale,ucons,theta)
 
 integer, intent(in) :: neq
 real*8,  intent(in) :: beta_lim, ascale, ucons(2,neq,-1:1)
 
-integer :: ieqn, ifc
+integer :: ieqn, ifc, ne
 real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
 
   theta(:) = 1.0
@@ -1592,6 +1691,15 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
     umin = min( min(ucons(1,ieqn,-1), ui), ucons(1,ieqn,1) )
 
     do ifc = 1,2
+      ! find min and max in neighborhood
+      if (ifc == 1) then
+        ne = -1
+      else if (ifc == 2) then
+        ne = 1
+      end if
+      umax = max(ui, ucons(1,ieqn,ne))
+      umin = min(ui, ucons(1,ieqn,ne))
+
       ! unlimited 2nd order solution
       ug = ucons(1,ieqn,0) + ((-1.0)**ifc) * ucons(2,ieqn,0)
 
@@ -1611,13 +1719,14 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
       ! limiter function
       phi = phi/ascale
       thetal = max( 0.0, max( min(beta_lim*phi, 1.0), min(phi, beta_lim) ) )
-      theta(ieqn) = min(thetal, theta(ieqn))
 
     end do !ifc
 
+    theta(ieqn) = min(thetal, theta(ieqn))
+
   end do !ieqn
 
-end subroutine superbee_fn
+end subroutine vertexbased_fn
 
 !-------------------------------------------------------------------------------
 !----- WENO limiter function
