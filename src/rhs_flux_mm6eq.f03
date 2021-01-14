@@ -1010,6 +1010,10 @@ associate (nummat=>g_mmi%nummat)
     p_loc = pr_fs
     u_loc = u_fs
     al_loc(1) = alpha_fs(1)
+  else if (x >= -4.0 .and. x < -3.0) then
+    p_loc = 1.0 / p_nd
+    u_loc = 0.0
+    al_loc(1) = alpha_fs(1)
   else
     p_loc = 1.0 / p_nd
     u_loc = 0.0
@@ -1024,6 +1028,8 @@ associate (nummat=>g_mmi%nummat)
   do i = 1,nummat
     if (x < -4.0) then
       rhomat = eos3_density(g_gam(i), g_cp(i), g_pc(i), p_loc, t_fs)
+    else if (x >= -4.0 .and. x < -3.0) then
+      rhomat = 0.8/rho_nd
     else
       rhomat = (1.0+0.2*dsin(5.0*x))/rho_nd
     end if
