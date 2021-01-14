@@ -1,5 +1,11 @@
 # multimat_1drdg
 A one-dimensional discontinuous Galerkin solver for multi-material flows.
+For details of the algorithm, see:
+[1] A. K. Pandare, J. Waltz, and J. Bakosi. Multi-material hydrodynamics with algebraic sharp
+interface capturing. Computers & Fluids, 215:104804, 2021.
+[2] A. K. Pandare, J. Waltz, and J. Bakosi. A reconstructed discontinuous Galerkin method for
+multi-material hydrodynamics with sharp-interfaces. International Journal for Numerical Methods in
+Fluids, 92:874–898, 2020.
 
 OSS License Copyright Notice:
 © (or copyright) 2020. Triad National Security, LLC. All rights reserved.
