@@ -138,6 +138,117 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 end subroutine ExplicitRK3_mm6eq
 
 !----------------------------------------------------------------------------------------------
+!----- Explicit TVD-RK3 time-stepping - hyperelastic solid dynamics:
+!----------------------------------------------------------------------------------------------
+
+subroutine explicitRK3_soldyn(reconst_soldyn, ucons, uprim, matint_el, ndof_el)
+
+procedure(), pointer :: reconst_soldyn
+integer  :: itstep, ielem, idof, ieqn, istage
+integer  :: matint_el(0:imax+1), ndof_el(2,0:imax+1)
+real*8   :: mm(g_tdof)
+real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
+            uprim(g_tdof,g_nprim,0:imax+1), &
+            k1(3),k2(3)
+real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
+
+  g_time = 0.d0
+
+  k1(1) = 0.0     !0.0
+  k1(2) = 3.0/4.0 !0.5
+  k1(3) = 1.0/3.0
+
+  k2(1) = 1.0     !1.0
+  k2(2) = 1.0/4.0 !0.5
+  k2(3) = 2.0/3.0
+
+  !call meconservation_soldyn(0,ucons,cons_err)
+
+  do itstep = 1,ntstep
+
+     !--- solution update
+     uconsn(:,:,:) = ucons(:,:,:)
+
+     !---------------------------------------------------------
+     !--- RK stages
+     do istage = 1,3 !2
+
+        rhsel(:,:,:) = 0.d0
+
+        call rhs_rdg_soldyn(ucons, uprim, rhsel, matint_el, ndof_el)
+
+        do ielem = 1,imax
+
+        mm(1) = coord(ielem+1)-coord(ielem)
+        if (g_nsdiscr .gt. 0) mm(2) = mm(1) / 3.0
+
+        do ieqn = 1,g_neqns
+        do idof = 1,ndof_el(1,ielem) !g_gdof
+
+          ucons(idof, ieqn,ielem) = &
+              k1(istage) *   uconsn(idof,ieqn,ielem) &
+            + k2(istage) * ( ucons(idof,ieqn,ielem) &
+                           + dt * rhsel(idof,ieqn,ielem) &
+                             / mm(idof) )
+
+        end do !idof
+        end do !ieqn
+        end do !ielem
+
+        call get_bc_soldyn(ucons)
+        call reconst_soldyn(ucons, uprim, ndof_el)
+
+     end do !istage
+     !---------------------------------------------------------
+
+     g_time = g_time + (dt/a_nd)
+
+     !----- Diagnostics:
+     !call meconservation_soldyn(itstep,ucons,cons_err)
+
+     !----- Screen-output:
+     if ((itstep.eq.1) .or. (mod(itstep,n_screen).eq.0)) then
+     write(*,*) "--------------------------------------------"
+     write(*,*) "  itstep: ", itstep, "   Time: ", g_time
+     write(*,*) "  Time step: ", dt/a_nd
+     !write(*,*) "  Conservation: "
+     !write(*,*) "  Mass:         ", cons_err(1)
+     !write(*,*) "  Total-energy: ", cons_err(2)
+     write(*,*) "--------------------------------------------"
+     write(*,*) " "
+     end if
+
+     !----- File-output:
+     if ((mod(itstep,n_opfile).eq.0).or.(itstep.eq.1)) then
+     call gnuplot_soldyn(ucons, uprim, matint_el, itstep)
+     !call gnuplot_flow_p1_soldyn(ucons, uprim, matint_el, itstep)
+     end if
+
+  end do !itstep
+
+  itstep = itstep - 1
+
+  call gnuplot_soldyn(ucons, uprim, matint_el, itstep)
+  !call gnuplot_flow_p1_soldyn(ucons, uprim, matint_el, itstep)
+
+  !----- Screen-output:
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-------- FINAL OUTPUT: ----- TVD-RK3: ---------"
+  write(*,*) "  itstep: ", itstep, "   Time: ", g_time
+  write(*,*) "  Time step: ", dt/a_nd
+  !write(*,*) "  Conservation: "
+  !write(*,*) "  Mass:         ", cons_err(1)
+  !write(*,*) "  Total-energy: ", cons_err(2)
+  !write(*,*) "  log(|e|):   ", err_log(1,1), 10.0**err_log(1,1)
+  !write(*,*) "  log(||e||): ", err_log(2,1), 10.0**err_log(2,1)
+  !write(*,*) "  |e|_inf:    ", linfty
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-----------------------------------------------"
+  write(*,*) " "
+
+end subroutine explicitRK3_soldyn
+
+!----------------------------------------------------------------------------------------------
 !----- Determine what materials are present in cell
 !----------------------------------------------------------------------------------------------
 

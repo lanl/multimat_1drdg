@@ -48,6 +48,10 @@ else if (i_system .eq. 1) then
    g_neqns = g_mmi%iemax
    ! primitive variable vector. See glob_var.f03 for indexing
    g_nprim = 2*g_mmi%nummat+1
+else if (i_system .eq. 2) then
+   ! hyperelastic solid dynamics
+   g_neqns = 8
+   g_nprim = 0
 end if
 
 if (g_nsdiscr .eq. 0) then
@@ -153,6 +157,30 @@ else if (i_system .eq. 1) then
   call init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
   dt = dt_u
   call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
+
+else if (i_system .eq. 2) then
+
+  select case(g_nsdiscr)
+
+  case(0)
+    reconst_mm6eq => reconstruction_p0
+  !case(1)
+  !  reconst_mm6eq => reconstruction_p0p1
+  !case(11)
+  !  reconst_mm6eq => reconstruction_p1
+  !case(12)
+  !  reconst_mm6eq => reconstruction_p1p2
+  case default
+    write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
+               g_nsdiscr
+    call exit
+
+  end select
+
+  ! Initialization
+  call init_soln_soldyn(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
+  dt = dt_u
+  call ExplicitRK3_soldyn(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 end if
 

@@ -7,6 +7,7 @@
 MODULE preprocess
 
 USE rhs_flux_mm6eq
+USE rhs_soldyn
 
 implicit none
 
@@ -37,6 +38,8 @@ else if (i_system .eq. 1) then
   write(*,*) "    iemax: ", g_mmi%iemax
   write(*,*) " "
   write(*,*) "  # equations:", g_neqns
+else if (i_system .eq. 1) then
+  write(*,*) " Hyperelastic solid dynamics system"
 else
   write(*,*) " System not configured; i_system: ", i_system
 end if
@@ -223,6 +226,41 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine nondimen_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Reference quantities and nondimensionalization for solid-dynamics:
+!----------------------------------------------------------------------------------------------
+
+subroutine nondimen_soldyn()
+
+integer :: imat
+
+  a_nd = dsqrt(pr_fs/rhomat_fs(1))
+  t_nd = t_fs
+  p_nd = pr_fs
+  rho_nd = rhomat_fs(1)
+
+  write(*,*)" Reference quantities used in non-dimensionalization:"
+  write(*,*)"  Speed of sound: ", a_nd
+  write(*,*)"  Temperature:    ", t_nd
+  write(*,*)"  Pressure:       ", p_nd
+  write(*,*)"  Density:        ", rho_nd
+  write(*,*) "-----------------------------------------------"
+  write(*,*) "-----------------------------------------------"
+  write(*,*)" "
+
+  !--- nondimensionalization
+  imat = 1
+  rhomat_fs(imat) = rhomat_fs(imat)/rho_nd
+  g_pc(imat) = g_pc(imat)/p_nd
+  g_cp(imat) = g_cp(imat)/ (a_nd*a_nd/t_nd)
+
+  pr_fs = pr_fs/p_nd
+  t_fs = t_fs/t_nd
+  u_fs = u_fs/a_nd
+  dt_u = dt_u*a_nd
+
+end subroutine nondimen_soldyn
 
 !----------------------------------------------------------------------------------------------
 !----- Solution initialization for k-exactness check:
@@ -892,6 +930,88 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
 end subroutine init_soln_mm6eq
 
+!----------------------------------------------------------------------------------------------
+!----- Solution initialization for hyperelastic solid dynamics:
+!----------------------------------------------------------------------------------------------
+
+subroutine init_soln_soldyn(reconst_soldyn, ucons, uprim, matint_el, ndof_el)
+
+procedure(), pointer :: reconst_soldyn
+integer :: matint_el(0:imax+1), ndof_el(2,0:imax+1), ielem
+real*8  :: pl, tl, ul, &
+           pr, tr, ur, xf, rho, &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  ucons = 0.0
+  uprim = 0.0
+
+  !----------
+  if (iprob .eq. -1) then
+
+  !--- single-material Sod Shocktube
+  !----------
+  else if (iprob .eq. 1) then
+
+    u_fs = 0.0
+    pr_fs = 1.0
+    t_fs = 3.484321d-3
+    rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+
+    call nondimen_soldyn()
+
+    ! left state
+    pl = pr_fs
+    tl = t_fs
+    ul  = u_fs
+    ! right state
+    pr = 0.1*pr_fs
+    tr = 0.8*t_fs
+    ur  = u_fs
+
+    do ielem = 0,imax+1
+
+      xf = coord(ielem)
+
+      if (xf .le. 0.5) then
+        rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pl, tl)
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * u_fs
+        ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pl, rho, ul)
+      else
+        rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr, tr)
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * u_fs
+        ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pr, rho, ur)
+      end if
+
+      if (g_nsdiscr .ge. 1) then
+        ucons(2,:,ielem) = 0.0
+          if (g_nsdiscr .ge. 12) then
+            ucons(3,:,ielem) = 0.0
+          end if
+      end if
+
+    end do !ielem
+
+  else
+     write(*,*) "Incorrect problem setup code!"
+
+  end if
+
+  ! set ndof indicators
+  ndof_el(1,:) = g_gdof
+
+  call get_bc_soldyn(ucons)
+  call reconst_soldyn(ucons, uprim)
+
+  call gnuplot_soldyn(ucons, uprim, matint_el, 0)
+
+end subroutine init_soln_soldyn
+
 !-------------------------------------------------------------------------------
 !----- Weak initialization for DG(P1) for smooth problems:
 !-------------------------------------------------------------------------------
@@ -1227,6 +1347,55 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine gnuplot_flow_p1_mm6eq
+
+!----------------------------------------------------------------------------------------------
+
+subroutine gnuplot_soldyn(ucons, uprim, matint_el, itstep)
+
+integer, intent(in) :: matint_el(0:imax+1), itstep
+real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                       uprim(g_tdof,g_nprim,0:imax+1)
+
+integer :: ielem, imat
+real*8  :: xcc, ucc, vcc, wcc, pcc, ecc, s11cc, s12cc, s13cc, vmagcc
+real*8  :: uconsi(g_neqns)
+
+character(len=100) :: filename2,filename3
+
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.soliddyn.'//'dat'
+  open(23,file=trim(adjustl(filename3)),status='unknown')
+
+  !--- write meta-data to gnuplot file
+  write(23,'(A8)',advance='no') "# xcc, "
+  write(23,'(9A8)') "rho, ", &
+    "u, ", "v, ", "w, ", "p, ", "e, ", "s11", "s12", "s13"
+
+  do ielem = 1,imax
+
+    uconsi = ucons(1,:,ielem)
+
+    xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
+    imat = 1
+
+    ucc = uconsi(2)/uconsi(1)
+    vcc = uconsi(3)/uconsi(1)
+    wcc = uconsi(4)/uconsi(1)
+    vmagcc = dsqrt(dot_product([ucc,vcc,wcc],[ucc,vcc,wcc]))
+    ecc = (uconsi(5) - 0.5*uconsi(1)*vmagcc*vmagcc)/uconsi(1)
+    pcc = eos3_pr(g_gam(imat), g_pc(imat), uconsi(1), uconsi(5), vmagcc)
+
+    !--- write solution data to gnuplot file
+    write(23,'(E16.6)',advance='no') xcc
+    write(23,'(9E16.6)') uconsi(1)*rho_nd, &
+      ucc*a_nd , vcc*a_nd , wcc*a_nd , pcc*p_nd, ecc, &
+      s11cc, s12cc, s13cc
+
+  end do !ielem
+
+  close(23)
+
+end subroutine gnuplot_soldyn
 
 !----------------------------------------------------------------------------------------------
 

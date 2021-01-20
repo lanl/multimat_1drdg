@@ -18,8 +18,7 @@ end type mmindex
 type(mmindex) :: g_mmi
 
 !--- flow properties
-real*8  :: rho1_fs, alpha1_fs, g_alphamin
-real*8  :: rho2_fs
+real*8  :: g_alphamin
 real*8  :: u_fs, pr_fs, t_fs
 real*8, allocatable  :: alpha_fs(:), rhomat_fs(:)
 

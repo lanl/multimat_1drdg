@@ -4,8 +4,8 @@ all:
 		glob_var.f03\
 		gquadrature.f03\
 		eos.f03\
-		reconstruction_mm6eq.f03\
-		rhs_flux_mm6eq.f03\
+		reconstruction_mm6eq.f03 reconstruction_soldyn.f03\
+		rhs_flux_mm6eq.f03 rhs_soldyn.f03\
 		preprocess.f03\
 		time_integration.f03\
 		main.f03\
