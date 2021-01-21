@@ -76,19 +76,19 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
     call get_soldynsoundspeed(ul, ac_l)
     call get_soldynsoundspeed(ur, ac_r)
 
-    !!--- reconstructed and limited values of conserved variables and
+    !--- reconstructed and limited values of conserved variables and
 
-    !!--- left element
-    !xc = 0.5*(coord(iel+1)+coord(iel))
-    !dx = coord(iel+1)-coord(iel)
-    !call get_basisfns(coord(ifc), xc, dx, basis)
-    !call linc_reconstruction(ucons(:,:,iel), uprim(:,:,iel), basis, ul, pp_l, dx, xc)
+    !--- left element
+    xc = 0.5*(coord(iel+1)+coord(iel))
+    dx = coord(iel+1)-coord(iel)
+    call get_basisfns(coord(ifc), xc, dx, basis)
+    call ho_reconstruction(g_neqns, ucons(:,:,iel), basis, ul)
 
-    !!--- right element
-    !xc = 0.5*(coord(ier+1)+coord(ier))
-    !dx = coord(ier+1)-coord(ier)
-    !call get_basisfns(coord(ifc), xc, dx, basis)
-    !call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
+    !--- right element
+    xc = 0.5*(coord(ier+1)+coord(ier))
+    dx = coord(ier+1)-coord(ier)
+    call get_basisfns(coord(ifc), xc, dx, basis)
+    call ho_reconstruction(g_neqns, ucons(:,:,ier), basis, ur)
 
     !--- fluxes
 

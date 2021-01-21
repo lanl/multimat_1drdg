@@ -38,7 +38,7 @@ else if (i_system .eq. 1) then
   write(*,*) "    iemax: ", g_mmi%iemax
   write(*,*) " "
   write(*,*) "  # equations:", g_neqns
-else if (i_system .eq. 1) then
+else if (i_system .eq. 2) then
   write(*,*) " Hyperelastic solid dynamics system"
 else
   write(*,*) " System not configured; i_system: ", i_system

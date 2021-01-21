@@ -164,8 +164,8 @@ else if (i_system .eq. 2) then
 
   case(0)
     reconst_mm6eq => reconstruction_p0
-  !case(1)
-  !  reconst_mm6eq => reconstruction_p0p1
+  case(1)
+    reconst_mm6eq => reconst_p0p1_soldyn
   !case(11)
   !  reconst_mm6eq => reconstruction_p1
   !case(12)
