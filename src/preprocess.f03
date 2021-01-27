@@ -40,6 +40,7 @@ else if (i_system .eq. 1) then
   write(*,*) "  # equations:", g_neqns
 else if (i_system .eq. 2) then
   write(*,*) " Hyperelastic solid dynamics system"
+  write(*,*) " Number of equations: ", g_neqns
 else
   write(*,*) " System not configured; i_system: ", i_system
 end if
@@ -139,10 +140,12 @@ integer :: imat
 
         ! allocate mat-property arrays
         allocate(g_gam(g_mmi%nummat), g_cp(g_mmi%nummat), g_pc(g_mmi%nummat), &
+                 g_mu(g_mmi%nummat), &
                  alpha_fs(g_mmi%nummat), rhomat_fs(g_mmi%nummat))
 
         do imat = 1,g_mmi%nummat
           read(12,*) g_gam(imat), g_pc(imat), g_cp(imat)
+          if (i_system == 2) read(12,*) g_mu(imat)
         end do !imat
         read(12,*) ! blank line
         read(12,*) u_fs
@@ -253,6 +256,7 @@ integer :: imat
   imat = 1
   rhomat_fs(imat) = rhomat_fs(imat)/rho_nd
   g_pc(imat) = g_pc(imat)/p_nd
+  g_mu(imat) = g_mu(imat)/p_nd
   g_cp(imat) = g_cp(imat)/ (a_nd*a_nd/t_nd)
 
   pr_fs = pr_fs/p_nd
@@ -938,19 +942,19 @@ subroutine init_soln_soldyn(reconst_soldyn, ucons, uprim, matint_el, ndof_el)
 
 procedure(), pointer :: reconst_soldyn
 integer :: matint_el(0:imax+1), ndof_el(2,0:imax+1), ielem
-real*8  :: pl, tl, ul, &
-           pr, tr, ur, xf, rho, &
+real*8  :: pl, tl, ul, gl(3), &
+           pr, tr, ur, gr(3), xf, rho, &
            ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   ucons = 0.0
   uprim = 0.0
 
   !----------
-  if (iprob .eq. -1) then
+  if (iprob == -1) then
 
   !--- single-material Sod Shocktube
   !----------
-  else if (iprob .eq. 1) then
+  else if (iprob == 1) then
 
     u_fs = 0.0
     pr_fs = 1.0
@@ -962,35 +966,94 @@ real*8  :: pl, tl, ul, &
     ! left state
     pl = pr_fs
     tl = t_fs
-    ul  = u_fs
+    ul = u_fs
+    gl = [1.0, 0.0, 0.0]
     ! right state
     pr = 0.1*pr_fs
     tr = 0.8*t_fs
-    ur  = u_fs
+    ur = u_fs
+    gr = [1.0, 0.0, 0.0]
 
     do ielem = 0,imax+1
 
       xf = coord(ielem)
 
-      if (xf .le. 0.5) then
+      ucons(1,6:8,ielem) = gl
+
+      if (xf <= 0.5) then
         rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pl, tl)
         ucons(1,1,ielem) = rho
         ucons(1,2,ielem) = ucons(1,1,ielem) * u_fs
         ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
         ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
-        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pl, rho, ul)
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pl, rho, ul) &
+          + elasticeos1_rhoe(g_mu(1), gl)
       else
         rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr, tr)
         ucons(1,1,ielem) = rho
         ucons(1,2,ielem) = ucons(1,1,ielem) * u_fs
         ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
         ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
-        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pr, rho, ur)
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pr, rho, ur) &
+          + elasticeos1_rhoe(g_mu(1), gr)
       end if
 
-      if (g_nsdiscr .ge. 1) then
+      if (g_nsdiscr >= 1) then
         ucons(2,:,ielem) = 0.0
-          if (g_nsdiscr .ge. 12) then
+          if (g_nsdiscr >= 12) then
+            ucons(3,:,ielem) = 0.0
+          end if
+      end if
+
+    end do !ielem
+
+  !--- elastic material impact problem
+  !----------
+  else if (iprob == 2) then
+
+    t_fs = 300.0
+    rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+
+    call nondimen_soldyn()
+
+    ! left state
+    pl = pr_fs
+    tl = t_fs
+    ul = u_fs
+    gl = [1.0, 0.0, 0.0]
+    ! right state
+    pr = pr_fs
+    tr = t_fs
+    ur = -u_fs
+    gr = [1.0, 0.0, 0.0]
+
+    do ielem = 0,imax+1
+
+      xf = coord(ielem)
+
+      if (xf <= 0.5) then
+        rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pl, tl)
+        ucons(1,6:8,ielem) = gl
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * ul
+        ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pl, rho, ul) &
+          + elasticeos1_rhoe(g_mu(1), gl)
+      else
+        rho = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr, tr)
+        ucons(1,6:8,ielem) = gr
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * ur
+        ucons(1,3,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pr, rho, ur) &
+          + elasticeos1_rhoe(g_mu(1), gr)
+      end if
+
+      if (g_nsdiscr >= 1) then
+        ucons(2,:,ielem) = 0.0
+          if (g_nsdiscr >= 12) then
             ucons(3,:,ielem) = 0.0
           end if
       end if
@@ -1357,7 +1420,8 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xcc, ucc, vcc, wcc, pcc, ecc, s11cc, s12cc, s13cc, vmagcc
+real*8  :: xcc, ucc, vcc, wcc, pcc, ecc, ehcc, g1cc(3), sigcc(3), &
+           vmagcc
 real*8  :: uconsi(g_neqns)
 
 character(len=100) :: filename2,filename3
@@ -1381,15 +1445,18 @@ character(len=100) :: filename2,filename3
     ucc = uconsi(2)/uconsi(1)
     vcc = uconsi(3)/uconsi(1)
     wcc = uconsi(4)/uconsi(1)
+    g1cc = uconsi(6:8)
     vmagcc = dsqrt(dot_product([ucc,vcc,wcc],[ucc,vcc,wcc]))
     ecc = (uconsi(5) - 0.5*uconsi(1)*vmagcc*vmagcc)/uconsi(1)
-    pcc = eos3_pr(g_gam(imat), g_pc(imat), uconsi(1), uconsi(5), vmagcc)
+    ehcc = uconsi(5) - elasticeos1_rhoe(g_mu(imat), g1cc)
+    pcc = eos3_pr(g_gam(imat), g_pc(imat), uconsi(1), ehcc, vmagcc)
+    sigcc = elasticeos1_sig(g_mu(imat), g1cc)
 
     !--- write solution data to gnuplot file
     write(23,'(E16.6)',advance='no') xcc
-    write(23,'(9E16.6)') uconsi(1)*rho_nd, &
+    write(23,'(10E16.6)') uconsi(1)*rho_nd, &
       ucc*a_nd , vcc*a_nd , wcc*a_nd , pcc*p_nd, ecc, &
-      s11cc, s12cc, s13cc
+      sigcc(1)*p_nd, sigcc(2)*p_nd, sigcc(3)*p_nd, (pcc-sigcc(1))*p_nd
 
   end do !ielem
 

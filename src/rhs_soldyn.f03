@@ -92,32 +92,32 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
     !--- fluxes
 
-    if (i_flux .eq. 1) then
+    if (i_flux == 1) then
       call llf_soldyn(ul, ur, ac_l, ac_r, intflux)
-    !else if (i_flux .eq. 2) then
+    !else if (i_flux == 2) then
     !  call ausmplus_soldyn(ul, ur, ac_l, ac_r, intflux)
-    !else if (i_flux .eq. 3) then
+    !else if (i_flux == 3) then
     !  call hll_soldyn(ul, ur, ac_l, ac_r, intflux)
     else
        write(*,*) "Invalid flux scheme."
        stop
     endif
 
-    if (iel .gt. 0) then
+    if (iel > 0) then
       do ieqn = 1,g_neqns
         rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
         ! high-order contributions
-        if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,iel) >= 2)) &
+        if ((g_nsdiscr >= 11) .and. (ndof_el(1,iel) >= 2)) &
           rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
       end do !ieqn
 
     end if
 
-    if (ier .lt. (imax+1)) then
+    if (ier < (imax+1)) then
       do ieqn = 1,g_neqns
         rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
         ! high-order contributions
-        if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ier) >= 2)) &
+        if ((g_nsdiscr >= 11) .and. (ndof_el(1,ier) >= 2)) &
           rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
       end do !ieqn
 
@@ -238,17 +238,20 @@ real*8, intent(in) :: u(g_neqns)
 real*8, intent(out) :: ac
 
 integer :: imat
-real*8 :: pr, ucc, vcc, wcc, vmagcc
+real*8 :: pr, ucc, vcc, wcc, g1cc(3), ehcc, vmagcc
 
   imat = 1
   ucc = u(2)/u(1)
   vcc = u(3)/u(1)
   wcc = u(4)/u(1)
+  g1cc = u(6:8)
   vmagcc = dsqrt(dot_product([ucc,vcc,wcc],[ucc,vcc,wcc]))
-  pr = eos3_pr(g_gam(imat), g_pc(imat), u(1), u(5), vmagcc)
+  ehcc = u(5) - elasticeos1_rhoe(g_mu(imat), g1cc)
+  pr = eos3_pr(g_gam(imat), g_pc(imat), u(1), ehcc, vmagcc)
 
   ! numerical speed of sound choice:
-  ac = eos3_ss(g_gam(imat), g_pc(imat), u(1), 1.0, pr)
+  ac = dsqrt((eos3_ss(g_gam(imat), g_pc(imat), u(1), 1.0, pr)**2.0) &
+    + (elasticeos1_ss(g_mu(imat), g1cc, u(1))**2.0))
 
 end subroutine get_soldynsoundspeed
 
@@ -262,9 +265,11 @@ real*8, intent(in) :: ul(g_neqns), ur(g_neqns), ac_l, ac_r
 real*8, intent(out) :: flux(g_neqns)
 
 integer :: imat
-real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), sigl(3), sigr(3), &
-          rho_l, rhou_l(3), rhoe_l, u_l(3), p_l, vmag_l, &
-          rho_r, rhou_r(3), rhoe_r, u_r(3), p_r, vmag_r
+real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
+          rho_l, rhou_l(3), rhoe_l, g_l(3), &
+          rho_r, rhou_r(3), rhoe_r, g_r(3), &
+          p_l, vmag_l, u_l(3), sigl(3), &
+          p_r, vmag_r, u_r(3), sigr(3)
 real*8 :: ac_12, lambda
 
   flux(:) = 0.0
@@ -278,13 +283,18 @@ real*8 :: ac_12, lambda
   rhou_l(2) = ul(3)
   rhou_l(3) = ul(4)
   rhoe_l = ul(5)
+  g_l(1) = ul(6)
+  g_l(2) = ul(7)
+  g_l(3) = ul(8)
 
   u_l(1) = rhou_l(1)/rho_l
   u_l(2) = rhou_l(2)/rho_l
   u_l(3) = rhou_l(3)/rho_l
   vmag_l = dsqrt(dot_product(u_l,u_l))
-  p_l = eos3_pr(g_gam(imat), g_pc(imat), rho_l, ul(5), vmag_l)
-  sigl(1) = -p_l
+  sigl = elasticeos1_sig(g_mu(imat), g_l)
+  p_l = eos3_pr(g_gam(imat), g_pc(imat), rho_l, &
+    rhoe_l-elasticeos1_rhoe(g_mu(imat), g_l), vmag_l)
+  sigl(1) = sigl(1)-p_l
 
   !--- right-state
   sigr(:) = 0.0
@@ -293,13 +303,18 @@ real*8 :: ac_12, lambda
   rhou_r(2) = ur(3)
   rhou_r(3) = ur(4)
   rhoe_r = ur(5)
+  g_r(1) = ur(6)
+  g_r(2) = ur(7)
+  g_r(3) = ur(8)
 
   u_r(1) = rhou_r(1)/rho_r
   u_r(2) = rhou_r(2)/rho_r
   u_r(3) = rhou_r(3)/rho_r
   vmag_r = dsqrt(dot_product(u_r,u_r))
-  p_r = eos3_pr(g_gam(imat), g_pc(imat), rho_r, ur(5), vmag_r)
-  sigr(1) = -p_r
+  sigr = elasticeos1_sig(g_mu(imat), g_r)
+  p_r = eos3_pr(g_gam(imat), g_pc(imat), rho_r, &
+    rhoe_r-elasticeos1_rhoe(g_mu(imat), g_r), vmag_r)
+  sigr(1) = sigr(1)-p_r
 
   ! numerical speed of sound:
   ac_12 = 0.5 * (ac_l+ac_r)
@@ -315,12 +330,18 @@ real*8 :: ac_12, lambda
   ffunc_l(3) = u_l(1) * rhou_l(2) - sigl(2)
   ffunc_l(4) = u_l(1) * rhou_l(3) - sigl(3)
   ffunc_l(5) = u_l(1) * (rhoe_l - sigl(1)) - u_l(2)*sigl(2) - u_l(3)*sigl(3)
+  ffunc_l(6) = u_l(1) * g_l(1)
+  ffunc_l(7) = u_l(1) * g_l(2) + u_l(2)
+  ffunc_l(8) = u_l(1) * g_l(3) + u_l(3)
 
   ffunc_r(1) = u_r(1) * rho_r
   ffunc_r(2) = u_r(1) * rhou_r(1) - sigr(1)
   ffunc_r(3) = u_r(1) * rhou_r(2) - sigr(2)
   ffunc_r(4) = u_r(1) * rhou_r(3) - sigr(3)
   ffunc_r(5) = u_r(1) * (rhoe_r - sigr(1)) - u_r(2)*sigr(2) - u_r(3)*sigr(3)
+  ffunc_r(6) = u_r(1) * g_r(1)
+  ffunc_r(7) = u_r(1) * g_r(2) + u_r(2)
+  ffunc_r(8) = u_r(1) * g_r(3) + u_r(3)
 
   flux = 0.5 * ( ffunc_l+ffunc_r - lambda*(ur-ul) )
 
@@ -337,13 +358,13 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   !----- left boundary
 
-  if (g_lbflag .eq. 0) then
+  if (g_lbflag == 0) then
      !--- extrapolation / supersonic outflow
-     if (g_nsdiscr .eq. 0) then
+     if (g_nsdiscr == 0) then
        ucons(1,:,0) = ucons(1,:,1)
-     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+     else if ((g_nsdiscr == 1) .or. (g_nsdiscr == 11)) then
        ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1)
-     else if (g_nsdiscr .eq. 12) then
+     else if (g_nsdiscr == 12) then
        ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
      end if
 
@@ -388,13 +409,13 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   !----- right boundary
 
-  if (g_rbflag .eq. 0) then
+  if (g_rbflag == 0) then
      !--- extrapolation / supersonic outflow
-     if (g_nsdiscr .eq. 0) then
+     if (g_nsdiscr == 0) then
        ucons(1,:,imax+1) = ucons(1,:,imax)
-     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+     else if ((g_nsdiscr == 1) .or. (g_nsdiscr == 11)) then
        ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax)
-     else if (g_nsdiscr .eq. 12) then
+     else if (g_nsdiscr == 12) then
        ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
      end if
 
@@ -438,10 +459,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
   end if
 
   !----- high-order dofs
-  if (g_nsdiscr .ge. 1) then
+  if (g_nsdiscr >= 1) then
     ucons(2,:,0) = 0.0
     ucons(2,:,imax+1) = 0.0
-      if (g_nsdiscr .ge. 12) then
+      if (g_nsdiscr >= 12) then
         ucons(3,:,0) = 0.0
         ucons(3,:,imax+1) = 0.0
       end if

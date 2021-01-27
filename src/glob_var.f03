@@ -37,7 +37,7 @@ real*8  :: k0   = 2.15d9
 real*8  :: n0   = 7.15
 
 !--- stiffened gas constants
-real*8, allocatable :: g_gam(:), g_cp(:), g_pc(:)
+real*8, allocatable :: g_gam(:), g_cp(:), g_pc(:), g_mu(:)
 
 !--- interface pressure correction coeff
 real*8  :: g_prelct

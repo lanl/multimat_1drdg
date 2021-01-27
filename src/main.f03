@@ -202,7 +202,7 @@ deallocate(ucons, &
            ndof_el, &
            err_log)
 
-deallocate(g_gam, g_cp, g_pc, &
+deallocate(g_gam, g_cp, g_pc, g_mu, &
            alpha_fs, rhomat_fs)
 
 deallocate(coord)

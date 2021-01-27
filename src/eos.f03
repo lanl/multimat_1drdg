@@ -150,6 +150,84 @@ real*8  :: pre, eos3_ss
 end function
 
 !----------------------------------------------------------------------------------------------
+!----- Elastic shear distortion from deformation gradient tensor
+!----------------------------------------------------------------------------------------------
+
+function elasticeos1_eps(g1)
+
+real*8, intent(in) :: g1(3)
+
+real*8 :: elasticeos1_eps, detb
+
+  detb = (g1(1)**(2.0/3.0)) / (g1(1)*g1(1))
+  elasticeos1_eps = 0.5 * (detb*(1.0 + 2.0*g1(1)*g1(1) + g1(2)*g1(2) &
+    + g1(3)*g1(3)) - 3.0)
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- Cauchy stress tensor from deformation gradient tensor
+!----------------------------------------------------------------------------------------------
+
+function elasticeos1_sig(mu, g1)
+
+real*8, intent(in) :: mu, g1(3)
+
+real*8 :: elasticeos1_sig(3), detb
+
+  detb = (g1(1)**(2.0/3.0)) / (g1(1)*g1(1))
+
+  ! deviatoric part
+  elasticeos1_sig(1) = (2.0 - 2.0*g1(1)*g1(1) - g1(2)*g1(2) - g1(3)*g1(3)) / 3.0
+  elasticeos1_sig(2) = - g1(2)
+  elasticeos1_sig(3) = - g1(3)
+  elasticeos1_sig = elasticeos1_sig * detb * mu
+
+  ! contribution from volumetric part
+  elasticeos1_sig(1) = elasticeos1_sig(1) + mu * elasticeos1_eps(g1)
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- elastic/shear part of internal energy from deformation gradient tensor
+!----------------------------------------------------------------------------------------------
+
+function elasticeos1_rhoe(mu, g1)
+
+real*8, intent(in) :: mu, g1(3)
+
+real*8 :: elasticeos1_rhoe
+
+  elasticeos1_rhoe = mu * elasticeos1_eps(g1)
+
+end function
+
+!----------------------------------------------------------------------------------------------
+!----- elastic wave speed from deformation gradient tensor
+!----------------------------------------------------------------------------------------------
+
+function elasticeos1_ss(mu, g1, rho)
+
+real*8, intent(in) :: mu, g1(3), rho
+
+real*8 :: elasticeos1_ss, dsigdg11
+
+  dsigdg11 = 0.5 * mu * &
+    (4.0*(1.0+2.0*g1(1)*g1(1)+g1(2)*g1(2)+g1(3)*g1(3))/(3.0*g1(1)**(7.0/3.0)) &
+    - 4.0/(g1(1)**(1.0/3.0)) &
+    - 8.0/(g1(1)**(7.0/3.0)))
+
+  if (-dsigdg11 < 1d-16) then
+    write(*,*) "Error: zero/negative elastic speed of sound; dsig/dg11 = ", &
+      dsigdg11
+    call exit
+  end if
+
+  elasticeos1_ss = dsqrt(-g1(1)*dsigdg11/rho)
+
+end function
+
+!----------------------------------------------------------------------------------------------
 !----- Get primitive variables for a mesh element from conserved
 !----------------------------------------------------------------------------------------------
 
