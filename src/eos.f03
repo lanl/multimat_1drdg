@@ -217,7 +217,7 @@ real*8 :: elasticeos1_ss, dsigdg11
     - 4.0/(g1(1)**(1.0/3.0)) &
     - 8.0/(g1(1)**(7.0/3.0)))
 
-  if (-dsigdg11 < 1d-16) then
+  if (-dsigdg11 < -1d-16) then
     write(*,*) "Error: zero/negative elastic speed of sound; dsig/dg11 = ", &
       dsigdg11
     call exit

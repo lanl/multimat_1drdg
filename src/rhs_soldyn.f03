@@ -94,10 +94,10 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
     if (i_flux == 1) then
       call llf_soldyn(ul, ur, ac_l, ac_r, intflux)
-    !else if (i_flux == 2) then
-    !  call ausmplus_soldyn(ul, ur, ac_l, ac_r, intflux)
-    !else if (i_flux == 3) then
-    !  call hll_soldyn(ul, ur, ac_l, ac_r, intflux)
+    else if (i_flux == 3) then
+      call hll_soldyn(ul, ur, ac_l, ac_r, intflux)
+    else if (i_flux == 4) then
+      call hllc_soldyn(ul, ur, ac_l, ac_r, intflux)
     else
        write(*,*) "Invalid flux scheme."
        stop
@@ -256,7 +256,7 @@ real*8 :: pr, ucc, vcc, wcc, g1cc(3), ehcc, vmagcc
 end subroutine get_soldynsoundspeed
 
 !-------------------------------------------------------------------------------
-!----- 2fluid Lax-Friedrichs flux:
+!----- Elastic solid dynamics Lax-Friedrichs flux:
 !-------------------------------------------------------------------------------
 
 subroutine llf_soldyn(ul, ur, ac_l, ac_r, flux)
@@ -346,6 +346,235 @@ real*8 :: ac_12, lambda
   flux = 0.5 * ( ffunc_l+ffunc_r - lambda*(ur-ul) )
 
 end subroutine llf_soldyn
+
+!-------------------------------------------------------------------------------
+!----- Elastic solid dynamics HLL flux:
+!-------------------------------------------------------------------------------
+
+subroutine hll_soldyn(ul, ur, ac_l, ac_r, flux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), ac_l, ac_r
+real*8, intent(out) :: flux(g_neqns)
+
+integer :: imat
+real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
+          rho_l, rhou_l(3), rhoe_l, g_l(3), &
+          rho_r, rhou_r(3), rhoe_r, g_r(3), &
+          p_l, vmag_l, u_l(3), sigl(3), &
+          p_r, vmag_r, u_r(3), sigr(3)
+real*8 :: s_l, s_r
+
+  flux(:) = 0.0
+
+  imat = 1
+
+  !--- left-state
+  sigl(:) = 0.0
+  rho_l = ul(1)
+  rhou_l(1) = ul(2)
+  rhou_l(2) = ul(3)
+  rhou_l(3) = ul(4)
+  rhoe_l = ul(5)
+  g_l(1) = ul(6)
+  g_l(2) = ul(7)
+  g_l(3) = ul(8)
+
+  u_l(1) = rhou_l(1)/rho_l
+  u_l(2) = rhou_l(2)/rho_l
+  u_l(3) = rhou_l(3)/rho_l
+  vmag_l = dsqrt(dot_product(u_l,u_l))
+  sigl = elasticeos1_sig(g_mu(imat), g_l)
+  p_l = eos3_pr(g_gam(imat), g_pc(imat), rho_l, &
+    rhoe_l-elasticeos1_rhoe(g_mu(imat), g_l), vmag_l)
+  sigl(1) = sigl(1)-p_l
+
+  !--- right-state
+  sigr(:) = 0.0
+  rho_r = ur(1)
+  rhou_r(1) = ur(2)
+  rhou_r(2) = ur(3)
+  rhou_r(3) = ur(4)
+  rhoe_r = ur(5)
+  g_r(1) = ur(6)
+  g_r(2) = ur(7)
+  g_r(3) = ur(8)
+
+  u_r(1) = rhou_r(1)/rho_r
+  u_r(2) = rhou_r(2)/rho_r
+  u_r(3) = rhou_r(3)/rho_r
+  vmag_r = dsqrt(dot_product(u_r,u_r))
+  sigr = elasticeos1_sig(g_mu(imat), g_r)
+  p_r = eos3_pr(g_gam(imat), g_pc(imat), rho_r, &
+    rhoe_r-elasticeos1_rhoe(g_mu(imat), g_r), vmag_r)
+  sigr(1) = sigr(1)-p_r
+
+  ! signal speeds
+  s_l = min(u_l(1)-ac_l, u_r(1)-ac_r)
+  s_r = max(u_l(1)+ac_l, u_r(1)+ac_r)
+
+  ! flux functions
+  ffunc_l = 0.0
+  ffunc_r = 0.0
+
+  ffunc_l(1) = u_l(1) * rho_l
+  ffunc_l(2) = u_l(1) * rhou_l(1) - sigl(1)
+  ffunc_l(3) = u_l(1) * rhou_l(2) - sigl(2)
+  ffunc_l(4) = u_l(1) * rhou_l(3) - sigl(3)
+  ffunc_l(5) = u_l(1) * (rhoe_l - sigl(1)) - u_l(2)*sigl(2) - u_l(3)*sigl(3)
+  ffunc_l(6) = u_l(1) * g_l(1)
+  ffunc_l(7) = u_l(1) * g_l(2) + u_l(2)
+  ffunc_l(8) = u_l(1) * g_l(3) + u_l(3)
+
+  ffunc_r(1) = u_r(1) * rho_r
+  ffunc_r(2) = u_r(1) * rhou_r(1) - sigr(1)
+  ffunc_r(3) = u_r(1) * rhou_r(2) - sigr(2)
+  ffunc_r(4) = u_r(1) * rhou_r(3) - sigr(3)
+  ffunc_r(5) = u_r(1) * (rhoe_r - sigr(1)) - u_r(2)*sigr(2) - u_r(3)*sigr(3)
+  ffunc_r(6) = u_r(1) * g_r(1)
+  ffunc_r(7) = u_r(1) * g_r(2) + u_r(2)
+  ffunc_r(8) = u_r(1) * g_r(3) + u_r(3)
+
+  if (s_l >= 0.0) then
+    flux = ffunc_l
+  else if (s_r <= 0.0) then
+    flux = ffunc_r
+  else
+    flux = ( s_r*ffunc_l - s_l*ffunc_r + s_l*s_r*(ur-ul) ) / (s_r-s_l)
+  end if
+
+end subroutine hll_soldyn
+
+!-------------------------------------------------------------------------------
+!----- Elastic solid dynamics HLLC flux
+!----- (Gavrilyuk and Favrie, 2008, J Comp Phys):
+!-------------------------------------------------------------------------------
+
+subroutine hllc_soldyn(ul, ur, ac_l, ac_r, flux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), ac_l, ac_r
+real*8, intent(out) :: flux(g_neqns)
+
+integer :: imat
+real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns), &
+          q_l(g_neqns), q_r(g_neqns), &
+          us_l(g_neqns), us_r(g_neqns), &
+          sig_s(3), v_s, w_s, &
+          rho_l, rhou_l(3), rhoe_l, g_l(3), &
+          rho_r, rhou_r(3), rhoe_r, g_r(3), &
+          p_l, vmag_l, u_l(3), sigl(3), &
+          p_r, vmag_r, u_r(3), sigr(3)
+real*8 :: s_l, s_r, s_s
+
+  flux(:) = 0.0
+
+  imat = 1
+
+  !--- left-state
+  sigl(:) = 0.0
+  rho_l = ul(1)
+  rhou_l(1) = ul(2)
+  rhou_l(2) = ul(3)
+  rhou_l(3) = ul(4)
+  rhoe_l = ul(5)
+  g_l(1) = ul(6)
+  g_l(2) = ul(7)
+  g_l(3) = ul(8)
+
+  u_l(1) = rhou_l(1)/rho_l
+  u_l(2) = rhou_l(2)/rho_l
+  u_l(3) = rhou_l(3)/rho_l
+  vmag_l = dsqrt(dot_product(u_l,u_l))
+  sigl = elasticeos1_sig(g_mu(imat), g_l)
+  p_l = eos3_pr(g_gam(imat), g_pc(imat), rho_l, &
+    rhoe_l-elasticeos1_rhoe(g_mu(imat), g_l), vmag_l)
+  sigl(1) = sigl(1)-p_l
+
+  !--- right-state
+  sigr(:) = 0.0
+  rho_r = ur(1)
+  rhou_r(1) = ur(2)
+  rhou_r(2) = ur(3)
+  rhou_r(3) = ur(4)
+  rhoe_r = ur(5)
+  g_r(1) = ur(6)
+  g_r(2) = ur(7)
+  g_r(3) = ur(8)
+
+  u_r(1) = rhou_r(1)/rho_r
+  u_r(2) = rhou_r(2)/rho_r
+  u_r(3) = rhou_r(3)/rho_r
+  vmag_r = dsqrt(dot_product(u_r,u_r))
+  sigr = elasticeos1_sig(g_mu(imat), g_r)
+  p_r = eos3_pr(g_gam(imat), g_pc(imat), rho_r, &
+    rhoe_r-elasticeos1_rhoe(g_mu(imat), g_r), vmag_r)
+  sigr(1) = sigr(1)-p_r
+
+  ! signal speeds
+  s_l = min(u_l(1)-ac_l, u_r(1)-ac_r)
+  s_r = max(u_l(1)+ac_l, u_r(1)+ac_r)
+
+  ! flux functions
+  ffunc_l(1) = u_l(1) * rho_l
+  ffunc_l(2) = u_l(1) * rhou_l(1) - sigl(1)
+  ffunc_l(3) = u_l(1) * rhou_l(2) - sigl(2)
+  ffunc_l(4) = u_l(1) * rhou_l(3) - sigl(3)
+  ffunc_l(5) = u_l(1) * (rhoe_l - sigl(1)) - u_l(2)*sigl(2) - u_l(3)*sigl(3)
+  ffunc_l(6) = u_l(1) * g_l(1)
+  ffunc_l(7) = u_l(1) * g_l(2) + u_l(2)
+  ffunc_l(8) = u_l(1) * g_l(3) + u_l(3)
+
+  ffunc_r(1) = u_r(1) * rho_r
+  ffunc_r(2) = u_r(1) * rhou_r(1) - sigr(1)
+  ffunc_r(3) = u_r(1) * rhou_r(2) - sigr(2)
+  ffunc_r(4) = u_r(1) * rhou_r(3) - sigr(3)
+  ffunc_r(5) = u_r(1) * (rhoe_r - sigr(1)) - u_r(2)*sigr(2) - u_r(3)*sigr(3)
+  ffunc_r(6) = u_r(1) * g_r(1)
+  ffunc_r(7) = u_r(1) * g_r(2) + u_r(2)
+  ffunc_r(8) = u_r(1) * g_r(3) + u_r(3)
+
+  q_l = -(s_l * ul - ffunc_l)
+  q_r = -(s_r * ur - ffunc_r)
+
+  ! star-state
+  s_s = (q_r(2) - q_l(2)) / (q_r(1) - q_l(1))
+  sig_s(1) = (q_l(1)*q_r(2) - q_r(1)*q_l(2)) / (q_r(1) - q_l(1))
+  sig_s(2) = (q_l(1)*q_r(3) - q_r(1)*q_l(3)) / (q_r(1) - q_l(1))
+  sig_s(3) = (q_l(1)*q_r(4) - q_r(1)*q_l(4)) / (q_r(1) - q_l(1))
+  v_s = (q_r(3) - q_l(3)) / (q_r(1) - q_l(1))
+  w_s = (q_r(4) - q_l(4)) / (q_r(1) - q_l(1))
+
+  ! left
+  us_l(1) = rho_l * (s_l - u_l(1))/(s_l - s_s)
+  us_l(2) = us_l(1) * s_s
+  us_l(3) = us_l(1) * u_l(2)
+  us_l(4) = us_l(1) * u_l(3)
+  us_l(5) = us_l(1) * (q_l(5) + sig_s(1)*s_s + sig_s(2)*v_s + sig_s(3)*w_s) &
+    /q_l(1)
+  us_l(6) = q_l(6)/(s_s-s_l)
+  us_l(7) = (q_l(7)-v_s)/(s_s-s_l)
+  us_l(8) = (q_l(8)-w_s)/(s_s-s_l)
+  ! right
+  us_r(1) = rho_r * (s_r - u_r(1))/(s_r - s_s)
+  us_r(2) = us_r(1) * s_s
+  us_r(3) = us_r(1) * u_r(2)
+  us_r(4) = us_r(1) * u_r(3)
+  us_r(5) = us_r(1) * (q_r(5) + sig_s(1)*s_s + sig_s(2)*v_s + sig_s(3)*w_s) &
+    /q_r(1)
+  us_r(6) = q_r(6)/(s_s-s_r)
+  us_r(7) = (q_r(7)-v_s)/(s_s-s_r)
+  us_r(8) = (q_r(8)-w_s)/(s_s-s_r)
+
+  if (s_l >= 0.0) then
+    flux = ffunc_l
+  else if (s_l <= 0.0 .and. s_s >= 0.0) then
+    flux = ffunc_l + s_l*(us_l - ul)
+  else if (s_s <= 0.0 .and. s_r >= 0.0) then
+    flux = ffunc_r + s_r*(us_r - ur)
+  else !if (s_r <= 0.0) then
+    flux = ffunc_r
+  end if
+
+end subroutine hllc_soldyn
 
 !-------------------------------------------------------------------------------
 !----- Boundary conditions:
