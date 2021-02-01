@@ -238,7 +238,7 @@ real*8, intent(in) :: u(g_neqns)
 real*8, intent(out) :: ac
 
 integer :: imat
-real*8 :: pr, ucc, vcc, wcc, g1cc(3), ehcc, vmagcc
+real*8 :: prcc, ucc, vcc, wcc, g1cc(3), ehcc, vmagcc
 
   imat = 1
   ucc = u(2)/u(1)
@@ -247,11 +247,11 @@ real*8 :: pr, ucc, vcc, wcc, g1cc(3), ehcc, vmagcc
   g1cc = u(6:8)
   vmagcc = dsqrt(dot_product([ucc,vcc,wcc],[ucc,vcc,wcc]))
   ehcc = u(5) - elasticeos1_rhoe(g_mu(imat), g1cc)
-  pr = eos3_pr(g_gam(imat), g_pc(imat), u(1), ehcc, vmagcc)
+  prcc = eos3_pr(g_gam(imat), g_pc(imat), u(1), ehcc, vmagcc)
 
   ! numerical speed of sound choice:
-  ac = dsqrt((eos3_ss(g_gam(imat), g_pc(imat), u(1), 1.0, pr)**2.0) &
-    + (elasticeos1_ss(g_mu(imat), g1cc, u(1))**2.0))
+  ac = dsqrt((eos3_ss(g_gam(imat), g_pc(imat), u(1), 1.0, prcc)**2.0) &
+    + (elasticeos1_ss(g_mu(imat), g_gam(imat), g_pc(imat), g1cc, prcc, u(1))**2.0))
 
 end subroutine get_soldynsoundspeed
 

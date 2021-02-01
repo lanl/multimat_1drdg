@@ -206,16 +206,17 @@ end function
 !----- elastic wave speed from deformation gradient tensor
 !----------------------------------------------------------------------------------------------
 
-function elasticeos1_ss(mu, g1, rho)
+function elasticeos1_ss(mu, gam, p_c, g1, pr, rho)
 
-real*8, intent(in) :: mu, g1(3), rho
+real*8, intent(in) :: mu, gam, p_c, g1(3), pr, rho
 
 real*8 :: elasticeos1_ss, dsigdg11
 
   dsigdg11 = 0.5 * mu * &
     (4.0*(1.0+2.0*g1(1)*g1(1)+g1(2)*g1(2)+g1(3)*g1(3))/(3.0*g1(1)**(7.0/3.0)) &
     - 4.0/(g1(1)**(1.0/3.0)) &
-    - 8.0/(g1(1)**(7.0/3.0)))
+    - 8.0/(g1(1)**(7.0/3.0)))! &
+!    - gam/g1(1)*(pr+p_c)
 
   if (-dsigdg11 < -1d-16) then
     write(*,*) "Error: zero/negative elastic speed of sound; dsig/dg11 = ", &

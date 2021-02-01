@@ -76,7 +76,8 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    !call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta)
 
     !--- 3b. Obtain limiter functions for equation system in single-material cell
 
@@ -87,6 +88,63 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
   end do !ie
 
 end subroutine vertexbased_p1_soldyn
+
+!-------------------------------------------------------------------------------
+!----- Superbee limiter for n equations individually
+!----- this sub actually calculates the limiter function according to superbee.
+!----- the input to this function can be modified to limit P1 or P2 dofs, refer
+!----- to superbee_p1 and superbee_p2 respectively
+!-------------------------------------------------------------------------------
+
+subroutine superbee_fn(neq,beta_lim,ascale,ucons,theta)
+
+integer, intent(in) :: neq
+real*8,  intent(in) :: beta_lim, ascale, ucons(2,neq,-1:1)
+
+integer :: ieqn, ifc
+real*8  :: ui, ug, umin, umax, diff, phi, theta(neq), thetal
+
+  theta(:) = 1.0
+
+  do ieqn = 1,neq
+
+    !--- limiter
+    ! beta = 2 : Superbee
+    !      = 1 : Minmod
+
+    ui = ucons(1,ieqn,0)
+
+    ! find min and max in neighborhood
+    umax = max( max(ucons(1,ieqn,-1), ui), ucons(1,ieqn,1) )
+    umin = min( min(ucons(1,ieqn,-1), ui), ucons(1,ieqn,1) )
+
+    do ifc = 1,2
+      ! unlimited 2nd order solution
+      ug = ucons(1,ieqn,0) + ((-1.0)**ifc) * ucons(2,ieqn,0)
+
+      ! bounds
+      diff = ug-ui
+      if (diff > 1.0d-16) then
+        phi = min(1.0, (umax-ui)/(2.0*diff))
+
+      else if (diff < -1.0d-16) then
+        phi = min(1.0, (umin-ui)/(2.0*diff))
+
+      else
+        phi = 1.0
+
+      end if
+
+      ! limiter function
+      phi = phi/ascale
+      thetal = max( 0.0, max( min(beta_lim*phi, 1.0), min(phi, beta_lim) ) )
+      theta(ieqn) = min(thetal, theta(ieqn))
+
+    end do !ifc
+
+  end do !ieqn
+
+end subroutine superbee_fn
 
 !-------------------------------------------------------------------------------
 
