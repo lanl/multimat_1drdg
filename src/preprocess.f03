@@ -108,6 +108,8 @@ if (i_system > -1) then
     write(*,*) "   LINC+Vertex-based."
   else if (g_nlim .eq. 7) then
     write(*,*) "   LINC+Vertex-based+WENO."
+  else if (g_nlim .eq. 8) then
+    write(*,*) "   Superbee."
   else
     write(*,*) "Invalid limiter."
     stop
@@ -1062,6 +1064,57 @@ real*8  :: pl, tl, ul, gl(3), &
 
     end do !ielem
 
+  !--- shear (5-wave) problem
+  !----------
+  else if (iprob == 3) then
+
+    t_fs = 300.0
+    rhomat_fs(1) = 1000.0
+
+    call nondimen_soldyn()
+
+    ! left state
+    pl = 1000.0*pr_fs
+    ul = u_fs
+    gl = [1.0, 0.0, 0.0]
+    ! right state
+    pr = pr_fs
+    ur = -u_fs
+    gr = [1.0, 0.0, 0.0]
+
+    do ielem = 0,imax+1
+
+      xf = coord(ielem)
+
+      if (xf <= 0.5) then
+        rho = rhomat_fs(1)
+        ucons(1,6:8,ielem) = gl
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,3,ielem) = ucons(1,1,ielem) * ul
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pl, rho, ul) &
+          + elasticeos1_rhoe(g_mu(1), gl)
+      else
+        rho = rhomat_fs(1)
+        ucons(1,6:8,ielem) = gr
+        ucons(1,1,ielem) = rho
+        ucons(1,2,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,3,ielem) = ucons(1,1,ielem) * ur
+        ucons(1,4,ielem) = ucons(1,1,ielem) * 0.0
+        ucons(1,5,ielem) = eos3_rhoe(g_gam(1), g_pc(1), pr, rho, ur) &
+          + elasticeos1_rhoe(g_mu(1), gr)
+      end if
+
+      if (g_nsdiscr >= 1) then
+        ucons(2,:,ielem) = 0.0
+          if (g_nsdiscr >= 12) then
+            ucons(3,:,ielem) = 0.0
+          end if
+      end if
+
+    end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -1069,6 +1122,7 @@ real*8  :: pl, tl, ul, gl(3), &
 
   ! set ndof indicators
   ndof_el(1,:) = g_gdof
+  ndof_el(2,:) = 0
 
   call get_bc_soldyn(ucons)
   call reconst_soldyn(ucons, uprim)

@@ -43,7 +43,7 @@ real*8  :: rhsel(g_gdof,g_neqns,imax)
   !--- surface integration
   call surfaceint_soldyn_dg(ucons, uprim, ndof_el, rhsel)
   !!--- volume integration
-  !call volumeint_dg(ucons, uprim, ndof_el, riemanngrad, vriemann, rhsel)
+  call volumeint_dg(ucons, uprim, ndof_el, rhsel)
 
 end subroutine flux_rdg_soldyn
 
@@ -127,105 +127,65 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
 end subroutine surfaceint_soldyn_dg
 
-!!-------------------------------------------------------------------------------
-!!----- DG volume contribution to RHS:
-!!-------------------------------------------------------------------------------
-!
-!subroutine volumeint_dg(ucons, uprim, ndof_el, rgrad, vriem, rhsel)
-!
-!integer :: ig, ie, ieqn, ngauss, imat
-!
-!real*8  :: dx2, b3, p, hmat, viriem, &
-!           xg, xc, dx, basis(g_tdof), &
-!           u(g_neqns), pp(g_nprim), &
-!           rhob, y(g_mmi%nummat), dapdx, &
-!           carea(2), weight(2), &
-!           cflux(g_neqns), &
-!           nflux(g_gdof,g_neqns), &
-!           rhsel(g_gdof,g_neqns,imax)
-!
-!integer, intent(in) :: ndof_el(2,0:imax+1)
-!real*8, intent(in) :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1), &
-!                      ucons(g_tdof,g_neqns,0:imax+1), &
-!                      uprim(g_tdof,g_nprim,0:imax+1)
-!
-!associate (nummat=>g_mmi%nummat)
-!
-!  ngauss = get_numqpoints(g_nsdiscr)
-!  call rutope(1, ngauss, carea, weight)
-!
-!  do ie = 1,imax
-!  cflux = 0.0
-!  nflux = 0.0
-!  do ig = 1,ngauss
-!
-!    dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
-!
-!    !--- reconstruct high-order solution
-!    xc = 0.5*(coord(ie+1)+coord(ie))
-!    dx = coord(ie+1)-coord(ie)
-!    xg = carea(ig) * 0.5*dx + xc
-!    call get_basisfns(xg, xc, dx, basis)
-!    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
-!
-!    call check_volfrac(ie, u)
-!
-!    viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
-!
-!    p = 0.0
-!    dapdx = 0.0
-!    rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
-!    do imat = 1,nummat
-!      !p = p + u(imat)*up(g_mmi%irmin+imat-1)
-!      p = p + pp(apr_idx(nummat, imat))
-!      dapdx = dapdx + rgrad(imat,ie)
-!      y(imat) = u(g_mmi%irmin+imat-1) / rhob
-!    end do !imat
-!
-!    !--- flux terms
-!    ! momentum flux
-!    !cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) &
-!    !  * sum(pp(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) + p
-!    cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) * u(g_mmi%imome) + p
-!    nflux(1,g_mmi%imome) = 0.0
-!    if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
-!    do imat = 1,nummat
-!      hmat = u(g_mmi%iemin+imat-1) + pp(apr_idx(nummat, imat))
-!      !hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
-!      ! other conservative fluxes
-!      cflux(imat) = 0.0
-!      cflux(g_mmi%irmin+imat-1) = pp(vel_idx(nummat, 0)) * u(g_mmi%irmin+imat-1)
-!      cflux(g_mmi%iemin+imat-1) = pp(vel_idx(nummat, 0)) * hmat
-!
-!      ! non-conservative fluxes
-!      nflux(1,imat) = u(imat) * rgrad(nummat+1,ie)
-!      nflux(1,g_mmi%irmin+imat-1) = 0.0
-!      nflux(1,g_mmi%iemin+imat-1) = - pp(vel_idx(nummat, 0)) * ( y(imat) * dapdx &
-!                                                         - rgrad(imat,ie) )
-!      if (g_nsdiscr .ge. 11) then
-!        nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !pp(vel_idx(nummat, 0)) * 2.0
-!        nflux(2,g_mmi%irmin+imat-1) = 0.0
-!        nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
-!      end if
-!    end do !imat
-!
-!    do ieqn = 1,g_neqns
-!      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
-!        rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
-!    end do !ieqn
-!
-!    do ieqn = 1,g_neqns
-!      rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
-!      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
-!        rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
-!    end do !ieqn
-!
-!  end do !ig
-!  end do !ie
-!
-!end associate
-!
-!end subroutine volumeint_dg
+!-------------------------------------------------------------------------------
+!----- DG volume contribution to RHS:
+!-------------------------------------------------------------------------------
+
+subroutine volumeint_dg(ucons, uprim, ndof_el, rhsel)
+
+integer :: ig, ie, ieqn, ngauss, imat
+
+real*8  :: dx2, xg, xc, dx, basis(g_tdof), carea(2), weight(2), &
+           u(g_neqns), g(3), vel(3), sig(3), p, &
+           cflux(g_neqns), rhsel(g_gdof,g_neqns,imax)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                      uprim(g_tdof,g_nprim,0:imax+1)
+
+  ngauss = get_numqpoints(g_nsdiscr)
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+  cflux = 0.0
+  do ig = 1,ngauss
+
+    imat = 1
+
+    dx2 = weight(ig) ! <-- 2.0/dx * weight(ig)/2.0 * dx
+
+    !--- reconstruct high-order solution
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    dx = coord(ie+1)-coord(ie)
+    xg = carea(ig) * 0.5*dx + xc
+    call get_basisfns(xg, xc, dx, basis)
+    call ho_reconstruction(g_neqns, ucons(:,:,ie), basis, u)
+
+    !--- derived quantities
+    g(1:3) = u(6:8)
+    vel(1:3) = u(2:4)/u(1)
+    sig = elasticeos1_sig(g_mu(imat), g)
+    p = eos3_pr(g_gam(imat), g_pc(imat), u(1), &
+      u(5)-elasticeos1_rhoe(g_mu(imat), g), dsqrt(dot_product(vel,vel)))
+    sig(1) = sig(1)-p
+
+    !--- flux terms
+    cflux(1) = vel(1) * u(1)
+    cflux(2:4) = vel(1) * u(2:4) - sig(1:3)
+    cflux(5) = vel(1)*(u(5) - sig(1)) - vel(2)*sig(2) - vel(3)*sig(3)
+    cflux(6) = vel(1)*g(1)
+    cflux(7) = vel(1)*g(2) + vel(2)
+    cflux(8) = vel(1)*g(3) + vel(3)
+
+    do ieqn = 1,g_neqns
+      if ((g_nsdiscr >= 11) .and. (ndof_el(1,ie) >= 2)) &
+        rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+    end do !ieqn
+
+  end do !ig
+  end do !ie
+
+end subroutine volumeint_dg
 
 !-------------------------------------------------------------------------------
 !----- solid sound-speed:
