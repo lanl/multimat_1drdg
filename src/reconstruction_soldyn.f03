@@ -61,6 +61,34 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 end subroutine reconst_p1_soldyn
 
 !-------------------------------------------------------------------------------
+!----- P1P2 reconstruction:
+!-------------------------------------------------------------------------------
+
+subroutine reconst_p1p2_soldyn(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+
+integer :: ie
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  ! central difference reconstruction (least-squares for uniform meshes)
+  ! for FV2 cells
+  do ie = 1,imax
+    if (ndof_el(1,ie) == 1) then
+      ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+      uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+    end if
+  end do !ie
+
+  !--- reconstruct third-order conserved quantities
+  call leastsquares_p1p2(g_neqns, ucons)
+
+  !--- limit third-order solution
+  call limiting_p2_soldyn(ucons, uprim)
+
+end subroutine reconst_p1p2_soldyn
+
+!-------------------------------------------------------------------------------
 !----- P1 limiting:
 !-------------------------------------------------------------------------------
 
@@ -85,6 +113,32 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   end select
 
 end subroutine limiting_p1_soldyn
+
+!-------------------------------------------------------------------------------
+!----- P2 limiting:
+!-------------------------------------------------------------------------------
+
+subroutine limiting_p2_soldyn(ucons, uprim)
+
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  select case (g_nlim)
+
+  case(0)
+
+  case(2)
+    call vertexbased_p2_soldyn(ucons, uprim)
+
+  case(8)
+    call superbee_p2_soldyn(ucons, uprim)
+
+  case default
+    write(*,*) "Error: incorrect p2-limiter index in control file: ", g_nlim
+    call exit
+
+  end select
+
+end subroutine limiting_p2_soldyn
 
 !-------------------------------------------------------------------------------
 !----- vertexbased limiter for P1 dofs:
@@ -145,6 +199,104 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
   end do !ie
 
 end subroutine superbee_p1_soldyn
+
+!-------------------------------------------------------------------------------
+!----- vertex-based limiter for P1 and P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine vertexbased_p2_soldyn(ucons, uprim)
+
+integer :: ie, ieqn
+real*8  :: theta1(g_neqns), theta2(g_neqns)
+real*8  :: dx2, uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_nprim,0:imax+1)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- 1. obtain limiter function for individual unknowns
+    ! i. P2 derivative limiting
+
+    ! conserved quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
+
+    ! ii. P1 derivative limiting
+
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    !--- 2. Obtain limiter functions for equation system in single-material cell
+
+    do ieqn = 1,g_neqns
+      ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
+      ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
+    end do !ieqn
+
+  end do !ie
+
+end subroutine vertexbased_p2_soldyn
+
+!-------------------------------------------------------------------------------
+!----- superbee limiter for P1 and P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine superbee_p2_soldyn(ucons, uprim)
+
+integer :: ie, ieqn
+real*8  :: theta1(g_neqns), theta2(g_neqns)
+real*8  :: dx2, uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
+           uprim(g_tdof,g_nprim,0:imax+1)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- 1. obtain limiter function for individual unknowns
+    ! i. P2 derivative limiting
+
+    ! conserved quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
+
+    ! ii. P1 derivative limiting
+
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call superbee_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+
+    !--- 2. Obtain limiter functions for equation system in single-material cell
+
+    do ieqn = 1,g_neqns
+      ucons(3,ieqn,ie) = theta2(ieqn) * ucons(3,ieqn,ie)
+      ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
+    end do !ieqn
+
+  end do !ie
+
+end subroutine superbee_p2_soldyn
 
 !-------------------------------------------------------------------------------
 !----- Superbee limiter for n equations individually
