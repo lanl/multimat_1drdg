@@ -324,6 +324,48 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end if
 
+  !--- Jacob's manufactured solution
+  !----------
+  else if (iprob .eq. -2) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 2) then
+       write(*,*) " Error: 'tanh manufactured problem' not configured for &
+         more than two materials"
+       stop
+     end if
+
+     ! Quantities below calculated based on following:
+     ! rhoe_1=1/rho_1, rhoe_2=1/rho_2, gam_1=gam_2, rho_1=rho_2=rho_01+k1*x
+     ! rho_01=5
+     u_fs = 1.0
+     pr_fs = 0.4
+     t_fs = 1.0/(5.0*g_cp(1)/g_gam(1))
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     call nondimen_mm6eq()
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = mms_tanh(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
   !--- SCD
   !----------
   else if (iprob .eq. 0) then
@@ -919,6 +961,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
       x = carea(ig) * 0.5 * vol + xc
       if (iprob == -1) then
         s = gaussian(x,0.0)
+      else if (iprob == -2) then
+        s = mms_tanh(x,0.0)
       else if (iprob == 8) then
         s = shockentropywave(x, 0.0)
       end if
@@ -989,6 +1033,7 @@ associate (nummat=>g_mmi%nummat)
      write(23,'(A8)',advance='no') "tmat, "
   end do !imat
   write(23,'(2A8)') "e_m, ", &
+                    "te_m," , &
                     "int_cell"
 
   do ielem = 1,imax
@@ -1034,8 +1079,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(23,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(23,'(3E16.6)') emix, &
-                          temix, &
+     write(23,'(3E16.6)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
                           trcell
 
   end do !ielem
@@ -1086,6 +1131,7 @@ associate (nummat=>g_mmi%nummat)
      write(24,'(A8)',advance='no') "tmat, "
   end do !imat
   write(24,'(2A8)') "e_m, ", &
+                    "te_m, ", &
                     "int_cell"
 
   !write(25,'(8A8)') "# xcc,", &   !1
@@ -1146,8 +1192,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix, &
-                          temix, &
+     write(24,'(3E16.6)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
                           trcell
 
      !write(25,'(8E16.6)') xp, &                                                               !1
@@ -1202,8 +1248,8 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix, &
-                          temix, &
+     write(24,'(3E16.6)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
                           trcell
 
      !write(25,'(8E16.6)') xp, &                                                               !1
@@ -1285,7 +1331,7 @@ subroutine errorcalc_p1(ucons, t, err_log, linfty)
 
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
 
-integer :: ig, ie, ieqn, ngauss
+integer :: ig, ie, ieqn, imat, ngauss
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
@@ -1293,6 +1339,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
            carea(3), weight(3), &
            s(g_neqns), &
            err, linfty, err_log(2,g_neqns), &
+           errrho, errte, &
            errlow_log(g_neqns)
 
   call rutope(1, ngauss, carea, weight)
@@ -1301,7 +1348,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
   errlow_log = 0.0
   linfty = 0.d0
 
-  if ( (iprob .eq. -1) .or. (iprob .eq. 0) ) then
+  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. 0) ) then
 
     do ie = 1,imax
     do ig = 1,ngauss
@@ -1329,30 +1376,67 @@ real*8  :: dx, xg, wi, xc, b3i, &
 
       if (i_system .eq. 1) then
         if (iprob.eq.-1) s = gaussian(xg,t)
+        if (iprob.eq.-2) s = mms_tanh(xg,t)
         if (iprob.eq.0) s = contact(xg,t)
       else if (i_system .eq. -1) then
         s = quadraticfn(xg,t)
       end if
 
-      do ieqn = 1,g_neqns
-        err = u(ieqn) - s(ieqn)
-        err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
-        err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
-        err = ulow(ieqn) - s(ieqn)
-        errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
-      end do !ieqn
+      if (iprob == -2) then
+        ! error in volfrac1
+        err = u(g_mmi%iamin) - s(g_mmi%iamin)
+        err_log(1,g_mmi%iamin) = err_log(1,g_mmi%iamin) + wi*dabs(err)
+        err_log(2,g_mmi%iamin) = err_log(2,g_mmi%iamin) + wi*err*err
+
+        ! error in mixture props (density and total energy)
+        errrho = 0.0
+        errte = 0.0
+        do imat = 1,g_mmi%nummat
+          errrho = errrho + (u(g_mmi%irmin+imat-1) - s(g_mmi%irmin+imat-1))
+          errte = errte + (u(g_mmi%iemin+imat-1) - s(g_mmi%iemin+imat-1))
+        end do !imat
+        err_log(1,g_mmi%irmin) = err_log(1,g_mmi%irmin) + wi*dabs(errrho)
+        err_log(2,g_mmi%irmin) = err_log(2,g_mmi%irmin) + wi*errrho*errrho
+        err_log(1,g_mmi%iemin) = err_log(1,g_mmi%iemin) + wi*dabs(errte)
+        err_log(2,g_mmi%iemin) = err_log(2,g_mmi%iemin) + wi*errte*errte
+
+      else
+        do ieqn = 1,g_neqns
+          err = u(ieqn) - s(ieqn)
+          err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
+          err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
+          err = ulow(ieqn) - s(ieqn)
+          errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
+        end do !ieqn
+
+      end if
+
       linfty = max(linfty, dabs(u(1) - s(1)))
 
     end do !ig
     end do !ie
 
-    do ieqn = 1,g_neqns
-      err_log(1,ieqn) = dlog10(err_log(1,ieqn))
-      err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
-      err_log(2,ieqn) = dlog10(err_log(2,ieqn))
-      errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
-      errlow_log(ieqn) = dlog10(errlow_log(ieqn))
-    end do !ieqn
+    if (iprob == -2) then
+      err_log(1,g_mmi%iamin) = dlog10(err_log(1,g_mmi%iamin))
+      err_log(1,g_mmi%irmin) = dlog10(err_log(1,g_mmi%irmin))
+      err_log(1,g_mmi%iemin) = dlog10(err_log(1,g_mmi%iemin))
+
+      err_log(2,g_mmi%iamin) = dsqrt(err_log(2,g_mmi%iamin))
+      err_log(2,g_mmi%irmin) = dsqrt(err_log(2,g_mmi%irmin))
+      err_log(2,g_mmi%iemin) = dsqrt(err_log(2,g_mmi%iemin))
+
+      err_log(2,g_mmi%iamin) = dlog10(err_log(2,g_mmi%iamin))
+      err_log(2,g_mmi%irmin) = dlog10(err_log(2,g_mmi%irmin))
+      err_log(2,g_mmi%iemin) = dlog10(err_log(2,g_mmi%iemin))
+    else
+      do ieqn = 1,g_neqns
+        err_log(1,ieqn) = dlog10(err_log(1,ieqn))
+        err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
+        err_log(2,ieqn) = dlog10(err_log(2,ieqn))
+        errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
+        errlow_log(ieqn) = dlog10(errlow_log(ieqn))
+      end do !ieqn
+    end if
 
   else
 

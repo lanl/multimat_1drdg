@@ -30,6 +30,10 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
     call relaxpressure_rdg(ucons, uprim, ndof_el, rhsel)
   end if
 
+  if (iprob == -2) then
+    call src_mms_tanh_rdg(ucons, uprim, ndof_el, rhsel)
+  end if
+
 end subroutine rhs_rdg_mm6eq
 
 !-------------------------------------------------------------------------------
@@ -730,7 +734,14 @@ associate (nummat=>g_mmi%nummat)
 
   if (g_lbflag .eq. -1) then
      !--- exact inlet
-     ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
+     if (iprob .eq. -1) then
+       ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
+     else if (iprob .eq. -2) then
+       ucons(1,:,0) = mms_tanh(coord(1),g_time*a_nd)
+     else
+       write(*,*) "Exact-BC not set for problem", iprob
+       stop
+     end if
 
   else if (g_lbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
@@ -785,7 +796,14 @@ associate (nummat=>g_mmi%nummat)
 
   if (g_rbflag .eq. -1) then
      !--- exact inlet
-     ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
+     if (iprob .eq. -1) then
+       ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
+     else if (iprob .eq. -2) then
+       ucons(1,:,imax+1) = mms_tanh(coord(imax+1),g_time*a_nd)
+     else
+       write(*,*) "Exact-BC not set for problem", iprob
+       stop
+     end if
 
   else if (g_rbflag .eq. 0) then
      !--- extrapolation / supersonic outflow
@@ -941,6 +959,68 @@ end associate
 end subroutine relaxpressure_rdg
 
 !-------------------------------------------------------------------------------
+!----- Source term integration for J Waltz's 'tanh manufactured solution':
+!-------------------------------------------------------------------------------
+
+subroutine src_mms_tanh_rdg(ucons, uprim, ndof_el, rhsel)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                      uprim(g_tdof,g_nprim,0:imax+1)
+
+integer :: ig, ie, ngauss, i
+real*8  :: dx, dx2, &
+           xc, xg, basis(g_tdof), &
+           carea(2), weight(2)
+real*8  :: u(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  ngauss = get_numqpoints(g_nsdiscr)
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+
+  dx = coord(ie+1)-coord(ie)
+
+  do ig = 1,ngauss
+
+    dx2 = weight(ig)/2.0 * dx
+
+    !--- reconstruct high-order solution
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    xg = carea(ig) * 0.5*dx + xc
+    call get_basisfns(xg, xc, dx, basis)
+    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
+
+    !--- source term calculations
+    src = 0.0
+    do i = 1,nummat
+      ! k1 = k2 = 1.0
+      src(g_mmi%irmin+i-1) = pp(vel_idx(nummat,0))*1.0*u(i)
+      src(g_mmi%imome) = src(g_mmi%imome) &
+        + pp(vel_idx(nummat,0))*pp(vel_idx(nummat,0))*1.0*u(i)
+      src(g_mmi%iemin+i-1) = 0.5*pp(vel_idx(nummat,0))*pp(vel_idx(nummat,0)) &
+        *(src(g_mmi%irmin+i-1))
+    end do !i
+
+    !--- contribute to rhs
+    do i = 1,g_neqns
+      rhsel(1,i,ie) = rhsel(1,i,ie) + dx2 * src(i)
+
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
+        rhsel(2,i,ie) = rhsel(2,i,ie) + dx2 * carea(ig) * src(i)
+      end if
+    end do !i
+
+  end do !ig
+  end do !ie
+
+end associate
+
+end subroutine src_mms_tanh_rdg
+
+!-------------------------------------------------------------------------------
 !----- 2-material Gaussian function in volume-fraction
 !-------------------------------------------------------------------------------
 
@@ -1067,6 +1147,45 @@ end associate
 !     shockentropywave(6) = shockentropywave(1) * eos3_rhoe(g_gam(1), g_pc(1), 1.0/p_nd, rho1, 0.0)
 !     shockentropywave(7) = shockentropywave(2) * eos3_rhoe(g_gam(2), g_pc(2), 1.0/p_nd, rho2, 0.0)
 !  end if
+
+end function
+
+!-------------------------------------------------------------------------------
+!----- Jacob's manufactured solution
+!-------------------------------------------------------------------------------
+
+function mms_tanh(x, t)
+
+real*8, intent(in) :: x, t
+
+integer :: i
+real*8 :: c1, xc, k(g_mmi%nummat), al_loc(g_mmi%nummat), rhomat, mms_tanh(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  c1 = 100.0
+  k(1) = 1.0
+  k(2) = 1.0
+
+  xc = 0.25 + u_fs*t
+  al_loc(1) = (1.0-2.0*g_alphamin) * 0.5 * (1.0 - dtanh(c1*(x-xc))) + g_alphamin
+  al_loc(2) = 1.0-al_loc(1)
+
+  ! material states
+  do i = 1,nummat
+    rhomat = k(i)*x + rhomat_fs(i)
+
+    mms_tanh(i) = al_loc(i)
+    mms_tanh(g_mmi%irmin+i-1) = mms_tanh(i) * rhomat
+    mms_tanh(g_mmi%iemin+i-1) = mms_tanh(i) * &
+      eos3_rhoe(g_gam(i), g_pc(i), pr_fs, rhomat, u_fs)
+  end do !i
+
+  ! bulk momentum
+  mms_tanh(g_mmi%imome) = &
+    sum(mms_tanh(g_mmi%irmin:g_mmi%irmax)) * u_fs
+
+end associate
 
 end function
 

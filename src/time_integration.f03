@@ -135,6 +135,29 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
 
+  !----- write errors to file
+  open(41,file='logerrors.dat',status='unknown')
+  write(41,*) "#  dx,  ndof,  al1,  rhomix,  temix"
+  write(41,*) "#  l1-errors: "
+  write(41,*) dlog10(coord(2)-coord(1)), dlog10(dble(imax*g_gdof)), &
+    err_log(1,g_mmi%iamin), err_log(1,g_mmi%irmin), err_log(1,g_mmi%iemin)
+  write(41,*) "#  l2-errors: "
+  write(41,*) dlog10(coord(2)-coord(1)), dlog10(dble(imax*g_gdof)), &
+    err_log(2,g_mmi%iamin), err_log(2,g_mmi%irmin), err_log(2,g_mmi%iemin)
+  close(41)
+
+  open(42,file='abserrors.dat',status='unknown')
+  write(42,*) "#  dx,  ndof,  al1,  rhomix,  temix"
+  write(42,*) "#  l1-errors: "
+  write(42,*) coord(2)-coord(1), imax*g_gdof, &
+    10.0**err_log(1,g_mmi%iamin), 10.0**err_log(1,g_mmi%irmin), &
+    10.0**err_log(1,g_mmi%iemin)
+  write(42,*) "#  l2-errors: "
+  write(42,*) coord(2)-coord(1), imax*g_gdof, &
+    10.0**err_log(2,g_mmi%iamin), 10.0**err_log(2,g_mmi%irmin), &
+    10.0**err_log(2,g_mmi%iemin)
+  close(42)
+
 end subroutine ExplicitRK3_mm6eq
 
 !----------------------------------------------------------------------------------------------
