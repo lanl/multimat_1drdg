@@ -1382,61 +1382,26 @@ real*8  :: dx, xg, wi, xc, b3i, &
         s = quadraticfn(xg,t)
       end if
 
-      if (iprob == -2) then
-        ! error in volfrac1
-        err = u(g_mmi%iamin) - s(g_mmi%iamin)
-        err_log(1,g_mmi%iamin) = err_log(1,g_mmi%iamin) + wi*dabs(err)
-        err_log(2,g_mmi%iamin) = err_log(2,g_mmi%iamin) + wi*err*err
-
-        ! error in mixture props (density and total energy)
-        errrho = 0.0
-        errte = 0.0
-        do imat = 1,g_mmi%nummat
-          errrho = errrho + (u(g_mmi%irmin+imat-1) - s(g_mmi%irmin+imat-1))
-          errte = errte + (u(g_mmi%iemin+imat-1) - s(g_mmi%iemin+imat-1))
-        end do !imat
-        err_log(1,g_mmi%irmin) = err_log(1,g_mmi%irmin) + wi*dabs(errrho)
-        err_log(2,g_mmi%irmin) = err_log(2,g_mmi%irmin) + wi*errrho*errrho
-        err_log(1,g_mmi%iemin) = err_log(1,g_mmi%iemin) + wi*dabs(errte)
-        err_log(2,g_mmi%iemin) = err_log(2,g_mmi%iemin) + wi*errte*errte
-
-      else
-        do ieqn = 1,g_neqns
-          err = u(ieqn) - s(ieqn)
-          err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
-          err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
-          err = ulow(ieqn) - s(ieqn)
-          errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
-        end do !ieqn
-
-      end if
+      do ieqn = 1,g_neqns
+        err = u(ieqn) - s(ieqn)
+        err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
+        err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
+        err = ulow(ieqn) - s(ieqn)
+        errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
+      end do !ieqn
 
       linfty = max(linfty, dabs(u(1) - s(1)))
 
     end do !ig
     end do !ie
 
-    if (iprob == -2) then
-      err_log(1,g_mmi%iamin) = dlog10(err_log(1,g_mmi%iamin))
-      err_log(1,g_mmi%irmin) = dlog10(err_log(1,g_mmi%irmin))
-      err_log(1,g_mmi%iemin) = dlog10(err_log(1,g_mmi%iemin))
-
-      err_log(2,g_mmi%iamin) = dsqrt(err_log(2,g_mmi%iamin))
-      err_log(2,g_mmi%irmin) = dsqrt(err_log(2,g_mmi%irmin))
-      err_log(2,g_mmi%iemin) = dsqrt(err_log(2,g_mmi%iemin))
-
-      err_log(2,g_mmi%iamin) = dlog10(err_log(2,g_mmi%iamin))
-      err_log(2,g_mmi%irmin) = dlog10(err_log(2,g_mmi%irmin))
-      err_log(2,g_mmi%iemin) = dlog10(err_log(2,g_mmi%iemin))
-    else
-      do ieqn = 1,g_neqns
-        err_log(1,ieqn) = dlog10(err_log(1,ieqn))
-        err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
-        err_log(2,ieqn) = dlog10(err_log(2,ieqn))
-        errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
-        errlow_log(ieqn) = dlog10(errlow_log(ieqn))
-      end do !ieqn
-    end if
+    do ieqn = 1,g_neqns
+      err_log(1,ieqn) = dlog10(err_log(1,ieqn))
+      err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
+      err_log(2,ieqn) = dlog10(err_log(2,ieqn))
+      errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
+      errlow_log(ieqn) = dlog10(errlow_log(ieqn))
+    end do !ieqn
 
   else
 
