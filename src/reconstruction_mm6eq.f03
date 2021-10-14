@@ -402,6 +402,9 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
   case(0)
 
+  case(1)
+    call min_vertexbased_p2(ucons, uprim)
+
   case(2)
     call vertexbased_p2(ucons, uprim)
 
@@ -1011,6 +1014,95 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine weno_p1
+
+!-------------------------------------------------------------------------------
+!----- min vertexbased limiter for P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine min_vertexbased_p2(ucons, uprim)
+
+integer :: ie, ieqn, imat
+real*8  :: dx2, theta2(g_neqns), theta1(g_neqns), &
+           theta1m, theta2m, &
+           thetap2(g_nprim), thetap1(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- 1. obtain limiter function for individual unknowns
+    ! i. P2 derivative limiting
+
+    ! conserved quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_neqns, uneigh, theta2)
+
+    ! primitive quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2)
+
+    ! ii. P1 derivative limiting
+
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call vertexbased_fn(g_neqns, uneigh, theta1)
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1)
+
+    ! use min limiter function for all conserved vars
+    theta1m = minval(theta1)
+    theta2m = minval(theta2)
+
+    !--- 2. Limit unknowns
+    ucons(2,:,ie) = max(theta1m,theta2m) * ucons(2,:,ie)
+    ucons(3,:,ie) = theta2m * ucons(3,:,ie)
+
+    uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      max(minval(thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat))), &
+      minval(thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)))) &
+      * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    uprim(2,vel_idx(nummat, 0),ie) = max(thetap2(vel_idx(nummat, 0)), &
+      thetap1(vel_idx(nummat, 0))) * uprim(2,vel_idx(nummat, 0),ie)
+
+    uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)) &
+      * uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    uprim(3,vel_idx(nummat, 0),ie) = thetap2(vel_idx(nummat, 0)) &
+      * uprim(3,vel_idx(nummat, 0),ie)
+
+  end do !ie
+
+end associate
+
+end subroutine min_vertexbased_p2
 
 !-------------------------------------------------------------------------------
 !----- system-consistent vertexbased limiter for P2 dofs:
