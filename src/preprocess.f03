@@ -110,6 +110,8 @@ if (i_system > -1) then
     write(*,*) "   LINC+Vertex-based."
   else if (g_nlim .eq. 7) then
     write(*,*) "   LINC+Vertex-based+WENO."
+  else if (g_nlim .eq. 8) then
+    write(*,*) "   Vertex-based+Positivity."
   else
     write(*,*) "Invalid limiter."
     stop
@@ -178,6 +180,9 @@ real*8  :: ldomn, dx
         if ((iprob==8) .and. (i_system==1)) then
           ldomn = 10.0
           coord(1) = -5.0
+        else if ((iprob==9) .and. (i_system==1)) then
+          ldomn = 9.0
+          coord(1) = 0.0
         else
           ldomn = 1.0
           coord(1)  = 0.d0
@@ -921,6 +926,66 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end if
 
+  !--- LeBlanc shocktube
+  !----------
+  else if (iprob .eq. 9) then
+
+     g_alphamin = 0.0 !1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 1) then
+       write(*,*) " Error: LeBlanc shocktube not configured for &
+         more than one material"
+       stop
+     end if
+     u_fs = 0.0
+     pr_fs = eos3_pr(g_gam(1), g_pc(1), 1.0, 0.1, 0.0)
+     t_fs = eos3_t(g_gam(1), g_cp(1), g_pc(1), 1.0, 0.1, 0.0)
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = 0.0
+     ! right state (need to non-dimensionalize)
+     p1r = eos3_pr(g_gam(1), g_pc(1), 0.001/rho_nd, 1.0d-10/(rho_nd*p_nd), 0.0)
+     t1r = eos3_t(g_gam(1), g_cp(1), g_pc(1), 0.001/rho_nd, &
+       1.0d-10/(rho_nd*p_nd), 0.0)
+     ur  = 0.0
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 3.0) then
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+        else
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+        end if
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -1041,7 +1106,7 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
      write(23,'(A8)',advance='no') "tmat, "
   end do !imat
-  write(23,'(2A8)') "e_m, ", &
+  write(23,'(3A8)') "e_m, ", &
                     "te_m," , &
                     "int_cell"
 
@@ -1144,7 +1209,7 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
      write(24,'(A8)',advance='no') "tmat, "
   end do !imat
-  write(24,'(2A8)') "e_m, ", &
+  write(24,'(3A8)') "e_m, ", &
                     "te_m, ", &
                     "int_cell"
 

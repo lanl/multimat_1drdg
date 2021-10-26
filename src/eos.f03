@@ -150,6 +150,17 @@ real*8  :: pre, eos3_ss
 end function
 
 !----------------------------------------------------------------------------------------------
+!----- Internal energy from total energy by subtracting KE; not an EOS call
+!----------------------------------------------------------------------------------------------
+
+real*8 function intenergy(ret, r, ru)
+  real*8, intent(in) :: ret, r, ru
+
+  intenergy = ret - 0.5*ru*ru/r
+
+end function intenergy
+
+!----------------------------------------------------------------------------------------------
 !----- Get primitive variables for a mesh element from conserved
 !----------------------------------------------------------------------------------------------
 

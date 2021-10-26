@@ -380,6 +380,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(6)
     call thincvertexbased_p1(ucons, uprim)
 
+  case(8)
+    call vertexbased_p1(ucons, uprim)
+    call positivitypres_p1(ucons, uprim)
+
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
     call exit
@@ -1014,6 +1018,157 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine weno_p1
+
+!------------------------------------------------------------------------------
+!----- Robust Positivity-preserving limiter (Wang, Zhang and Shu JCP 2012):
+!------------------------------------------------------------------------------
+
+subroutine positivitypres_p1(ucons, uprim)
+
+integer :: ie, imat, ifc, ne
+real*8  :: dx, xc, rho_min, p_min, eps, eps_pos, ui_min, ui, uf(1), pf(1), &
+  pressure, u2i_min, theta_1, theta_2, theta_3, theta_m
+real*8  :: basis(g_tdof), ufull(g_neqns), pfull(g_nprim), &
+  ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  !--- set up a small number
+  rho_min = 999.9d9
+  p_min = 999.9d9
+
+  eps = 1.0d-13
+
+  do ie = 1,imax
+
+    do imat = 1,nummat
+      rho_min = min(rho_min, ucons(1,g_mmi%irmin+imat-1,ie))
+      p_min = min(p_min, uprim(1,apr_idx(nummat,imat),ie)/ucons(1,imat,ie))
+    end do !imat
+
+  end do !ie
+
+  eps_pos = max(1d-16, min(eps, rho_min, p_min))
+
+  do ie = 1,imax
+
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    dx = coord(ie+1)-coord(ie)
+
+    !--- modify density for each material
+
+    ui_min = 999.d9
+
+    do imat = 1,nummat
+
+      do ifc = 1,2
+
+        if (ifc == 1) then
+          ne = 0
+        else if (ifc == 2) then
+          ne = 1
+        end if
+
+        ! unlimited 2nd order density
+        call get_basisfns(coord(ie+ne), xc, dx, basis)
+        call ho_reconstruction(1, ucons(:,g_mmi%irmin+imat-1,ie), basis, &
+          uf)
+
+        ! minimum in this cell
+        ui_min = min(ui_min, uf(1))
+
+      end do !ifc
+
+      ui = ucons(1,g_mmi%irmin+imat-1,ie)
+      if (dabs(ui-ui_min) <= eps) then
+        theta_1 = 1.d0
+      else
+        theta_1 = min(1.0, dabs((ui - eps_pos) / (ui - ui_min)))
+      end if
+
+      ! limit the slope of the density
+      ucons(2,g_mmi%irmin+imat-1,ie) = theta_1 * ucons(2,g_mmi%irmin+imat-1,ie)
+
+    end do !imat
+
+    !--- modify the pressure and energy for each material
+
+    ui_min = 999.d9
+    u2i_min = 999.d9
+    theta_m = 1.0
+
+    do imat = 1,nummat
+
+      do ifc = 1,2
+
+        if (ifc == 1) then
+          ne = 0
+        else if (ifc == 2) then
+          ne = 1
+        end if
+
+        ! unlimited 2nd order pressure
+        call get_basisfns(coord(ie+ne), xc, dx, basis)
+        call ho_reconstruction(g_neqns, ucons(:,:,ie), basis, ufull)
+        call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pfull)
+
+        !pressure = eos3_alphapr(g_gam(imat), g_pc(imat), ufull(imat), &
+        !  ufull(g_mmi%irmin+imat-1), ufull(g_mmi%iemin+imat-1), &
+        !  ufull(g_mmi%imome)/sum(ufull(g_mmi%irmin:g_mmi%irmax))) &
+        !  / ufull(imat)
+
+        !! minimum in this cell
+        !ui_min = min(ui_min, pressure)
+
+        ! minimum in this cell
+        ui_min = min(ui_min, pfull(apr_idx(nummat,imat))/ufull(imat))
+
+        ! unlimited 2nd order energy
+        u2i_min = min(u2i_min, intenergy(ufull(g_mmi%iemin+imat-1), &
+          ufull(g_mmi%irmin+imat-1), &
+          ufull(g_mmi%irmin+imat-1)*pfull(vel_idx(nummat,0))))
+
+      end do !ifc
+
+      ui = uprim(1,apr_idx(nummat,imat),ie)/ucons(1,imat,ie)
+      if (ui_min < eps_pos) then
+        theta_2 = min(1.0, dabs((ui - eps_pos) / (ui - ui_min)))
+      else
+        theta_2 = 1.d0
+      end if
+
+      ui = intenergy(ucons(1,g_mmi%iemin+imat-1,ie), &
+        ucons(1,g_mmi%irmin+imat-1,ie), &
+        ucons(1,g_mmi%irmin+imat-1,ie)*uprim(1,vel_idx(nummat,0),ie))
+      if (u2i_min < eps_pos) then
+        theta_3 = min(1.0, dabs((ui - eps_pos) / (ui - u2i_min)))
+      else
+        theta_3 = 1.d0
+      end if
+
+      !if (theta_1 < 1.0 .or. theta_2 < 1.0 .or. theta_3 < 1.0) &
+      !print*, ie, theta_1, theta_2, theta_3
+
+      theta_3 = min(theta_3, theta_2)
+      theta_m = min(theta_m, theta_2, theta_3)
+
+      ! limit slopes of other vars
+      uprim(2,apr_idx(nummat,imat),ie) = theta_3 &
+        * uprim(2,apr_idx(nummat,imat),ie)
+      ucons(2,g_mmi%irmin+imat-1,ie) = theta_3 * ucons(2,g_mmi%irmin+imat-1,ie)
+      ucons(2,g_mmi%iemin+imat-1,ie) = theta_3 * ucons(2,g_mmi%iemin+imat-1,ie)
+
+    end do !imat
+
+    ! limit momentum
+    ucons(2,g_mmi%imome,ie) = theta_m * ucons(2,g_mmi%imome,ie)
+    uprim(2,vel_idx(nummat,0),ie) = theta_m * uprim(2,vel_idx(nummat,0),ie)
+
+  end do !ie
+
+end associate
+
+end subroutine positivitypres_p1
 
 !-------------------------------------------------------------------------------
 !----- min vertexbased limiter for P2 dofs:
