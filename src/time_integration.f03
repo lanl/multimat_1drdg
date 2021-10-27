@@ -48,6 +48,14 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
      !--- RK stages
      do istage = 1,3 !2
 
+        if (istage == 1) then
+          alpha_dt = 0.0
+        else if (istage == 2) then
+          alpha_dt = 1.0
+        else
+          alpha_dt = 0.5
+        end if
+
         rhsel(:,:,:) = 0.d0
 
         call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el, ndof_el)

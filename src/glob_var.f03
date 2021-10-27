@@ -9,7 +9,7 @@ integer :: i_system, &
            g_nprelx, g_intreco, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen
-real*8  :: dt_u, dt, dt_s, g_time
+real*8  :: dt_u, dt, dt_s, g_time, alpha_dt
 
 !--- indexing into the multimaterial system
 type mmindex

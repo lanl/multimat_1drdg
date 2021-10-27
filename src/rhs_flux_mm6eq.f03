@@ -31,7 +31,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
   end if
 
   if (iprob == -2) then
-    call src_mms_tanh_rdg(ucons, uprim, ndof_el, rhsel)
+    call src_mms_tanh_rdg(ndof_el, rhsel)
   end if
 
 end subroutine rhs_rdg_mm6eq
@@ -703,7 +703,7 @@ associate (nummat=>g_mmi%nummat)
      if (iprob .eq. -1) then
        ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
      else if (iprob .eq. -2) then
-       ucons(1,:,0) = mms_tanh(coord(1),g_time*a_nd)
+       ucons(1,:,0) = mms_tanh(coord(1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -765,7 +765,7 @@ associate (nummat=>g_mmi%nummat)
      if (iprob .eq. -1) then
        ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
      else if (iprob .eq. -2) then
-       ucons(1,:,imax+1) = mms_tanh(coord(imax+1),g_time*a_nd)
+       ucons(1,:,imax+1) = mms_tanh(coord(imax+1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -847,7 +847,7 @@ real*8  :: dx, dx2, b3, p_star, rel_time, rhorat, s_lim, &
            xc, xg, basis(g_tdof), &
            rho, p, aimat, nume, deno, &
            carea(2), weight(2)
-real*8  :: u(g_neqns), up(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax)
+real*8  :: u(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax)
 
 real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp, s_max
 
@@ -869,8 +869,6 @@ associate (nummat=>g_mmi%nummat)
     xg = carea(ig) * 0.5*dx + xc
     call get_basisfns(xg, xc, dx, basis)
     call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
-
-    call get_uprim_mm6eq(u, up)
 
     rho  = sum(u(g_mmi%irmin:g_mmi%irmax))
     p = 0.0
@@ -927,17 +925,14 @@ end subroutine relaxpressure_rdg
 !----- Source term integration for J Waltz's 'tanh manufactured solution':
 !-------------------------------------------------------------------------------
 
-subroutine src_mms_tanh_rdg(ucons, uprim, ndof_el, rhsel)
+subroutine src_mms_tanh_rdg(ndof_el, rhsel)
 
 integer, intent(in) :: ndof_el(2,0:imax+1)
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
-                      uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ig, ie, ngauss, i
-real*8  :: dx, dx2, &
-           xc, xg, basis(g_tdof), &
+real*8  :: dx, dx2, xc, xg, &
            carea(2), weight(2)
-real*8  :: u(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
+real*8  :: u(g_neqns), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -952,21 +947,17 @@ associate (nummat=>g_mmi%nummat)
 
     dx2 = weight(ig)/2.0 * dx
 
-    !--- reconstruct high-order solution
     xc = 0.5*(coord(ie+1)+coord(ie))
     xg = carea(ig) * 0.5*dx + xc
-    call get_basisfns(xg, xc, dx, basis)
-    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
+    u = mms_tanh(xg, (g_time*a_nd + alpha_dt*dt))
 
     !--- source term calculations
     src = 0.0
     do i = 1,nummat
       ! k1 = k2 = 1.0
-      src(g_mmi%irmin+i-1) = pp(vel_idx(nummat,0))*1.0*u(i)
-      src(g_mmi%imome) = src(g_mmi%imome) &
-        + pp(vel_idx(nummat,0))*pp(vel_idx(nummat,0))*1.0*u(i)
-      src(g_mmi%iemin+i-1) = 0.5*pp(vel_idx(nummat,0))*pp(vel_idx(nummat,0)) &
-        *(src(g_mmi%irmin+i-1))
+      src(g_mmi%irmin+i-1) = u_fs*1.0*u(i)
+      src(g_mmi%imome) = src(g_mmi%imome) + u_fs*src(g_mmi%irmin+i-1)
+      src(g_mmi%iemin+i-1) = 0.5*u_fs*u_fs*src(g_mmi%irmin+i-1)
     end do !i
 
     !--- contribute to rhs
@@ -1128,11 +1119,11 @@ real*8 :: c1, xc, k(g_mmi%nummat), al_loc(g_mmi%nummat), rhomat, mms_tanh(g_neqn
 
 associate (nummat=>g_mmi%nummat)
 
-  c1 = 100.0
+  c1 = 10.0
   k(1) = 1.0
   k(2) = 1.0
 
-  xc = 0.25 + u_fs*t
+  xc = 0.45 + u_fs*t
   al_loc(1) = (1.0-2.0*g_alphamin) * 0.5 * (1.0 - dtanh(c1*(x-xc))) + g_alphamin
   al_loc(2) = 1.0-al_loc(1)
 
