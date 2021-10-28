@@ -143,41 +143,6 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   write(*,*) "-----------------------------------------------"
   write(*,*) " "
 
-  !----- write errors to file
-  open(41,file='logerrors.dat',status='unknown')
-  write(41,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
-  write(41,'(A13)') "#  l1-errors: "
-  write(41,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
-    dlog10(dble(imax*g_gdof))
-  do ieqn = 1,g_neqns
-    write(41,'(F16.6)',advance='no') err_log(1,ieqn)
-  end do !ieqn
-  write(41,*) ""
-  write(41,'(A13)') "#  l2-errors: "
-  write(41,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
-    dlog10(dble(imax*g_gdof))
-  do ieqn = 1,g_neqns
-    write(41,'(F16.6)',advance='no') err_log(2,ieqn)
-  end do !ieqn
-  close(41)
-
-  open(42,file='abserrors.dat',status='unknown')
-  write(42,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
-  write(42,'(A13)') "#  l1-errors: "
-  write(42,'(E16.6)',advance='no') coord(2)-coord(1)
-  write(42,'(I16)',advance='no') imax*g_gdof
-  do ieqn = 1,g_neqns
-    write(42,'(E16.6)',advance='no') 10.0**err_log(1,ieqn)
-  end do !ieqn
-  write(42,*) ""
-  write(42,'(A13)') "#  l2-errors: "
-  write(42,'(E16.6)',advance='no') coord(2)-coord(1)
-  write(42,'(I16)',advance='no') imax*g_gdof
-  do ieqn = 1,g_neqns
-    write(42,'(E16.6)',advance='no') 10.0**err_log(2,ieqn)
-  end do !ieqn
-  close(42)
-
 end subroutine ExplicitRK3_mm6eq
 
 !----------------------------------------------------------------------------------------------

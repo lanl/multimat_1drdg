@@ -1423,6 +1423,7 @@ subroutine errorcalc_p1(ucons, t, err_log, linfty)
 real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
 
 integer :: ig, ie, ieqn, imat, ngauss
+logical :: file_exists
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
@@ -1486,6 +1487,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
     end do !ig
     end do !ie
 
+    !--- final error computation
     do ieqn = 1,g_neqns
       err_log(1,ieqn) = dlog10(err_log(1,ieqn))
       err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
@@ -1493,6 +1495,67 @@ real*8  :: dx, xg, wi, xc, b3i, &
       errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
       errlow_log(ieqn) = dlog10(errlow_log(ieqn))
     end do !ieqn
+
+    !--- write errors to file
+    inquire(file='logl1errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(41,file='logl1errors.dat',status='old', position='append')
+    else
+      open(41,file='logl1errors.dat',status='new')
+      write(41,'(A13)') "#  l1-errors: "
+      write(41,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(41,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
+      dlog10(dble(imax*g_gdof))
+    do ieqn = 1,g_neqns
+      write(41,'(F16.6)',advance='no') err_log(1,ieqn)
+    end do !ieqn
+    close(41)
+
+    inquire(file='logl2errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(42,file='logl2errors.dat',status='old', position='append')
+    else
+      open(42,file='logl2errors.dat',status='new')
+      write(42,'(A13)') "#  l2-errors: "
+      write(42,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(42,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
+      dlog10(dble(imax*g_gdof))
+    do ieqn = 1,g_neqns
+      write(42,'(F16.6)',advance='no') err_log(2,ieqn)
+    end do !ieqn
+    close(42)
+
+    inquire(file='absl1errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(43,file='absl1errors.dat',status='old', position='append')
+    else
+      open(43,file='absl1errors.dat',status='new')
+      write(43,'(A13)') "#  l1-errors: "
+      write(43,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(43,'(E16.6)',advance='no') coord(2)-coord(1)
+    write(43,'(I16)',advance='no') imax*g_gdof
+    do ieqn = 1,g_neqns
+      write(43,'(E16.6)',advance='no') 10.0**err_log(1,ieqn)
+    end do !ieqn
+    close(43)
+
+    inquire(file='absl2errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(44,file='absl2errors.dat',status='old', position='append')
+    else
+      open(44,file='absl2errors.dat',status='new')
+      write(44,'(A13)') "#  l2-errors: "
+      write(44,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(44,'(E16.6)',advance='no') coord(2)-coord(1)
+    write(44,'(I16)',advance='no') imax*g_gdof
+    do ieqn = 1,g_neqns
+      write(44,'(E16.6)',advance='no') 10.0**err_log(2,ieqn)
+    end do !ieqn
+    close(44)
 
   else
 
