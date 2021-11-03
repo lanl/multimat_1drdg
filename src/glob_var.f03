@@ -48,7 +48,7 @@ real*8  :: g_prelct
 real*8  :: g_mass0_m, g_tenergy0_m
 
 !--- geometry
-real*8,  allocatable :: coord(:)
+real*8,  allocatable :: coord(:), g_limcell(:,:)
 
 real*8,  parameter :: Pi = 4.d0*datan(1.d0)
 

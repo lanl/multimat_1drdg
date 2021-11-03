@@ -130,6 +130,13 @@ end subroutine screen_output
 subroutine read_cntl()
 
 integer :: imat
+logical :: file_exists
+
+        inquire(file='setflow.cntl', exist=file_exists)
+        if (.not.file_exists) then
+          write(*,*) "Error: Input file 'setflow.cntl' does not exist"
+          stop
+        end if
 
         open(12, file = 'setflow.cntl')
 
@@ -1015,9 +1022,9 @@ end subroutine init_soln_mm6eq
 subroutine weakinit_p1(ucons)
 
 integer :: ig, ie, ieqn, ngauss
-data       ngauss/3/
+data       ngauss/5/
 
-real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(3), weight(3)
+real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(5), weight(5)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
@@ -1106,9 +1113,11 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
      write(23,'(A8)',advance='no') "tmat, "
   end do !imat
-  write(23,'(3A8)') "e_m, ", &
-                    "te_m," , &
-                    "int_cell"
+  write(23,'(5A15)') "e_m, ", &
+                     "te_m," , &
+                     "limcons_cell, ", &
+                     "limprim_cell, ", &
+                     "int_cell"
 
   do ielem = 1,imax
 
@@ -1141,8 +1150,6 @@ associate (nummat=>g_mmi%nummat)
      emix = emix/rhomix
      temix = temix/rhomix
 
-     trcell = dble(matint_el(ielem))
-
      !--- write material and bulk data to gnuplot file
      write(23,'(E16.6)',advance='no') xcc
      do imat = 1,nummat
@@ -1158,9 +1165,11 @@ associate (nummat=>g_mmi%nummat)
      do imat = 1,nummat
         write(23,'(E16.6)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(23,'(3E16.6)') emix*p_nd/rho_nd, &
+     write(23,'(5E16.6)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &
-                          trcell
+                          g_limcell(1,ielem), &
+                          g_limcell(2,ielem), &
+                          dble(matint_el(ielem))
 
   end do !ielem
 

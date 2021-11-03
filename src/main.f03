@@ -80,7 +80,7 @@ allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          ndof_el(2,0:imax+1), &
          err_log(g_neqns))
 
-allocate(coord(0:imax+2))
+allocate(coord(0:imax+2), g_limcell(2,imax))
 
 !----- Mesh generation:
 call gen_mesh()
@@ -152,6 +152,9 @@ else if (i_system .eq. 1) then
   ! Initialization
   call init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
   dt = dt_u
+  write(*,*) "Initialization complete. Starting time stepping..."
+  write(*,*) " "
+
   call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 end if
