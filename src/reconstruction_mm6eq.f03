@@ -674,9 +674,6 @@ associate (nummat=>g_mmi%nummat)
       * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
     uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
       * uprim(2,vel_idx(nummat, 0),ie)
-    uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
-      * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
   end do !ie
 
@@ -731,20 +728,14 @@ associate (nummat=>g_mmi%nummat)
 
       !! consistent limiting of primitives
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      !  ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
-      !  * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
       !uprim(2,vel_idx(nummat, 0),ie) = 0.0
 
       ! monotonicity of primitives
       uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
 
       !--- common for all equations
-      !thetac = min(minval(theta), &
-      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !thetac = minval(theta)
       !ucons(2,:,ie) = thetac * ucons(2,:,ie)
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
-      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,1:nummat,ie) = minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
@@ -760,11 +751,8 @@ associate (nummat=>g_mmi%nummat)
       !thetac = minval(theta(g_mmi%iemin:g_mmi%iemax))
       !ucons(2,g_mmi%iemin:g_mmi%iemax,ie) = thetac &
       !  * ucons(2,g_mmi%iemin:g_mmi%iemax,ie)
-      !thetac = min(theta(g_mmi%imome), &
-      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !thetac = theta(g_mmi%imome)
       !ucons(2,g_mmi%imome,ie) = thetac * ucons(2,g_mmi%imome,ie)
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
-      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &

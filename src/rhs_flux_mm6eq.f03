@@ -240,8 +240,6 @@ associate (nummat=>g_mmi%nummat)
 
     !--- flux terms
     ! momentum flux
-    !cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) &
-    !  * sum(pp(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) + p
     cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) * u(g_mmi%imome) + p
     nflux(1,g_mmi%imome) = 0.0
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
@@ -370,7 +368,6 @@ associate (nummat=>g_mmi%nummat)
     pi_l         = pp_l(apr_idx(nummat, imat))
     hm_l(imat)   = em_l + pi_l
     p_l = p_l + pi_l
-    !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
 
   ! ur
@@ -382,7 +379,6 @@ associate (nummat=>g_mmi%nummat)
     pi_r         = pp_r(apr_idx(nummat, imat))
     hm_r(imat)   = em_r + pi_r
     p_r = p_r + pi_r
-    !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
   end do !imat
 
@@ -405,14 +401,10 @@ associate (nummat=>g_mmi%nummat)
     ffunc_l(imat) = u_l * al_l(imat)
     ffunc_l(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
     ffunc_l(g_mmi%iemin+imat-1) = u_l * hm_l(imat)
-    !ffunc_l(g_mmi%imome) = ffunc_l(g_mmi%imome) &
-    !  + u_l * pp_l(mmom_idx(nummat, imat)) + pm_l(imat)
 
     ffunc_r(imat) = u_r * al_r(imat)
     ffunc_r(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
     ffunc_r(g_mmi%iemin+imat-1) = u_r * hm_r(imat)
-    !ffunc_r(g_mmi%imome) = ffunc_r(g_mmi%imome) &
-    !  + u_r * pp_r(mmom_idx(nummat, imat)) + pm_r(imat)
   end do !imat
   ffunc_l(g_mmi%imome) = u_l * rhou_l + p_l
   ffunc_r(g_mmi%imome) = u_r * rhou_r + p_r
@@ -483,7 +475,6 @@ associate (nummat=>g_mmi%nummat)
     pi_l         = pp_l(apr_idx(nummat, imat))
     hm_l(imat)   = em_l + pi_l
     p_l = p_l + pi_l
-    !rhou_l = rhou_l + pp_l(mmom_idx(nummat, imat))
     pm_l(imat)   = pi_l
 
   ! ur
@@ -495,7 +486,6 @@ associate (nummat=>g_mmi%nummat)
     pi_r         = pp_r(apr_idx(nummat, imat))
     hm_r(imat)   = em_r + pi_r
     p_r = p_r + pi_r
-    !rhou_r = rhou_r + pp_r(mmom_idx(nummat, imat))
     pm_r(imat)   = pi_r
   end do !imat
 
@@ -552,11 +542,6 @@ associate (nummat=>g_mmi%nummat)
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
     flux(g_mmi%irmin+imat-1) = lambda_plus*arhom_l(imat) + lambda_minu*arhom_r(imat)
     flux(g_mmi%iemin+imat-1) = lambda_plus*hm_l(imat)    + lambda_minu*hm_r(imat)
-    !flux(g_mmi%imome) = flux(g_mmi%imome) &
-    !  + lambda_plus*pp_l(mmom_idx(nummat, imat)) &
-    !  + lambda_minu*pp_r(mmom_idx(nummat, imat)) &
-    !  + psplus_l*pm_l(imat) &
-    !  + psminu_r*pm_r(imat) + p_u(imat)
   end do !imat
   flux(g_mmi%imome) = lambda_plus*rhou_l + lambda_minu*rhou_r + p_12
 
