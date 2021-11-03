@@ -1007,7 +1007,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
 integer :: ielem, imat
 real*8  :: xcc, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns)
+real*8  :: uconsi(g_neqns), uprimi(g_nprim), tmat(g_mmi%nummat)
 
 character(len=100) :: filename2,filename3
 
@@ -1039,9 +1039,7 @@ associate (nummat=>g_mmi%nummat)
   do ielem = 1,imax
 
      uconsi = ucons(1,:,ielem)
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,apr_idx(nummat, 1):apr_idx(nummat, nummat),ielem)
-     uprimi(g_mmi%imome) = uprim(1,vel_idx(nummat, 0),ielem)
+     uprimi = uprim(1,:,ielem)
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
 
@@ -1052,11 +1050,14 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
@@ -1067,17 +1068,17 @@ associate (nummat=>g_mmi%nummat)
      !--- write material and bulk data to gnuplot file
      write(23,'(E16.6)',advance='no') xcc
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(imat)
+        write(23,'(E16.6)',advance='no') uconsi(imat)
      end do !imat
      write(23,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(23,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
      end do !imat
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(23,'(E16.6)',advance='no') tmat(imat)*t_nd
      end do !imat
      write(23,'(3E16.6)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &
@@ -1101,7 +1102,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
 integer :: ielem, imat
 real*8  :: dx, xc, xp, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_nprim), basis(g_tdof)
+real*8  :: uconsi(g_neqns), uprimi(g_nprim), basis(g_tdof), tmat(g_mmi%nummat)
 
 character(len=100) :: filename2,filename3
 
@@ -1153,10 +1154,7 @@ associate (nummat=>g_mmi%nummat)
      xp = coord(ielem)
      call get_basisfns(xp, xc, dx, basis)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
-     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
+     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
 
      rhomix = 0.0
      pmix = 0.0
@@ -1165,11 +1163,14 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
@@ -1183,14 +1184,14 @@ associate (nummat=>g_mmi%nummat)
         write(24,'(E16.6)',advance='no') uconsi(imat)
      end do !imat
      write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
      end do !imat
      write(24,'(3E16.6)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &
@@ -1209,10 +1210,7 @@ associate (nummat=>g_mmi%nummat)
      xp = coord(ielem+1)
      call get_basisfns(xp, xc, dx, basis)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
-     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
+     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
 
      rhomix = 0.0
      pmix = 0.0
@@ -1221,11 +1219,14 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
@@ -1239,14 +1240,14 @@ associate (nummat=>g_mmi%nummat)
         write(24,'(E16.6)',advance='no') uconsi(imat)
      end do !imat
      write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
      end do !imat
      write(24,'(3E16.6)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &

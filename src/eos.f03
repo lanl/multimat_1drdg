@@ -158,30 +158,23 @@ subroutine get_uprim_mm6eq(ucons, uprim)
 real*8, intent(in) :: ucons(g_neqns)
 
 integer :: i
-real*8  :: almat(g_mmi%nummat), pmat(g_mmi%nummat), tmat(g_mmi%nummat), &
-           rhomat(g_mmi%nummat), rhoemat(g_mmi%nummat), u, rho
-real*8  :: uprim(g_neqns)
+real*8  :: almat, apmat, rhomat, rhoemat, u
+real*8  :: uprim(g_nprim)
 
 associate (nummat=>g_mmi%nummat)
 
   ! bulk state
-  rho = sum( ucons(g_mmi%irmin:g_mmi%irmax) )
-  u = ucons(g_mmi%imome) / rho
-  uprim(g_mmi%imome) = u
+  u = ucons(g_mmi%imome) / sum( ucons(g_mmi%irmin:g_mmi%irmax) )
+  uprim(vel_idx(nummat,0)) = u
 
   ! material states
   do i = 1,nummat
-    ! conserved variables
-    almat(i) = ucons(i)
-    rhomat(i) = ucons(g_mmi%irmin+i-1) / almat(i)
-    rhoemat(i) = ucons(g_mmi%iemin+i-1) / almat(i)
-    ! primitive variables
-    pmat(i) = eos3_pr(g_gam(i), g_pc(i), rhomat(i), rhoemat(i), u)
-    tmat(i) = eos3_t(g_gam(i), g_cp(i), g_pc(i), rhomat(i), rhoemat(i), u)
+    almat = ucons(i)
+    rhomat = ucons(g_mmi%irmin+i-1) / almat
+    rhoemat = ucons(g_mmi%iemin+i-1) / almat
+    apmat = eos3_alphapr(g_gam(i), g_pc(i), almat, rhomat, rhoemat, u)
 
-    uprim(i) = almat(i)
-    uprim(g_mmi%irmin+i-1) = pmat(i)
-    uprim(g_mmi%iemin+i-1) = tmat(i)
+    uprim(apr_idx(nummat,i)) = apmat
   end do !i
 
 end associate
