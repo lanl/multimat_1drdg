@@ -158,8 +158,7 @@ subroutine get_uprim_mm6eq(ucons, uprim)
 real*8, intent(in) :: ucons(g_neqns)
 
 integer :: i
-real*8  :: almat, apmat, rhomat, rhoemat, u
-real*8  :: uprim(g_nprim)
+real*8  :: u, uprim(g_nprim)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -169,12 +168,8 @@ associate (nummat=>g_mmi%nummat)
 
   ! material states
   do i = 1,nummat
-    almat = ucons(i)
-    rhomat = ucons(g_mmi%irmin+i-1) / almat
-    rhoemat = ucons(g_mmi%iemin+i-1) / almat
-    apmat = eos3_alphapr(g_gam(i), g_pc(i), almat, rhomat, rhoemat, u)
-
-    uprim(apr_idx(nummat,i)) = apmat
+    uprim(apr_idx(nummat,i)) = eos3_alphapr(g_gam(i), g_pc(i), ucons(i), &
+      ucons(g_mmi%irmin+i-1), ucons(g_mmi%iemin+i-1), u)
   end do !i
 
 end associate
