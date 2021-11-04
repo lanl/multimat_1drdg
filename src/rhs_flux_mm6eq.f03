@@ -90,9 +90,14 @@ associate (nummat=>g_mmi%nummat)
 
   !--- sound-speeds
   ul = ucons(1,:,iel)
-  pp_l = uprim(1,:,iel)
   ur = ucons(1,:,ier)
-  pp_r = uprim(1,:,ier)
+  if (g_pureco == 1) then
+    pp_l = uprim(1,:,iel)
+    pp_r = uprim(1,:,ier)
+  else
+    call get_uprim_mm6eq(ul, pp_l)
+    call get_uprim_mm6eq(ur, pp_r)
+  end if
   call get_multimatsoundspeed(ul, pp_l, ac_l)
   call get_multimatsoundspeed(ur, pp_r, ac_r)
 

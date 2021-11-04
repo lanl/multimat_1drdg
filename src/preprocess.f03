@@ -85,6 +85,14 @@ if (i_system > -1) then
   end if
 
   write(*,*) " "
+  write(*,*) " 'Redundant' reconst/limiting for a*p, u: "
+  if (g_pureco .eq. 1) then
+    write(*,*) "   ON"
+  else
+    write(*,*) "   OFF"
+  end if
+
+  write(*,*) " "
   write(*,*) " Limiter: "
   if (g_nlim .eq. 0) then
     write(*,*) "   None."
@@ -145,7 +153,8 @@ integer :: imat
         read(12,*) u_fs
         read(12,*) pr_fs
         read(12,*) ! blank line
-        read(12,*) g_nsdiscr, g_nlim, g_nmatint
+        read(12,*) g_nsdiscr
+        read(12,*) g_nlim, g_nmatint, g_pureco
         read(12,*) dt_u
         read(12,*) ntstep
         read(12,*) ! blank line

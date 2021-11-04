@@ -251,84 +251,88 @@ real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
 
 associate (nummat=>g_mmi%nummat)
 
-  ngauss = get_numqpoints(g_nsdiscr)
-  call rutope(1, ngauss, carea, weight)
+  if (g_pureco == 1) then
 
-  do ie = 0,imax+1
+    ngauss = get_numqpoints(g_nsdiscr)
+    call rutope(1, ngauss, carea, weight)
 
-    dxi = coord(ie+1)-coord(ie)
-    xci = 0.5*(coord(ie+1)+coord(ie))
+    do ie = 0,imax+1
 
-    ! get lhs
-    lhs(1) = dxi
-    if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
-    !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+      dxi = coord(ie+1)-coord(ie)
+      xci = 0.5*(coord(ie+1)+coord(ie))
 
-    ! quadrature
-    rhs = 0.0
-    do ig = 1,ngauss
-      xg = carea(ig) * 0.5*dxi + xci
-      wi = 0.5 * weight(ig)
-      b2 = p1basis(xg, xci, dxi)
-      !b3 = p2basis(xg, xci, dxi)
+      ! get lhs
+      lhs(1) = dxi
+      if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
+      !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
 
-      !--- dgp0 or rdgp0p1
-      if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
-        do ieqn = 1,g_neqns
-          ug(ieqn) = ucons(1,ieqn,ie)
+      ! quadrature
+      rhs = 0.0
+      do ig = 1,ngauss
+        xg = carea(ig) * 0.5*dxi + xci
+        wi = 0.5 * weight(ig)
+        b2 = p1basis(xg, xci, dxi)
+        !b3 = p2basis(xg, xci, dxi)
+
+        !--- dgp0 or rdgp0p1
+        if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp1 or rdgp1p2
+        elseif ((g_nsdiscr .ge. 11)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
+          end do !ieqn
+
+        !!--- rdgp1p2
+        !elseif (g_nsdiscr .eq. 12) then
+        !  do ieqn = 1,g_neqns
+        !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+        !      + b3*ucons(3,ieqn,ie)
+        !  end do !ieqn
+
+        end if
+
+        ! primitives at quadrature point
+        upg = 0.0
+        upg(vel_idx(nummat, 0)) = ug(g_mmi%imome)/sum(ug(g_mmi%irmin:g_mmi%irmax))
+        do imat = 1,nummat
+          rhomat = ug(g_mmi%irmin+imat-1)
+          rhoemat = ug(g_mmi%iemin+imat-1)
+          upg(apr_idx(nummat, imat)) = &
+            eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+              upg(vel_idx(nummat, 0)))
+        end do !imat
+
+        ! get rhs
+        do ieqn = 1,g_nprim
+          rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
+          if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
+          !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
         end do !ieqn
 
-      !--- dgp1 or rdgp1p2
-      elseif ((g_nsdiscr .ge. 11)) then
-        do ieqn = 1,g_neqns
-          ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
-        end do !ieqn
+      end do !ig
 
-      !!--- rdgp1p2
-      !elseif (g_nsdiscr .eq. 12) then
-      !  do ieqn = 1,g_neqns
-      !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
-      !      + b3*ucons(3,ieqn,ie)
-      !  end do !ieqn
-
-      end if
-
-      ! primitives at quadrature point
-      upg = 0.0
-      upg(vel_idx(nummat, 0)) = ug(g_mmi%imome)/sum(ug(g_mmi%irmin:g_mmi%irmax))
-      do imat = 1,nummat
-        rhomat = ug(g_mmi%irmin+imat-1)
-        rhoemat = ug(g_mmi%iemin+imat-1)
-        upg(apr_idx(nummat, imat)) = &
-          eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
-            upg(vel_idx(nummat, 0)))
-      end do !imat
-
-      ! get rhs
+      ! get primitive variable dofs
       do ieqn = 1,g_nprim
-        rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
-        if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
-        !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
+        uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
+        if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
+        !if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
       end do !ieqn
 
-    end do !ig
+    end do !ie
 
-    ! get primitive variable dofs
-    do ieqn = 1,g_nprim
-      uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
-      if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
-      !if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
-    end do !ieqn
+    if (g_nsdiscr .eq. 1) then
+      uprim(2,:,0) = 0.0
+      uprim(2,:,imax+1) = 0.0
 
-  end do !ie
+    else if (g_nsdiscr .eq. 12) then
+      uprim(3,:,0) = 0.0
+      uprim(3,:,imax+1) = 0.0
 
-  if (g_nsdiscr .eq. 1) then
-    uprim(2,:,0) = 0.0
-    uprim(2,:,imax+1) = 0.0
-
-  else if (g_nsdiscr .eq. 12) then
-    uprim(3,:,0) = 0.0
-    uprim(3,:,imax+1) = 0.0
+    end if
 
   end if
 
@@ -1831,13 +1835,17 @@ real*8, intent(out) :: uho(g_neqns), pho(g_nprim)
 
 integer :: imat, mmax, matint(g_mmi%nummat)
 real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel, &
-  alsum, almat(g_mmi%nummat)
+  alsum, velavg, almat(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
   !--- TVD reconstruction
   call ho_reconstruction(g_neqns, udof, basis, uho)
-  call ho_reconstruction(g_nprim, pdof, basis, pho)
+  if (g_pureco == 1) then
+    call ho_reconstruction(g_nprim, pdof, basis, pho)
+  else
+    call get_uprim_mm6eq(uho, pho)
+  end if
 
   beta_linc = 2.5
 
@@ -1895,6 +1903,8 @@ associate (nummat=>g_mmi%nummat)
     uho(mmax) = uho(mmax) + (1.0 - alsum)
     alsum = 1.0
 
+    velavg = udof(1,g_mmi%imome)/sum(udof(1,g_mmi%irmin:g_mmi%irmax))
+
     ! consistent reconstruction
     do imat = 1, nummat
       if (matint(imat) == 1) then
@@ -1904,7 +1914,15 @@ associate (nummat=>g_mmi%nummat)
         ! energy
         uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
         ! pressure
-        pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm * uho(imat)
+        if (g_pureco == 1) then
+          pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm &
+            * uho(imat)
+        else
+          pho(apr_idx(nummat, imat)) = eos3_alphapr(g_gam(imat), g_pc(imat), &
+            alm, udof(1,g_mmi%irmin+imat-1), udof(1,g_mmi%iemin+imat-1), &
+            velavg)/alm &
+            * uho(imat)
+        end if
       end if
     end do !imat
 
@@ -1912,7 +1930,11 @@ associate (nummat=>g_mmi%nummat)
     ! bulk-momentum
     uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
     ! velocity
-    pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
+    if (g_pureco == 1) then
+      pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
+    else
+      pho(vel_idx(nummat, 0)) = velavg
+    end if
 
   end if
 

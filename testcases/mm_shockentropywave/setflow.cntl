@@ -14,7 +14,8 @@
 0.0             / Freestream velocity
 1.0             / Freestream pressure
 ----------------------------------------------------------------------------------------------
-11   6   1      / Space discretization, limiter and material interface detection
+11              / Space discretization
+6   1   1       / Limiter, material interface detection, and redundant reco/lim
 1.0d-03         / Time-step size
 1800            / Maximum number of timesteps
 ----------------------------------------------------------------------------------------------
