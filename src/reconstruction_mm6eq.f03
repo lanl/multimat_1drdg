@@ -42,9 +42,11 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   end do !ie
 
   !--- central difference reconstruction for primitive quantities
-  do ie = 1,imax
-    uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
-  end do !ie
+  if (g_pureco == 1) then
+    do ie = 1,imax
+      uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+    end do !ie
+  end if
 
   !--- limit second-order solution
   call limiting_p1(ucons, uprim)
@@ -69,7 +71,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
     do ie = 1,imax
       if (ndof_el(1,ie) == 1) then
         ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
-        uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+        if (g_pureco == 1) &
+          uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
       end if
     end do !ie
   end if
@@ -106,7 +109,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   call leastsquares_p1p2(g_neqns, ucons)
 
   !--- reconstruct third-order primitive quantities
-  call leastsquares_p1p2(g_nprim, uprim)
+  if (g_pureco == 1) call leastsquares_p1p2(g_nprim, uprim)
 
   !--- limit third-order solution
   call limiting_p2(ucons, uprim)
@@ -664,20 +667,24 @@ associate (nummat=>g_mmi%nummat)
     theta = minval(theta)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    end if
 
     ! 2. limit 2nd dofs
     ucons(2,:,ie) = theta(:) * ucons(2,:,ie)
 
+    if (g_pureco == 1) then
     uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
     uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
       * uprim(2,vel_idx(nummat, 0),ie)
+    end if
 
   end do !ie
 
@@ -714,11 +721,13 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    end if
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
@@ -735,7 +744,9 @@ associate (nummat=>g_mmi%nummat)
       !uprim(2,vel_idx(nummat, 0),ie) = 0.0
 
       ! monotonicity of primitives
+      if (g_pureco == 1) then
       uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+      end if
 
       !--- common for all equations
       !thetac = minval(theta)
@@ -795,7 +806,9 @@ associate (nummat=>g_mmi%nummat)
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
       end do !ieqn
 
+      if (g_pureco == 1) then
       uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+      end if
 
     end if
 
@@ -830,11 +843,13 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    end if
 
     !--- 2. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -862,7 +877,9 @@ associate (nummat=>g_mmi%nummat)
       ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
     end do !ieqn
 
+    if (g_pureco == 1) then
     uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    end if
 
   end do !ie
 
@@ -1039,6 +1056,7 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta2)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
 
@@ -1049,6 +1067,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2)
+    end if
 
     ! ii. P1 derivative limiting
 
@@ -1060,11 +1079,13 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta1)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1)
+    end if
 
     ! use common limiter function for all volume-fractions
     theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
@@ -1107,10 +1128,12 @@ associate (nummat=>g_mmi%nummat)
       !uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
 
       ! monotonicity of primitives
+      if (g_pureco == 1) then
       do ieqn = 1,g_nprim
         uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
         uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
       end do !ieqn
+      end if
 
     else
     !--- 3b. Obtain limiter functions for equation system in single-material cell
@@ -1120,10 +1143,12 @@ associate (nummat=>g_mmi%nummat)
         ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
       end do !ieqn
 
+      if (g_pureco == 1) then
       do ieqn = 1,g_nprim
         uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
         uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
       end do !ieqn
+      end if
 
     end if
 
@@ -1168,6 +1193,7 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta2)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
 
@@ -1178,6 +1204,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2)
+    end if
 
     ! 2. P1 derivative limiting
     ! conserved quantities
@@ -1188,11 +1215,13 @@ associate (nummat=>g_mmi%nummat)
     call vertexbased_fn(g_neqns, uneigh, theta1)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1)
+    end if
 
     !--- ii. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -1224,10 +1253,12 @@ associate (nummat=>g_mmi%nummat)
       ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
     end do !ieqn
 
+    if (g_pureco == 1) then
     do ieqn = 1,g_nprim
       uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
       uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
     end do !ieqn
+    end if
 
   end do !ie
 
@@ -1621,11 +1652,13 @@ associate (nummat=>g_mmi%nummat)
     call overbee_fn(uneigh(:,mmax,:), theta_al)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
     call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    end if
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta_al !theta(mmax)
@@ -1645,7 +1678,9 @@ associate (nummat=>g_mmi%nummat)
 
     end if
 
+    if (g_pureco == 1) then
     uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    end if
 
   end do !ie
 

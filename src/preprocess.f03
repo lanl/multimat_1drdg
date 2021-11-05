@@ -1048,7 +1048,11 @@ associate (nummat=>g_mmi%nummat)
   do ielem = 1,imax
 
      uconsi = ucons(1,:,ielem)
-     uprimi = uprim(1,:,ielem)
+     if (g_pureco == 1) then
+       uprimi = uprim(1,:,ielem)
+     else
+       call get_uprim_mm6eq(uconsi, uprimi)
+     end if
 
      xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
 
@@ -1163,7 +1167,11 @@ associate (nummat=>g_mmi%nummat)
      xp = coord(ielem)
      call get_basisfns(xp, xc, dx, basis)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+     if (g_pureco == 1) then
+       call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+     else
+       call get_uprim_mm6eq(uconsi, uprimi)
+     end if
 
      rhomix = 0.0
      pmix = 0.0
@@ -1219,7 +1227,11 @@ associate (nummat=>g_mmi%nummat)
      xp = coord(ielem+1)
      call get_basisfns(xp, xc, dx, basis)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+     if (g_pureco == 1) then
+       call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+     else
+       call get_uprim_mm6eq(uconsi, uprimi)
+     end if
 
      rhomix = 0.0
      pmix = 0.0
@@ -1293,7 +1305,7 @@ real*8,  intent(in) :: time, ucons(g_tdof,g_neqns,0:imax+1), &
 
 logical :: mixed_cell
 integer :: ie, k
-real*8 :: alk, apk, pb, denob, pavg(g_mmi%nummat), deno(g_mmi%nummat)
+real*8 :: alk, ap(g_nprim), pb, denob, pavg(g_mmi%nummat), deno(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -1303,17 +1315,21 @@ associate (nummat=>g_mmi%nummat)
   denob = 0.0
   do ie=1,imax
     mixed_cell = .false.
+    if (g_pureco == 1) then
+      ap = uprim(1,:,ie)
+    else
+      call get_uprim_mm6eq(ucons(1,:,ie), ap)
+    end if
     do k = 1,nummat
       alk = ucons(1,g_mmi%iamin+k-1,ie)
-      apk = uprim(1,apr_idx(nummat, k),ie)
       if ((alk > 1d-2) .and. (alk < 1.0-1d-2)) then
         mixed_cell = .true.
-        pavg(k) = pavg(k) + apk
+        pavg(k) = pavg(k) + ap(k)
         deno(k) = deno(k) + alk
       end if
     end do !k
     if (mixed_cell) then
-      pb = pb + sum(uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie))
+      pb = pb + sum(ap(apr_idx(nummat,1):apr_idx(nummat,nummat)))
       denob = denob + 1.0
     end if
   end do !ie

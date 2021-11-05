@@ -184,7 +184,7 @@ end subroutine get_uprim_mm6eq
 subroutine ignore_tinyphase_mm6eq(ucons, uprim)
 
 integer :: ie, i, mmax
-real*8  :: almat(g_mmi%nummat), pmax, tmax, &
+real*8  :: almat(g_mmi%nummat), apmat(g_mmi%nummat), pmax, tmax, &
            rhomat, rhoemat, &
            al_eps, rho, u, alsum, d_al, d_are, are_new, &
            apk, ak, kmat(g_mmi%nummat), &
@@ -202,11 +202,22 @@ associate (nummat=>g_mmi%nummat)
     almat = ucons(1,g_mmi%iamin:g_mmi%iamax,ie)
     mmax = maxloc(almat, 1)
 
+    !--- get material pressures
+    if (g_pureco == 0) then
+      u = ucons(1,g_mmi%imome,ie)/sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
+      do i = 1,nummat
+        apmat(i) = eos3_alphapr(g_gam(i), g_pc(i), almat(i), &
+        ucons(1,g_mmi%irmin+i-1,ie), ucons(1,g_mmi%iemin+i-1,ie), u)
+      end do !i
+    else
+      u = uprim(1,vel_idx(nummat, 0),ie)
+      apmat = uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    end if
+
     rhomat  = ucons(1,g_mmi%irmin+mmax-1,ie)/almat(mmax)
     rhoemat = ucons(1,g_mmi%iemin+mmax-1,ie)/almat(mmax)
     rho     = sum(ucons(1,g_mmi%irmin:g_mmi%irmax,ie))
-    u       = uprim(1,vel_idx(nummat, 0),ie)
-    pmax = uprim(1,apr_idx(nummat, mmax),ie)/almat(mmax)
+    pmax = apmat(mmax)/almat(mmax)
     tmax = eos3_t(g_gam(mmax), g_cp(mmax), g_pc(mmax), rhomat, rhoemat, u)
 
     !--- get equilibrium pressure
@@ -229,7 +240,7 @@ associate (nummat=>g_mmi%nummat)
     d_al = 0.0
     d_are = 0.0
     do i = 1,nummat
-      apk = uprim(1,apr_idx(nummat, i),ie)/almat(i)
+      apk = apmat(i)/almat(i)
       ! positive volfrac
       if (almat(i) > 0.0) then
         ! pressure relaxation
@@ -240,7 +251,8 @@ associate (nummat=>g_mmi%nummat)
           d_are = d_are + ucons(1,g_mmi%iemin+i-1,ie) - are_new
 
           ucons(1,g_mmi%iemin+i-1,ie) = are_new
-          uprim(1,apr_idx(nummat, i),ie) = almat(i) * p_target
+          if (g_pureco == 1) &
+            uprim(1,apr_idx(nummat, i),ie) = almat(i) * p_target
         end if
       ! negative volfrac
       else if (almat(i) < 0.0) then
@@ -251,7 +263,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%irmin+i-1,ie) = 1d-14 * rhomat
         ucons(1,g_mmi%iemin+i-1,ie) = 1d-14 * eos3_rhoe(g_gam(i), g_pc(i), &
           p_target, rhomat, u)
-        uprim(1,apr_idx(nummat, i),ie) = 1d-14 * p_target
+        if (g_pureco == 1) uprim(1,apr_idx(nummat, i),ie) = 1d-14 * p_target
       end if
     end do !i
 
@@ -259,9 +271,11 @@ associate (nummat=>g_mmi%nummat)
     ucons(1,g_mmi%iamin+mmax-1,ie) = ucons(1,g_mmi%iamin+mmax-1,ie) + d_al
     almat(mmax) = ucons(1,g_mmi%iamin+mmax-1,ie)
     ucons(1,g_mmi%iemin+mmax-1,ie) = ucons(1,g_mmi%iemin+mmax-1,ie) + d_are
-    uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
-      almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
-      ucons(1,g_mmi%iemin+mmax-1,ie), u)
+    if (g_pureco == 1) then
+      uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
+        almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
+        ucons(1,g_mmi%iemin+mmax-1,ie), u)
+    end if
 
     !--- enforce unit sum
     alsum = 0.0
@@ -273,7 +287,8 @@ associate (nummat=>g_mmi%nummat)
       ucons(1,g_mmi%iamin+i-1,ie) = ucons(1,g_mmi%iamin+i-1,ie) / alsum
       ucons(1,g_mmi%irmin+i-1,ie) = ucons(1,g_mmi%irmin+i-1,ie) / alsum
       ucons(1,g_mmi%iemin+i-1,ie) = ucons(1,g_mmi%iemin+i-1,ie) / alsum
-      uprim(1,apr_idx(nummat, i),ie) = uprim(1,apr_idx(nummat, i),ie) / alsum
+      if (g_pureco == 1) &
+        uprim(1,apr_idx(nummat, i),ie) = uprim(1,apr_idx(nummat, i),ie) / alsum
     end do !i
 
   end do !ie
