@@ -345,7 +345,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end if
 
-  !--- Jacob's manufactured solution
+  !--- MMS 1: advection of equilibrium interface
   !----------
   else if (iprob .eq. -2) then
 
@@ -381,6 +381,56 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
          xf = 0.5*(coord(ielem) + coord(ielem+1))
 
          s = mms_tanh(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
+  !--- MMS 2: two-material nonlinear energy growth
+  !----------
+  else if (iprob .eq. -3) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 2) then
+       write(*,*) " Error: 'nleg manufactured problem' not configured for &
+         more than two materials"
+       stop
+     end if
+
+     ! Quantities below calculated based on following:
+     ! \rho_10 = \rho_20 = 30.0
+     ! e_20 = 5.0
+     ! c_1 = 0.5
+     ! c_2 = 1.0
+     ! c_3 = -1.0
+     ! beta = 1.0
+     ! k = 0.8
+     u_fs = 1.0
+     pr_fs = 1.0
+     t_fs = 1.0
+     rhomat_fs = 1.0
+     call nondimen_mm6eq()
+
+     pr_fs = eos3_pr(g_gam(1), g_pc(1), 30.0, 150.0, 0.0)
+     t_fs = eos3_t(g_gam(1), g_cp(1), g_pc(1), 30.0, 150.0, 0.0)
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = mms_nleg(xf,0.0)
          ucons(1,:,ielem) = s(:)
        end do !ielem
        if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
@@ -1044,6 +1094,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
         s = gaussian(x,0.0)
       else if (iprob == -2) then
         s = mms_tanh(x,0.0)
+      else if (iprob == -3) then
+        s = mms_nleg(x,0.0)
       else if (iprob == 8) then
         s = shockentropywave(x, 0.0)
       end if
@@ -1199,9 +1251,9 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
   open(24,file=trim(adjustl(filename3)),status='unknown')
 
-  !write(filename2,'(1I50)')itstep
-  !filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
-  !open(25,file=trim(adjustl(filename3)),status='unknown')
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
+  open(25,file=trim(adjustl(filename3)),status='unknown')
 
   !--- write material and bulk meta-data to gnuplot file
   write(24,'(A8)',advance='no') "# xcc, "
@@ -1222,14 +1274,14 @@ associate (nummat=>g_mmi%nummat)
                     "te_m, ", &
                     "int_cell"
 
-  !write(25,'(8A8)') "# xcc,", &   !1
-  !                  "arho1,", &   !2
-  !                  "arho2," , &  !3
-  !                  "rhou,", &    !4
-  !                  "arhoE1,", &  !5
-  !                  "arhoE2,", &  !6
-  !                  "arhoe1,", &  !7
-  !                  "arhoe2"      !8
+  write(25,'(A8)',advance='no') "# xcc, "
+  do imat = 1,nummat
+     write(25,'(A12)',advance='no') "rhomat, "
+  end do !imat
+  do imat = 1,nummat
+     write(25,'(A12)',advance='no') "temat, "
+  end do !imat
+  write(25,*) " "
 
   do ielem = 1,imax
 
@@ -1288,14 +1340,14 @@ associate (nummat=>g_mmi%nummat)
                           temix*p_nd/rho_nd, &
                           trcell
 
-     !write(25,'(8E16.6)') xp, &                                                               !1
-     !                     uconsi(g_mmi%irmin), &                                              !2
-     !                     uconsi(g_mmi%irmin+1), &                                            !3
-     !                     uconsi(g_mmi%imome), &                                              !4
-     !                     uconsi(g_mmi%iemin), &                                              !5
-     !                     uconsi(g_mmi%iemin+1), &                                            !6
-     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     write(25,'(E16.6)',advance='no') xp
+     do imat = 1,nummat
+        write(25,'(E16.6)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+     end do !imat
+     do imat = 1,nummat
+        write(25,'(E16.6)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+     end do !imat
+     write(25,*) " "
 
      ! right face
      xp = coord(ielem+1)
@@ -1348,23 +1400,23 @@ associate (nummat=>g_mmi%nummat)
                           temix*p_nd/rho_nd, &
                           trcell
 
-     !write(25,'(8E16.6)') xp, &                                                               !1
-     !                     uconsi(g_mmi%irmin), &                                              !2
-     !                     uconsi(g_mmi%irmin+1), &                                            !3
-     !                     uconsi(g_mmi%imome), &                                              !4
-     !                     uconsi(g_mmi%iemin), &                                              !5
-     !                     uconsi(g_mmi%iemin+1), &                                            !6
-     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     write(25,'(E16.6)',advance='no') xp
+     do imat = 1,nummat
+        write(25,'(E16.6)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+     end do !imat
+     do imat = 1,nummat
+        write(25,'(E16.6)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+     end do !imat
+     write(25,*) " "
 
      write(24,*) " "
 
-     !write(25,*) " "
+     write(25,*) " "
 
   end do !ielem
 
   close(24)
-  !close(25)
+  close(25)
 
 end associate
 
@@ -1436,20 +1488,19 @@ logical :: file_exists
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
-           u(g_neqns), ulow(g_neqns), &
+           u(g_neqns), &
            carea(3), weight(3), &
            s(g_neqns), &
            err, linfty, err_log(2,g_neqns), &
-           errrho, errte, &
-           errlow_log(g_neqns)
+           errrho, errte
 
   call rutope(1, ngauss, carea, weight)
 
   err_log = 0.0
-  errlow_log = 0.0
   linfty = 0.d0
 
-  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. 0) ) then
+  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. -3) &
+    .or. (iprob .eq. 0) ) then
 
     do ie = 1,imax
     do ig = 1,ngauss
@@ -1465,7 +1516,6 @@ real*8  :: dx, xg, wi, xc, b3i, &
         b3i = p2basis(xg,xc,dx)
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3i*ucons(3,ieqn,ie)
-          ulow(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn
       else if (g_nsdiscr .ge. 1) then
         do ieqn = 1,g_neqns
@@ -1478,6 +1528,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
       if (i_system .eq. 1) then
         if (iprob.eq.-1) s = gaussian(xg,t)
         if (iprob.eq.-2) s = mms_tanh(xg,t)
+        if (iprob.eq.-3) s = mms_nleg(xg,t)
         if (iprob.eq.0) s = contact(xg,t)
       else if (i_system .eq. -1) then
         s = quadraticfn(xg,t)
@@ -1487,8 +1538,6 @@ real*8  :: dx, xg, wi, xc, b3i, &
         err = u(ieqn) - s(ieqn)
         err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
         err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
-        err = ulow(ieqn) - s(ieqn)
-        errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
       end do !ieqn
 
       linfty = max(linfty, dabs(u(1) - s(1)))
@@ -1501,8 +1550,6 @@ real*8  :: dx, xg, wi, xc, b3i, &
       err_log(1,ieqn) = dlog10(err_log(1,ieqn))
       err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
       err_log(2,ieqn) = dlog10(err_log(2,ieqn))
-      errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
-      errlow_log(ieqn) = dlog10(errlow_log(ieqn))
     end do !ieqn
 
     !--- write errors to file

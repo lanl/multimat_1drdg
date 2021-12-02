@@ -32,6 +32,8 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
   if (iprob == -2) then
     call src_mms_tanh_rdg(ndof_el, rhsel)
+  else if (iprob == -3) then
+    call src_mms_nleg_rdg(ndof_el, rhsel)
   end if
 
 end subroutine rhs_rdg_mm6eq
@@ -704,6 +706,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,0) = gaussian(coord(1),g_time*a_nd)
      else if (iprob .eq. -2) then
        ucons(1,:,0) = mms_tanh(coord(1),g_time*a_nd + alpha_dt*dt)
+     else if (iprob .eq. -3) then
+       ucons(1,:,0) = mms_nleg(coord(1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -766,6 +770,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = gaussian(coord(imax+1),g_time*a_nd)
      else if (iprob .eq. -2) then
        ucons(1,:,imax+1) = mms_tanh(coord(imax+1),g_time*a_nd + alpha_dt*dt)
+     else if (iprob .eq. -3) then
+       ucons(1,:,imax+1) = mms_nleg(coord(imax+1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -922,7 +928,7 @@ end associate
 end subroutine relaxpressure_rdg
 
 !-------------------------------------------------------------------------------
-!----- Source term integration for J Waltz's 'tanh manufactured solution':
+!----- Source term integration for MMS advection of equilibrium interface:
 !-------------------------------------------------------------------------------
 
 subroutine src_mms_tanh_rdg(ndof_el, rhsel)
@@ -975,6 +981,76 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine src_mms_tanh_rdg
+
+!-------------------------------------------------------------------------------
+!----- Source term integration for MMS two-mat nonlinear energy growth:
+!-------------------------------------------------------------------------------
+
+subroutine src_mms_nleg_rdg(ndof_el, rhsel)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+
+integer :: ig, ie, ngauss, i
+real*8  :: dx, dx2, xc, xg, &
+           carea(2), weight(2)
+real*8  :: t, c_1, c_2, c_3, k, beta, rho0, e0, e_10, h, d_a
+real*8  :: u(g_neqns), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  ngauss = get_numqpoints(g_nsdiscr)
+  call rutope(1, ngauss, carea, weight)
+
+  do ie = 1,imax
+
+  dx = coord(ie+1)-coord(ie)
+
+  do ig = 1,ngauss
+
+    dx2 = weight(ig)/2.0 * dx
+
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    xg = carea(ig) * 0.5*dx + xc
+    t = g_time*a_nd + alpha_dt*dt
+    u = mms_nleg(xg, t)
+    call get_nleg_params(c_1, c_2, c_3, k, beta, rho0, e0)
+
+    h = dcos(pi*xg)
+    d_a = c_1*dexp(-t)
+    e_10 = (-3.0*c_3 - 3.0*k*h*h*t)**(-1.0/3.0)
+
+    !--- source term calculations
+    src = 0.0
+    src(1) = -d_a
+    src(2) = d_a
+    src(g_mmi%irmin) = u(g_mmi%irmin)/u(1) * src(1)
+    src(g_mmi%irmin+1) = u(g_mmi%irmin+1)/u(2) * src(2)
+    src(g_mmi%iemin) = u(g_mmi%iemin)/u(g_mmi%irmin)*src(g_mmi%irmin) &
+      + u(g_mmi%irmin)*(k*h*h*(e_10**4.0) + beta*d_a)
+    src(g_mmi%iemin+1) = u(g_mmi%iemin+1)/u(g_mmi%irmin+1)*src(g_mmi%irmin+1) &
+      - u(g_mmi%irmin+1)*beta*d_a
+    src(g_mmi%imome) = - (g_gam(1) - 1.0) * (u(g_mmi%irmin)*(2.0*pi*k*h*t* &
+      (e_10**4.0)*dsin(pi*xg)) &
+      + u(1)*u(g_mmi%iemin)*(2.0*c_2*xg)/u(g_mmi%irmin) &
+      + u(g_mmi%iemin)*(pi*(dcos(pi*xg/2.0)*dsin(pi*xg/2.0))/2.0)/u(1)) &
+      + (g_gam(2) - 1) * u(g_mmi%iemin+1)/u(2) &
+      * (pi*(dcos(pi*xg/2.0)*dsin(pi*xg/2.0))/2.0)
+
+    !--- contribute to rhs
+    do i = 1,g_neqns
+      rhsel(1,i,ie) = rhsel(1,i,ie) + dx2 * src(i)
+
+      if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
+        rhsel(2,i,ie) = rhsel(2,i,ie) + dx2 * carea(ig) * src(i)
+      end if
+    end do !i
+
+  end do !ig
+  end do !ie
+
+end associate
+
+end subroutine src_mms_nleg_rdg
 
 !-------------------------------------------------------------------------------
 !----- 2-material Gaussian function in volume-fraction
@@ -1107,7 +1183,7 @@ end associate
 end function
 
 !-------------------------------------------------------------------------------
-!----- Jacob's manufactured solution
+!----- MMS 1: advection of equilibrium interface
 !-------------------------------------------------------------------------------
 
 function mms_tanh(x, t)
@@ -1144,6 +1220,61 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end function
+
+!-------------------------------------------------------------------------------
+!----- MMS 2: two-material nonlinear energy growth
+!-------------------------------------------------------------------------------
+
+function mms_nleg(x, t)
+
+real*8, intent(in) :: x, t
+
+real*8 :: c_1, c_2, c_3, k, beta, d_a, h, rhomat, emat, rho0, e0, &
+  mms_nleg(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  call get_nleg_params(c_1, c_2, c_3, k, beta, rho0, e0)
+
+  h = dcos(pi*x)
+  d_a = c_1*dexp(-t)
+
+  ! material volume fractions
+  mms_nleg(1) = (1.0-2.0*g_alphamin) * 0.5 * (dcos(pi*x/2.0))**2.0 + g_alphamin &
+    + d_a
+  mms_nleg(2) = 1.0-mms_nleg(1)
+
+  ! material states
+  rhomat = rhomat_fs(1) - c_2*x*x
+  emat = (-3.0*c_3 - 3.0*k*h*h*t)**(-1.0/3.0) - beta*d_a
+  mms_nleg(g_mmi%irmin) = mms_nleg(1) * rhomat
+  mms_nleg(g_mmi%iemin) = mms_nleg(1) * rhomat * emat
+
+  rhomat = rhomat_fs(2)
+  emat = 5.0 + beta*d_a
+  mms_nleg(g_mmi%irmin+1) = mms_nleg(2) * rhomat
+  mms_nleg(g_mmi%iemin+1) = mms_nleg(2) * rhomat * emat
+
+  ! bulk momentum
+  mms_nleg(g_mmi%imome) = 0.0
+
+end associate
+
+end function
+
+!-------------------------------------------------------------------------------
+
+subroutine get_nleg_params(c_1, c_2, c_3, k, beta, rho0, e0)
+  real*8 :: c_1, c_2, c_3, k, beta, rho0, e0
+
+  c_1 = 0.5
+  c_2 = 1.0
+  c_3 = -1.0
+  k = 0.8
+  beta = 1.0
+  rho0 = 30.0
+  e0 = 5.0
+end subroutine get_nleg_params
 
 !-------------------------------------------------------------------------------
 

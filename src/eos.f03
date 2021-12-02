@@ -205,6 +205,8 @@ real*8  :: almat(g_mmi%nummat), apmat(g_mmi%nummat), pmax, tmax, &
 
 associate (nummat=>g_mmi%nummat)
 
+  if (g_nmatint == 1) then
+
   al_eps = 1d-2
 
   do ie = 1,imax
@@ -303,6 +305,8 @@ associate (nummat=>g_mmi%nummat)
     end do !i
 
   end do !ie
+
+  end if
 
 end associate
 
