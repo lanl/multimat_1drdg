@@ -324,7 +324,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      alpha_fs(1) = g_alphamin
      alpha_fs(2) = 1.0-alpha_fs(1)
-     t_fs = 300.0
+     t_fs = 0.003484320557
      rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
      rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 

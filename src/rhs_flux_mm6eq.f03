@@ -1061,8 +1061,8 @@ function gaussian(x,t)
 real*8, intent(in)  :: x, t
 real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
 
-  xc  = 0.25 + u_fs*t
-  al1 = (1.0-alpha_fs(1)) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.002) ) + alpha_fs(1)
+  xc  = 0.4 + u_fs*t
+  al1 = (1.0-alpha_fs(1)) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.01) ) + alpha_fs(1)
 
   rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
   rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
