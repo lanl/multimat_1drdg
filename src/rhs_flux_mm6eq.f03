@@ -71,7 +71,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
            xc, dx, basis(g_tdof), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           ac_l, ac_r, lplus, lminu, lmag, pplus, pminu, pstar
+           ac_l, ac_r, lplus, lminu, lmda, pplus, pminu, pstar
 
 real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
@@ -123,15 +123,15 @@ associate (nummat=>g_mmi%nummat)
 
   if (i_flux .eq. 1) then
      call llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                    intflux, lplus, lminu, lmag, pplus, pminu)
+                    intflux, lplus, lminu, lmda, pplus, pminu)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                         intflux, lplus, lminu, lmag, pplus, pminu)
+                         intflux, lplus, lminu, lmda, pplus, pminu)
      pplus = lplus
      pminu = lminu
   else if (i_flux .eq. 3) then
      call hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, intflux, &
-                    lplus, lminu, lmag, pplus, pminu)
+                    lplus, lminu, lmda, pplus, pminu)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -152,7 +152,7 @@ associate (nummat=>g_mmi%nummat)
     vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
       + pminu*pp_r(apr_idx(nummat, imat))
   end do !imat
-  vriem(nummat+1,ifc) = lmag*(lplus+lminu)
+  vriem(nummat+1,ifc) = lmda
 
   if (iel .gt. 0) then
     do ieqn = 1,g_neqns
@@ -336,13 +336,13 @@ end subroutine get_multimatsoundspeed
 !-------------------------------------------------------------------------------
 
 subroutine llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                     flux, lplus, lminu, lmag, pplus, pminu)
+                     flux, lplus, lminu, lambda, pplus, pminu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
 
 integer :: imat
-real*8 :: flux(g_neqns), lplus, lminu, lmag
+real*8 :: flux(g_neqns), lplus, lminu, lambda, lmag
 real*8 :: ffunc_l(g_neqns), ffunc_r(g_neqns)
 real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
                                    arhom_l,hm_l,pm_l, &
@@ -351,8 +351,6 @@ real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
 real*8 :: rhou_l, em_l, u_l, rho_l, pi_l, p_l, &
           rhou_r, em_r, u_r, rho_r, pi_r, p_r
 real*8 :: ac_12,pplus,pminu
-  
-real*8 :: lambda
 
 associate (nummat=>g_mmi%nummat)
 
@@ -424,6 +422,7 @@ associate (nummat=>g_mmi%nummat)
   lmag = dabs(lplus+lminu) + 1.d-16
   lplus = lplus/lmag
   lminu = lminu/lmag
+  lambda = lmag*(lplus+lminu)
 
 end associate
 
@@ -434,7 +433,7 @@ end subroutine llf_mm6eq
 !-------------------------------------------------------------------------------
 
 subroutine ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-  flux, lambda_plus, lambda_minu, lambda_mag, psplus_l, psminu_r)
+  flux, lambda_plus, lambda_minu, lambda, psplus_l, psminu_r)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
@@ -553,7 +552,7 @@ associate (nummat=>g_mmi%nummat)
   lambda_mag = dabs(lambda) + 1.d-16
 
   lambda_plus = lambda_plus/(lambda_mag)
-  lambda_minu = lambda_minu/(lambda_mag)
+  lambda_minu = dabs(lambda_minu/(lambda_mag))
 
 end associate
 
@@ -564,7 +563,7 @@ end subroutine ausmplus_mm6eq
 !------------------------------------------------------------------------------
 
 subroutine hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-  flux, lambda_plus, lambda_minu, lambda_mag, pplus, pminu)
+  flux, lambda_plus, lambda_minu, lambda, pplus, pminu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
@@ -580,7 +579,7 @@ real*8 :: rhou_l, em_l, u_l, rho_l, pi_l, p_l, &
 
 real*8 :: sl, sr
 
-real*8 :: lambda_plus, lambda_minu, lambda_mag, pplus, pminu
+real*8 :: lambda_plus, lambda_minu, lambda_mag, lambda, pplus, pminu
 
 associate (nummat=>g_mmi%nummat)
 
@@ -659,7 +658,9 @@ associate (nummat=>g_mmi%nummat)
     pminu = - sl*u_r / (sr-sl)
   end if
 
-  lambda_mag = dabs(lambda_plus+lambda_minu) + 1.d-16
+  lambda = lambda_plus + lambda_minu
+
+  lambda_mag = (lambda_plus+lambda_minu) + 1.d-16
 
   lambda_plus = lambda_plus/(lambda_mag)
   lambda_minu = lambda_minu/(lambda_mag)
