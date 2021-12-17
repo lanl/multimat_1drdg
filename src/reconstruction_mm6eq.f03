@@ -304,9 +304,15 @@ associate (nummat=>g_mmi%nummat)
         do imat = 1,nummat
           rhomat = ug(g_mmi%irmin+imat-1)
           rhoemat = ug(g_mmi%iemin+imat-1)
-          upg(apr_idx(nummat, imat)) = &
-            eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
-              upg(vel_idx(nummat, 0)))
+          if (g_papreco == 0) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0)))
+          else
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+          end if
         end do !imat
 
         ! get rhs
@@ -2133,6 +2139,11 @@ associate (nummat=>g_mmi%nummat)
   call ho_reconstruction(g_neqns, udof, basis, uho)
   if (g_pureco == 1) then
     call ho_reconstruction(g_nprim, pdof, basis, pho)
+    if (g_papreco > 0) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+      end do !imat
+    end if
   else
     call get_uprim_mm6eq(uho, pho)
   end if
@@ -2205,8 +2216,13 @@ associate (nummat=>g_mmi%nummat)
         uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
         ! pressure
         if (g_pureco == 1) then
-          pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm &
-            * uho(imat)
+          if (g_papreco == 0) then
+            pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm &
+              * uho(imat)
+          else
+            pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat)) &
+              * uho(imat)
+          end if
         else
           pho(apr_idx(nummat, imat)) = eos3_alphapr(g_gam(imat), g_pc(imat), &
             alm, udof(1,g_mmi%irmin+imat-1), udof(1,g_mmi%iemin+imat-1), &

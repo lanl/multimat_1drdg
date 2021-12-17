@@ -73,6 +73,10 @@ else
   g_intreco = 0
 end if
 
+!----- Reconstructing material pressure (p_k) or partial pressure (a_k p_k)
+!----- 0: a_k p_k; 1: p_k
+g_papreco = 0
+
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          uprim(g_tdof,g_nprim,0:imax+1), &

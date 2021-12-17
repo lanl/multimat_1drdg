@@ -90,19 +90,6 @@ associate (nummat=>g_mmi%nummat)
   iel = ifc - 1
   ier = ifc
 
-  !--- sound-speeds
-  ul = ucons(1,:,iel)
-  ur = ucons(1,:,ier)
-  if (g_pureco == 1) then
-    pp_l = uprim(1,:,iel)
-    pp_r = uprim(1,:,ier)
-  else
-    call get_uprim_mm6eq(ul, pp_l)
-    call get_uprim_mm6eq(ur, pp_r)
-  end if
-  call get_multimatsoundspeed(ul, pp_l, ac_l)
-  call get_multimatsoundspeed(ur, pp_r, ac_r)
-
   !--- reconstructed and limited values of conserved variables and
   !--- primitive quantities: material pressures (p_k) and bulk fluid velocity.
 
@@ -111,12 +98,14 @@ associate (nummat=>g_mmi%nummat)
   dx = coord(iel+1)-coord(iel)
   call get_basisfns(coord(ifc), xc, dx, basis)
   call linc_reconstruction(ucons(:,:,iel), uprim(:,:,iel), basis, ul, pp_l, dx, xc)
+  call get_multimatsoundspeed(ul, pp_l, ac_l)
 
   !--- right element
   xc = 0.5*(coord(ier+1)+coord(ier))
   dx = coord(ier+1)-coord(ier)
   call get_basisfns(coord(ifc), xc, dx, basis)
   call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
+  call get_multimatsoundspeed(ur, pp_r, ac_r)
 
   !--- fluxes
 
