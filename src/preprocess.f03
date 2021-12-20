@@ -1176,6 +1176,11 @@ associate (nummat=>g_mmi%nummat)
      uconsi = ucons(1,:,ielem)
      if (g_pureco == 1) then
        uprimi = uprim(1,:,ielem)
+       if (g_papreco > 0) then
+         do imat = 1,nummat
+           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
+         end do !imat
+       end if
      else
        call get_uprim_mm6eq(uconsi, uprimi)
      end if
@@ -1295,6 +1300,11 @@ associate (nummat=>g_mmi%nummat)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
      if (g_pureco == 1) then
        call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+       if (g_papreco > 0) then
+         do imat = 1,nummat
+           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
+         end do !imat
+       end if
      else
        call get_uprim_mm6eq(uconsi, uprimi)
      end if
@@ -1355,6 +1365,11 @@ associate (nummat=>g_mmi%nummat)
      call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
      if (g_pureco == 1) then
        call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
+       if (g_papreco > 0) then
+         do imat = 1,nummat
+           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
+         end do !imat
+       end if
      else
        call get_uprim_mm6eq(uconsi, uprimi)
      end if

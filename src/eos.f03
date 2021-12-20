@@ -83,6 +83,20 @@ real*8  :: eos3_rhoe
 end function
 
 !----------------------------------------------------------------------------------------------
+!----- Total energy from pressure and density using stiffened gas eos
+!----------------------------------------------------------------------------------------------
+
+function eos3_arhoe(gam, p_c, apres, arho, u, alp)
+
+real*8, intent(in) :: gam, p_c, apres, arho, u, alp
+
+real*8  :: eos3_arhoe
+
+    eos3_arhoe = (apres + alp*p_c)/(gam - 1.0) + (0.5*arho*u*u) + alp*p_c;
+
+end function
+
+!----------------------------------------------------------------------------------------------
 !----- Pressure from total energy and density using stiffened gas eos
 !----------------------------------------------------------------------------------------------
 
