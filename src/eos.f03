@@ -298,40 +298,5 @@ end associate
 end subroutine ignore_tinyphase_mm6eq
 
 !----------------------------------------------------------------------------------------------
-!----- Check if volume fraction satisfies [0,1] bounds
-!----------------------------------------------------------------------------------------------
-
-subroutine check_volfrac(ie,uc)
-
-integer, intent(in) :: ie
-real*8,  intent(in) :: uc(g_neqns)
-
-integer :: imat, mmax
-real*8  :: eps
-
-associate (nummat=>g_mmi%nummat)
-
-  eps = 0.0001*g_alphamin
-
-  !do imat = 1,nummat
-
-  !  if ( (uc(imat) .lt. eps) .or. (uc(imat) .gt. 1.0-eps) ) then
-  !    write(*,*) "------------------------------------------------------------------"
-  !    write(*,*) "Bound-violating volume fraction: ", uc(imat)
-  !    write(*,*) "  in cell ", ie
-  !    write(*,*) "  material-id:  ", imat
-  !    write(*,*) "  density:      ", uc(g_mmi%irmin+imat-1)
-  !    write(*,*) "  total-energy: ", uc(g_mmi%iemin+imat-1)
-  !    write(*,*) "------------------------------------------------------------------"
-  !    write(*,*) " "
-  !  end if
-
-  !end do !imat
-
-end associate
-
-end subroutine check_volfrac
-
-!----------------------------------------------------------------------------------------------
 
 END MODULE eos

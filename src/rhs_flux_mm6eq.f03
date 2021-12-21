@@ -116,9 +116,6 @@ associate (nummat=>g_mmi%nummat)
   call get_basisfns(coord(ifc), xc, dx, basis)
   call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
 
-  call check_volfrac(iel, ul)
-  call check_volfrac(ier, ur)
-
   !--- fluxes
 
   if (i_flux .eq. 1) then
@@ -140,15 +137,6 @@ associate (nummat=>g_mmi%nummat)
   !--- compute gradients of volume fractions and velocity for the
   !--- non-conservative terms from Riemann reconstructed values
   do imat = 1,nummat
-    !vriem(imat,ifc) = al_star(lplus, lminu, &
-    !                          !ul(imat)*up_l(g_mmi%irmin+imat-1), &
-    !                          !ur(imat)*up_r(g_mmi%irmin+imat-1))
-    !                          ul(imat)*pp_l(apr_idx(nummat, imat)), &
-    !                          ur(imat)*pp_r(apr_idx(nummat, imat)))
-    !vriem(imat,ifc) = pplus*ul(imat)*up_l(g_mmi%irmin+imat-1) &
-    !  + pminu*ur(imat)*up_r(g_mmi%irmin+imat-1)
-    !vriem(imat,ifc) = pplus*ul(imat)*pp_l(apr_idx(nummat, imat)) &
-    !  + pminu*ur(imat)*pp_r(apr_idx(nummat, imat))
     vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
       + pminu*pp_r(apr_idx(nummat, imat))
   end do !imat
@@ -229,15 +217,12 @@ associate (nummat=>g_mmi%nummat)
     call get_basisfns(xg, xc, dx, basis)
     call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
 
-    call check_volfrac(ie, u)
-
     viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
 
     p = 0.0
     dapdx = 0.0
     rhob = sum(u(g_mmi%irmin:g_mmi%irmax))
     do imat = 1,nummat
-      !p = p + u(imat)*up(g_mmi%irmin+imat-1)
       p = p + pp(apr_idx(nummat, imat))
       dapdx = dapdx + rgrad(imat,ie)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
@@ -250,7 +235,6 @@ associate (nummat=>g_mmi%nummat)
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
     do imat = 1,nummat
       hmat = u(g_mmi%iemin+imat-1) + pp(apr_idx(nummat, imat))
-      !hmat = u(g_mmi%iemin+imat-1) + u(imat)*up(g_mmi%irmin+imat-1)
       ! other conservative fluxes
       cflux(imat) = 0.0
       cflux(g_mmi%irmin+imat-1) = pp(vel_idx(nummat, 0)) * u(g_mmi%irmin+imat-1)
@@ -262,7 +246,7 @@ associate (nummat=>g_mmi%nummat)
       nflux(1,g_mmi%iemin+imat-1) = - pp(vel_idx(nummat, 0)) * ( y(imat) * dapdx &
                                                          - rgrad(imat,ie) )
       if (g_nsdiscr .ge. 11) then
-        nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0 !pp(vel_idx(nummat, 0)) * 2.0
+        nflux(2,imat) = nflux(1,imat) * carea(ig) + u(imat) * viriem * 2.0
         nflux(2,g_mmi%irmin+imat-1) = 0.0
         nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
       end if
@@ -367,7 +351,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
     em_l          = ul(g_mmi%iemin+imat-1)
 
-    !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
     hm_l(imat)   = em_l + pi_l
     p_l = p_l + pi_l
@@ -378,7 +361,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
     em_r          = ur(g_mmi%iemin+imat-1)
 
-    !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
     hm_r(imat)   = em_r + pi_r
     p_r = p_r + pi_r
@@ -475,7 +457,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
     em_l          = ul(g_mmi%iemin+imat-1)
 
-    !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
     hm_l(imat)   = em_l + pi_l
     p_l = p_l + pi_l
@@ -486,7 +467,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
     em_r          = ur(g_mmi%iemin+imat-1)
 
-    !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
     hm_r(imat)   = em_r + pi_r
     p_r = p_r + pi_r
@@ -538,9 +518,6 @@ associate (nummat=>g_mmi%nummat)
   ! flux vector splitting
   lambda_plus = 0.5 * (lambda + dabs(lambda))
   lambda_minu = 0.5 * (lambda - dabs(lambda))
-
-  !pplus = psplus_l - k_u* psplus_l* psminu_r* f_a* (u_r-u_l) / ac_12
-  !pminu = psminu_r - k_u* psplus_l* psminu_r* f_a* (u_r-u_l) / ac_12
 
   do imat = 1,nummat
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
@@ -594,7 +571,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_l(imat) = ul(g_mmi%irmin+imat-1)
     em_l          = ul(g_mmi%iemin+imat-1)
 
-    !pi_l         = up_l(g_mmi%irmin+imat-1)
     pi_l         = pp_l(apr_idx(nummat, imat))
     hm_l(imat)   = em_l + pi_l
     p_l = p_l + pi_l
@@ -604,7 +580,6 @@ associate (nummat=>g_mmi%nummat)
     arhom_r(imat) = ur(g_mmi%irmin+imat-1)
     em_r          = ur(g_mmi%iemin+imat-1)
 
-    !pi_r         = up_r(g_mmi%irmin+imat-1)
     pi_r         = pp_r(apr_idx(nummat, imat))
     hm_r(imat)   = em_r + pi_r
     p_r = p_r + pi_r
@@ -901,7 +876,6 @@ associate (nummat=>g_mmi%nummat)
     p = 0.0
     do imat = 1,nummat
       rhom(imat) = u(g_mmi%irmin+imat-1)
-      !pm(imat)   = up(g_mmi%irmin+imat-1)
       pm(imat)   = pp(apr_idx(nummat, imat))
       p = p + pm(imat)
     end do !imat
