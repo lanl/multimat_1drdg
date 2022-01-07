@@ -1102,16 +1102,6 @@ associate (nummat=>g_mmi%nummat)
   gaussiantanh(g_mmi%imome) = &
     sum(gaussiantanh(g_mmi%irmin:g_mmi%irmax)) * u_fs
 
-  !rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
-  !rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
-  !gaussiantanh(1) = al1
-  !gaussiantanh(2) = 1.0-al1
-  !gaussiantanh(3) = al1 * rho1
-  !gaussiantanh(4) = (1.0-al1) * rho2
-  !gaussiantanh(5) = (gaussiantanh(3)+gaussiantanh(4)) * u_fs
-  !gaussiantanh(6) = al1 * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
-  !gaussiantanh(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
-
 end associate
 
 end function
