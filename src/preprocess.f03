@@ -437,6 +437,35 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end if
 
+  !--- Density-Gaussian and volfrac-tanh
+  !----------
+  else if (iprob .eq. -4) then
+
+     g_alphamin = 1.d-10
+
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
+     t_fs = 0.03484320557
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = gaussiantanh(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
   !--- SCD
   !----------
   else if (iprob .eq. 0) then
@@ -1096,6 +1125,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
         s = mms_tanh(x,0.0)
       else if (iprob == -3) then
         s = mms_nleg(x,0.0)
+      else if (iprob == -4) then
+        s = gaussiantanh(x,0.0)
       else if (iprob == 8) then
         s = shockentropywave(x, 0.0)
       end if
@@ -1217,7 +1248,7 @@ associate (nummat=>g_mmi%nummat)
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
+        write(23,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
         write(23,'(E16.6)',advance='no') tmat(imat)*t_nd
@@ -1341,7 +1372,7 @@ associate (nummat=>g_mmi%nummat)
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
+        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
@@ -1406,7 +1437,7 @@ associate (nummat=>g_mmi%nummat)
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd
+        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
         write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
@@ -1514,8 +1545,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
   err_log = 0.0
   linfty = 0.d0
 
-  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. -3) &
-    .or. (iprob .eq. 0) ) then
+  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. -3) .or. &
+    (iprob .eq. -4) .or. (iprob .eq. 0) ) then
 
     do ie = 1,imax
     do ig = 1,ngauss
@@ -1544,6 +1575,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
         if (iprob.eq.-1) s = gaussian(xg,t)
         if (iprob.eq.-2) s = mms_tanh(xg,t)
         if (iprob.eq.-3) s = mms_nleg(xg,t)
+        if (iprob.eq.-4) s = gaussiantanh(xg,t)
         if (iprob.eq.0) s = contact(xg,t)
       else if (i_system .eq. -1) then
         s = quadraticfn(xg,t)

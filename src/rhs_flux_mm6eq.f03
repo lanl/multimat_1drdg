@@ -697,6 +697,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,0) = mms_tanh(coord(1),g_time*a_nd + alpha_dt*dt)
      else if (iprob .eq. -3) then
        ucons(1,:,0) = mms_nleg(coord(1),g_time*a_nd + alpha_dt*dt)
+     else if (iprob .eq. -4) then
+       ucons(1,:,0) = gaussiantanh(coord(1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -761,6 +763,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = mms_tanh(coord(imax+1),g_time*a_nd + alpha_dt*dt)
      else if (iprob .eq. -3) then
        ucons(1,:,imax+1) = mms_nleg(coord(imax+1),g_time*a_nd + alpha_dt*dt)
+     else if (iprob .eq. -4) then
+       ucons(1,:,imax+1) = gaussiantanh(coord(imax+1),g_time*a_nd + alpha_dt*dt)
      else
        write(*,*) "Exact-BC not set for problem", iprob
        stop
@@ -1051,7 +1055,7 @@ real*8, intent(in)  :: x, t
 real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
 
   xc  = 0.4 + u_fs*t
-  al1 = (1.0-alpha_fs(1)) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.01) ) + alpha_fs(1)
+  al1 = (1.0-2.0*alpha_fs(1)) * dexp( -(x-xc)*(x-xc)/(2.0 * 0.01) ) + alpha_fs(1)
 
   rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
   rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
@@ -1062,6 +1066,53 @@ real*8  :: xc, al1, rho1, rho2, gaussian(g_neqns)
   gaussian(5) = (gaussian(3)+gaussian(4)) * u_fs
   gaussian(6) = al1 * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
   gaussian(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+
+end function
+
+!-------------------------------------------------------------------------------
+!----- 2-material density-Gaussian and tanh-volume fraction
+!-------------------------------------------------------------------------------
+
+function gaussiantanh(x,t)
+
+real*8, intent(in)  :: x, t
+
+integer :: i
+real*8 :: c1, xc, al_loc(g_mmi%nummat), rhomat, gaussiantanh(g_neqns)
+
+associate (nummat=>g_mmi%nummat)
+
+  xc  = 0.4 + u_fs*t
+  rhomat = 10.0*dexp( -(x-xc)*(x-xc)/(2.0 * 0.01) ) + rhomat_fs(1)
+
+  c1 = 10.0
+  xc = 0.45 + u_fs*t
+  al_loc(1) = (1.0-2.0*alpha_fs(1)) * 0.5 * (1.0 - dtanh(c1*(x-xc))) + alpha_fs(1)
+  al_loc(2) = 1.0-al_loc(1)
+
+  ! material states
+  do i = 1,nummat
+    gaussiantanh(i) = al_loc(i)
+    gaussiantanh(g_mmi%irmin+i-1) = gaussiantanh(i) * rhomat
+    gaussiantanh(g_mmi%iemin+i-1) = gaussiantanh(i) * &
+      eos3_rhoe(g_gam(i), g_pc(i), pr_fs, rhomat, u_fs)
+  end do !i
+
+  ! bulk momentum
+  gaussiantanh(g_mmi%imome) = &
+    sum(gaussiantanh(g_mmi%irmin:g_mmi%irmax)) * u_fs
+
+  !rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+  !rho2 = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+  !gaussiantanh(1) = al1
+  !gaussiantanh(2) = 1.0-al1
+  !gaussiantanh(3) = al1 * rho1
+  !gaussiantanh(4) = (1.0-al1) * rho2
+  !gaussiantanh(5) = (gaussiantanh(3)+gaussiantanh(4)) * u_fs
+  !gaussiantanh(6) = al1 * eos3_rhoe(g_gam(1), g_pc(1), pr_fs, rho1, u_fs)
+  !gaussiantanh(7) = (1.0-al1) * eos3_rhoe(g_gam(2), g_pc(2), pr_fs, rho2, u_fs)
+
+end associate
 
 end function
 
