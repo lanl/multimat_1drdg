@@ -1170,8 +1170,8 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xcc, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_nprim), tmat(g_mmi%nummat)
+real*8  :: dx, xcc, pmix, tmix, rhomix, emix, temix, trcell
+real*8  :: uconsi(g_neqns), uprimi(g_nprim), basis(g_tdof), tmat(g_mmi%nummat)
 
 character(len=100) :: filename2,filename3
 
@@ -1204,19 +1204,12 @@ associate (nummat=>g_mmi%nummat)
 
   do ielem = 1,imax
 
-     uconsi = ucons(1,:,ielem)
-     if (g_pureco == 1) then
-       uprimi = uprim(1,:,ielem)
-       if (g_papreco > 0) then
-         do imat = 1,nummat
-           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
-         end do !imat
-       end if
-     else
-       call get_uprim_mm6eq(uconsi, uprimi)
-     end if
-
-     xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
+     ! cell geometry
+     dx = coord(ielem+1) - coord(ielem)
+     xcc = coord(ielem) + 0.5 * dx
+     call get_basisfns(xcc, xcc, dx, basis)
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xcc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1328,17 +1321,8 @@ associate (nummat=>g_mmi%nummat)
      ! left face
      xp = coord(ielem)
      call get_basisfns(xp, xc, dx, basis)
-     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     if (g_pureco == 1) then
-       call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
-       if (g_papreco > 0) then
-         do imat = 1,nummat
-           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
-         end do !imat
-       end if
-     else
-       call get_uprim_mm6eq(uconsi, uprimi)
-     end if
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1393,17 +1377,8 @@ associate (nummat=>g_mmi%nummat)
      ! right face
      xp = coord(ielem+1)
      call get_basisfns(xp, xc, dx, basis)
-     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     if (g_pureco == 1) then
-       call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimi(:))
-       if (g_papreco > 0) then
-         do imat = 1,nummat
-           uprimi(apr_idx(nummat,imat)) = uconsi(imat)*uprimi(apr_idx(nummat,imat))
-         end do !imat
-       end if
-     else
-       call get_uprim_mm6eq(uconsi, uprimi)
-     end if
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1477,7 +1452,9 @@ real*8,  intent(in) :: time, ucons(g_tdof,g_neqns,0:imax+1), &
 
 logical :: mixed_cell
 integer :: ie, k
-real*8 :: alk, ap(g_nprim), pb, denob, pavg(g_mmi%nummat), deno(g_mmi%nummat)
+real*8 :: dx, xc
+real*8 :: basis(g_tdof), alk, uci(g_neqns), pri(g_nprim), pb, denob, &
+  pavg(g_mmi%nummat), deno(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -1487,21 +1464,27 @@ associate (nummat=>g_mmi%nummat)
   denob = 0.0
   do ie=1,imax
     mixed_cell = .false.
-    if (g_pureco == 1) then
-      ap = uprim(1,:,ie)
-    else
-      call get_uprim_mm6eq(ucons(1,:,ie), ap)
-    end if
+
+    ! cell geometry
+    dx = coord(ie+1) - coord(ie)
+    xc = coord(ie) + 0.5 * dx
+    call get_basisfns(xc, xc, dx, basis)
+    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, &
+      uci, pri, dx, xc)
+
+    ! average pressures of majority materials for all mixed cells
     do k = 1,nummat
       alk = ucons(1,g_mmi%iamin+k-1,ie)
       if ((alk > 1d-2) .and. (alk < 1.0-1d-2)) then
         mixed_cell = .true.
-        pavg(k) = pavg(k) + ap(k)
+        pavg(k) = pavg(k) + pri(apr_idx(nummat,k))
         deno(k) = deno(k) + alk
       end if
     end do !k
+
+    ! average bulk pressure for all mixed cells
     if (mixed_cell) then
-      pb = pb + sum(ap(apr_idx(nummat,1):apr_idx(nummat,nummat)))
+      pb = pb + sum(pri(apr_idx(nummat,1):apr_idx(nummat,nummat)))
       denob = denob + 1.0
     end if
   end do !ie
