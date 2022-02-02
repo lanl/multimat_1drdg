@@ -995,7 +995,7 @@ associate (nummat=>g_mmi%nummat)
 
           ucons(1,g_mmi%iemin+i-1,ie) = are_new
           if (g_pureco == 1) then
-            if (g_papreco == 0) then
+            if (g_pvarreco == 0) then
               uprim(1,apr_idx(nummat, i),ie) = almat(i) * p_target
             else
               uprim(1,apr_idx(nummat, i),ie) = p_target
@@ -1012,7 +1012,7 @@ associate (nummat=>g_mmi%nummat)
         ucons(1,g_mmi%iemin+i-1,ie) = 1d-14 * eos3_rhoe(g_gam(i), g_pc(i), &
           p_target, rhomat, u)
         if (g_pureco == 1) then
-          if (g_papreco == 0) then
+          if (g_pvarreco == 0) then
             uprim(1,apr_idx(nummat, i),ie) = 1d-14 * p_target
           else
             uprim(1,apr_idx(nummat, i),ie) = p_target
@@ -1026,7 +1026,7 @@ associate (nummat=>g_mmi%nummat)
     almat(mmax) = ucons(1,g_mmi%iamin+mmax-1,ie)
     ucons(1,g_mmi%iemin+mmax-1,ie) = ucons(1,g_mmi%iemin+mmax-1,ie) + d_are
     if (g_pureco == 1) then
-      if (g_papreco == 0) then
+      if (g_pvarreco == 0) then
         uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
           almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
           ucons(1,g_mmi%iemin+mmax-1,ie), u)
@@ -1047,7 +1047,7 @@ associate (nummat=>g_mmi%nummat)
       ucons(1,g_mmi%iamin+i-1,ie) = ucons(1,g_mmi%iamin+i-1,ie) / alsum
       ucons(1,g_mmi%irmin+i-1,ie) = ucons(1,g_mmi%irmin+i-1,ie) / alsum
       ucons(1,g_mmi%iemin+i-1,ie) = ucons(1,g_mmi%iemin+i-1,ie) / alsum
-      if (g_pureco == 1 .and. g_papreco == 0) &
+      if (g_pureco == 1 .and. g_pvarreco == 0) &
         uprim(1,apr_idx(nummat, i),ie) = uprim(1,apr_idx(nummat, i),ie) / alsum
     end do !i
 

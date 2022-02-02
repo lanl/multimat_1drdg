@@ -73,9 +73,10 @@ else
   g_intreco = 0
 end if
 
-!----- Reconstructing material pressure (p_k) or partial pressure (a_k p_k)
-!----- 0: a_k p_k; 1: p_k
-g_papreco = 0
+!----- Variables to reconstruct are controlled by values of pvarreco
+!----- 0: \alpha_k p_k, u
+!----- 1: p_k, u
+g_pvarreco = 0
 
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
