@@ -144,10 +144,28 @@ end function apr_idx
 
 !-----------------------------------------------------------------------
 
+pure integer function rho_idx(nummat, k)
+integer, intent(in) :: nummat, k
+
+  rho_idx = nummat + k
+
+end function rho_idx
+
+!-----------------------------------------------------------------------
+
+pure integer function rhote_idx(nummat, k)
+integer, intent(in) :: nummat, k
+
+  rhote_idx = 2*nummat + k
+
+end function rhote_idx
+
+!-----------------------------------------------------------------------
+
 pure integer function vel_idx(nummat, idir)
 integer, intent(in) :: nummat, idir
 
-  vel_idx = nummat + 1
+  vel_idx = 3*nummat + 1
 
 end function vel_idx
 

@@ -47,7 +47,7 @@ else if (i_system .eq. 1) then
 
    g_neqns = g_mmi%iemax
    ! primitive variable vector. See glob_var.f03 for indexing
-   g_nprim = g_mmi%nummat+1
+   g_nprim = 3*g_mmi%nummat+1
 end if
 
 if (g_nsdiscr .eq. 0) then
@@ -76,7 +76,16 @@ end if
 !----- Variables to reconstruct are controlled by values of pvarreco
 !----- 0: \alpha_k p_k, u
 !----- 1: p_k, u
-g_pvarreco = 0
+!----- 2: p_k, u, \rho_k, \rho_k E_k
+g_pvarreco = 2
+
+!----- Check for incompatible combinations for reco/lim
+if (g_pureco == 0) then
+  if (g_pvarreco == 2) then
+    write(*,*) "Redundant reconst/limiting required for g_pvarreco = 2."
+    stop
+  end if
+end if
 
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &

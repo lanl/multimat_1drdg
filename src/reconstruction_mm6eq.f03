@@ -304,15 +304,26 @@ associate (nummat=>g_mmi%nummat)
         do imat = 1,nummat
           rhomat = ug(g_mmi%irmin+imat-1)
           rhoemat = ug(g_mmi%iemin+imat-1)
+
           if (g_pvarreco == 0) then
             upg(apr_idx(nummat, imat)) = &
               eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
                 upg(vel_idx(nummat, 0)))
-          else
+
+          else if (g_pvarreco == 1) then
             upg(apr_idx(nummat, imat)) = &
               eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
                 upg(vel_idx(nummat, 0))) / ug(imat)
+
+          else if (g_pvarreco == 2) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+            upg(rho_idx(nummat, imat)) = ug(g_mmi%irmin+imat-1)/ug(imat)
+            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1)/ug(imat)
+
           end if
+
         end do !imat
 
         ! get rhs
@@ -2139,11 +2150,23 @@ associate (nummat=>g_mmi%nummat)
   call ho_reconstruction(g_neqns, udof, basis, uho)
   if (g_pureco == 1) then
     call ho_reconstruction(g_nprim, pdof, basis, pho)
-    if (g_pvarreco > 0) then
+
+    if (g_pvarreco == 1) then
       do imat = 1,nummat
         pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
       end do !imat
+
+    else if (g_pvarreco == 2) then
+      uho(g_mmi%imome) = 0.0
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+        uho(g_mmi%irmin+imat-1) = uho(imat)*pho(rho_idx(nummat,imat))
+        uho(g_mmi%iemin+imat-1) = uho(imat)*pho(rhote_idx(nummat,imat))
+        uho(g_mmi%imome) = uho(g_mmi%imome) + pho(vel_idx(nummat,0))*uho(g_mmi%irmin+imat-1)
+      end do !imat
+
     end if
+
   else
     call get_uprim_mm6eq(uho, pho)
   end if

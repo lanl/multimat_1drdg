@@ -939,7 +939,7 @@ real*8  :: dx, xc, basis(g_tdof), &
 
 associate (nummat=>g_mmi%nummat)
 
-  if (g_nmatint == 1) then
+  if (g_nmatint == 1 .or. g_intreco > 0) then
 
   al_eps = 1d-2
 
@@ -997,8 +997,12 @@ associate (nummat=>g_mmi%nummat)
           if (g_pureco == 1) then
             if (g_pvarreco == 0) then
               uprim(1,apr_idx(nummat, i),ie) = almat(i) * p_target
-            else
+            else if (g_pvarreco == 1) then
               uprim(1,apr_idx(nummat, i),ie) = p_target
+            else if (g_pvarreco == 2) then
+              uprim(1,apr_idx(nummat, i),ie) = p_target
+              uprim(1,rho_idx(nummat, i),ie) = rhomat
+              uprim(1,rhote_idx(nummat, i),ie) = are_new/almat(i)
             end if
           end if
         end if
@@ -1014,8 +1018,12 @@ associate (nummat=>g_mmi%nummat)
         if (g_pureco == 1) then
           if (g_pvarreco == 0) then
             uprim(1,apr_idx(nummat, i),ie) = 1d-14 * p_target
-          else
+          else if (g_pvarreco == 1) then
             uprim(1,apr_idx(nummat, i),ie) = p_target
+          else if (g_pvarreco == 2) then
+            uprim(1,apr_idx(nummat, i),ie) = p_target
+            uprim(1,rho_idx(nummat, i),ie) = rhomat
+            uprim(1,rhote_idx(nummat, i),ie) = ucons(1,g_mmi%iemin+i-1,ie)/1d-14
           end if
         end if
       end if
@@ -1030,10 +1038,16 @@ associate (nummat=>g_mmi%nummat)
         uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
           almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
           ucons(1,g_mmi%iemin+mmax-1,ie), u)
-      else
+      else if (g_pvarreco == 1) then
         uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
           almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
           ucons(1,g_mmi%iemin+mmax-1,ie), u) / almat(mmax)
+      else if (g_pvarreco == 2) then
+        uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
+          almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
+          ucons(1,g_mmi%iemin+mmax-1,ie), u) / almat(mmax)
+        uprim(1,rho_idx(nummat, mmax),ie) = ucons(1,g_mmi%irmin+mmax-1,ie)/almat(mmax)
+        uprim(1,rhote_idx(nummat, mmax),ie) = ucons(1,g_mmi%iemin+mmax-1,ie)/almat(mmax)
       end if
     end if
 
