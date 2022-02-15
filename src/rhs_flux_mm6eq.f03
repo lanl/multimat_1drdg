@@ -107,6 +107,20 @@ associate (nummat=>g_mmi%nummat)
   call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
   call get_multimatsoundspeed(ur, pp_r, ac_r)
 
+  !if (dabs(sum(ul(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14 .or. &
+  !  dabs(sum(ur(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14) then
+  !  print*, "surfint-e: ", ifc, sum(ul(g_mmi%iemin:g_mmi%iemax)), &
+  !    sum(ur(g_mmi%iemin:g_mmi%iemax))
+  !end if
+  !if (dabs(sum(ul(1:nummat))-1.0) > 1e-14 .or. dabs(sum(ur(1:nummat))-1.0) > 1e-14) then
+  !  print*, "surfint-a: ", ifc, sum(ul(1:nummat)), sum(ur(1:nummat))
+  !end if
+  !if (dabs(sum(pp_l(apr_idx(nummat,1):apr_idx(nummat,nummat)))-1.0) > 1e-14 .or. &
+  !  dabs(sum(pp_r(apr_idx(nummat,1):apr_idx(nummat,nummat)))-1.0) > 1e-14) then
+  !  print*, "surfint-p: ", ifc, sum(pp_l(apr_idx(nummat,1):apr_idx(nummat,nummat))), &
+  !  sum(pp_r(apr_idx(nummat,1):apr_idx(nummat,nummat)))
+  !end if
+
   !--- fluxes
 
   if (i_flux .eq. 1) then
@@ -114,7 +128,7 @@ associate (nummat=>g_mmi%nummat)
                     intflux, lplus, lminu, lmda, pplus, pminu)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                         intflux, lplus, lminu, lmda, pplus, pminu)
+                         intflux, lplus, lminu, lmda, pplus, pminu, iel, ier)
      pplus = lplus
      pminu = lminu
   else if (i_flux .eq. 3) then
@@ -163,6 +177,11 @@ associate (nummat=>g_mmi%nummat)
 
   end do !ifc
 
+  !do iel = 1,imax
+  !  if (dabs(g_fluxch(1,g_mmi%imome,iel)) > 1e-14) &
+  !    print*, "WARNING: large pressure force:", iel, g_fluxch(1,g_mmi%imome,iel)
+  !end do
+
 end associate
 
 end subroutine surfaceint_dg
@@ -208,6 +227,16 @@ associate (nummat=>g_mmi%nummat)
     call get_basisfns(xg, xc, dx, basis)
     call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
 
+    !if (dabs(sum(u(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14) then
+    !  print*, "voluint-e: ", ie, sum(u(g_mmi%iemin:g_mmi%iemax))
+    !end if
+    !if (dabs(sum(u(1:nummat))-1.0) > 1e-14) then
+    !  print*, "voluint-a: ", ie, sum(u(1:nummat))
+    !end if
+    !if (dabs(sum(pp(apr_idx(nummat,1):apr_idx(nummat,nummat)))-1.0) > 1e-14) then
+    !  print*, "voluint-p: ", ie, sum(pp(apr_idx(nummat,1):apr_idx(nummat,nummat)))
+    !end if
+
     viriem = 0.5* (vriem(nummat+1,ie) + vriem(nummat+1,ie+1)) + carea(ig) * rgrad(nummat+1,ie)/2.0
 
     p = 0.0
@@ -218,6 +247,7 @@ associate (nummat=>g_mmi%nummat)
       dapdx = dapdx + rgrad(imat,ie)
       y(imat) = u(g_mmi%irmin+imat-1) / rhob
     end do !imat
+    !if (dabs(dapdx) > 1e-14) print*, "WARNING: non-zero dpdx at: ", ie, dapdx
 
     !--- flux terms
     ! momentum flux
@@ -248,6 +278,10 @@ associate (nummat=>g_mmi%nummat)
         rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
     end do !ieqn
 
+    !do ieqn = 1,g_neqns
+    !  g_fluxch(1,ieqn,ie) = g_fluxch(1,ieqn,ie) + 0.5*dx2*nflux(1,ieqn)
+    !end do !ieqn
+
     do ieqn = 1,g_neqns
       rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
@@ -255,6 +289,12 @@ associate (nummat=>g_mmi%nummat)
     end do !ieqn
 
   end do !ig
+
+  !do imat = 1,nummat
+  !  if (dabs(g_fluxch(1,g_mmi%iemin+imat-1,ie)) > 1e-14) &
+  !    print*, "WARNING: large ncn term:", ie, imat, g_fluxch(1,g_mmi%iemin+imat-1,ie)
+  !end do !imat
+
   end do !ie
 
 end associate
@@ -406,10 +446,11 @@ end subroutine llf_mm6eq
 !-------------------------------------------------------------------------------
 
 subroutine ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-  flux, lambda_plus, lambda_minu, lambda, psplus_l, psminu_r)
+  flux, lambda_plus, lambda_minu, lambda, psplus_l, psminu_r, iel, ier)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
+integer, intent(in) :: iel, ier
 
 integer :: imat
 real*8 :: flux(g_neqns)
@@ -514,8 +555,14 @@ associate (nummat=>g_mmi%nummat)
     flux(imat)               = lambda_plus*al_l(imat)    + lambda_minu*al_r(imat)
     flux(g_mmi%irmin+imat-1) = lambda_plus*arhom_l(imat) + lambda_minu*arhom_r(imat)
     flux(g_mmi%iemin+imat-1) = lambda_plus*hm_l(imat)    + lambda_minu*hm_r(imat)
+    !g_fluxch(1,g_mmi%iemin+imat-1,iel) = g_fluxch(1,g_mmi%iemin+imat-1,iel) - &
+    !  (lambda_plus*pp_l(apr_idx(nummat,imat)) + lambda_minu*pp_r(apr_idx(nummat,imat)))
+    !g_fluxch(1,g_mmi%iemin+imat-1,ier) = g_fluxch(1,g_mmi%iemin+imat-1,ier) + &
+    !  (lambda_plus*pp_l(apr_idx(nummat,imat)) + lambda_minu*pp_r(apr_idx(nummat,imat)))
   end do !imat
   flux(g_mmi%imome) = lambda_plus*rhou_l + lambda_minu*rhou_r + p_12
+  !g_fluxch(1,g_mmi%imome,iel) = g_fluxch(1,g_mmi%imome,iel) - p_12
+  !g_fluxch(1,g_mmi%imome,ier) = g_fluxch(1,g_mmi%imome,ier) + p_12
 
   lambda_mag = dabs(lambda) + 1.d-16
 
@@ -1001,8 +1048,9 @@ associate (nummat=>g_mmi%nummat)
               uprim(1,apr_idx(nummat, i),ie) = p_target
             else if (g_pvarreco == 2) then
               uprim(1,apr_idx(nummat, i),ie) = p_target
-              uprim(1,rho_idx(nummat, i),ie) = rhomat
-              uprim(1,rhote_idx(nummat, i),ie) = are_new/almat(i)
+            else if (g_pvarreco == 3) then
+              uprim(1,apr_idx(nummat, i),ie) = p_target
+              uprim(1,rhote_idx(nummat, i),ie) = are_new - uprim(1,rho_idx(nummat,i),ie)
             end if
           end if
         end if
@@ -1022,8 +1070,10 @@ associate (nummat=>g_mmi%nummat)
             uprim(1,apr_idx(nummat, i),ie) = p_target
           else if (g_pvarreco == 2) then
             uprim(1,apr_idx(nummat, i),ie) = p_target
-            uprim(1,rho_idx(nummat, i),ie) = rhomat
-            uprim(1,rhote_idx(nummat, i),ie) = ucons(1,g_mmi%iemin+i-1,ie)/1d-14
+          else if (g_pvarreco == 3) then
+            uprim(1,apr_idx(nummat, i),ie) = p_target
+            uprim(1,rho_idx(nummat, i),ie) = 0.5*ucons(1,g_mmi%irmin+i-1,ie)*u*u
+            uprim(1,rhote_idx(nummat, i),ie) = ucons(1,g_mmi%iemin+i-1,ie) - uprim(1,rho_idx(nummat, i),ie)
           end if
         end if
       end if
@@ -1046,8 +1096,11 @@ associate (nummat=>g_mmi%nummat)
         uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
           almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
           ucons(1,g_mmi%iemin+mmax-1,ie), u) / almat(mmax)
-        uprim(1,rho_idx(nummat, mmax),ie) = ucons(1,g_mmi%irmin+mmax-1,ie)/almat(mmax)
-        uprim(1,rhote_idx(nummat, mmax),ie) = ucons(1,g_mmi%iemin+mmax-1,ie)/almat(mmax)
+      else if (g_pvarreco == 3) then
+        uprim(1,apr_idx(nummat, mmax),ie) = eos3_alphapr(g_gam(mmax), g_pc(mmax), &
+          almat(mmax), ucons(1,g_mmi%irmin+mmax-1,ie), &
+          ucons(1,g_mmi%iemin+mmax-1,ie), u) / almat(mmax)
+        uprim(1,rhote_idx(nummat, mmax),ie) = ucons(1,g_mmi%iemin+mmax-1,ie) - uprim(1,rho_idx(nummat, mmax),ie)
       end if
     end if
 

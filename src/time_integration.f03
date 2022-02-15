@@ -57,6 +57,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         end if
 
         rhsel(:,:,:) = 0.d0
+        !g_fluxch(:,:,:) = 0.d0
 
         call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el, ndof_el)
 

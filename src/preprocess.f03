@@ -1365,12 +1365,12 @@ associate (nummat=>g_mmi%nummat)
                           temix*p_nd/rho_nd, &
                           trcell
 
-     write(25,'(E16.6)',advance='no') xp
+     write(25,'(E24.14)',advance='no') xp
      do imat = 1,nummat
-        write(25,'(E16.6)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
      end do !imat
      do imat = 1,nummat
-        write(25,'(E16.6)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
      end do !imat
      write(25,*) " "
 
@@ -1421,12 +1421,12 @@ associate (nummat=>g_mmi%nummat)
                           temix*p_nd/rho_nd, &
                           trcell
 
-     write(25,'(E16.6)',advance='no') xp
+     write(25,'(E24.14)',advance='no') xp
      do imat = 1,nummat
-        write(25,'(E16.6)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
      end do !imat
      do imat = 1,nummat
-        write(25,'(E16.6)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
      end do !imat
      write(25,*) " "
 

@@ -319,8 +319,15 @@ associate (nummat=>g_mmi%nummat)
             upg(apr_idx(nummat, imat)) = &
               eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
                 upg(vel_idx(nummat, 0))) / ug(imat)
-            upg(rho_idx(nummat, imat)) = ug(g_mmi%irmin+imat-1)/ug(imat)
-            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1)/ug(imat)
+
+          else if (g_pvarreco == 3) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+            upg(rho_idx(nummat, imat)) = 0.5 * ug(g_mmi%irmin+imat-1) * &
+              upg(vel_idx(nummat,0)) * upg(vel_idx(nummat,0))
+            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1) - &
+              upg(rho_idx(nummat,imat))
 
           end if
 
@@ -2157,12 +2164,15 @@ associate (nummat=>g_mmi%nummat)
       end do !imat
 
     else if (g_pvarreco == 2) then
-      uho(g_mmi%imome) = 0.0
       do imat = 1,nummat
         pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
-        uho(g_mmi%irmin+imat-1) = uho(imat)*pho(rho_idx(nummat,imat))
-        uho(g_mmi%iemin+imat-1) = uho(imat)*pho(rhote_idx(nummat,imat))
-        uho(g_mmi%imome) = uho(g_mmi%imome) + pho(vel_idx(nummat,0))*uho(g_mmi%irmin+imat-1)
+      end do !imat
+      uho(g_mmi%imome) = sum(uho(g_mmi%irmin:g_mmi%irmax))*pho(vel_idx(nummat,0))
+
+    else if (g_pvarreco == 3) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+        uho(g_mmi%iemin+imat-1) = pho(rhote_idx(nummat,imat)) + pho(rho_idx(nummat,imat))
       end do !imat
 
     end if
