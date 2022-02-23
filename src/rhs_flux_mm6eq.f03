@@ -861,6 +861,22 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
      end if
 
+  else if (g_rbflag .eq. 4) then
+     !--- subsonic outflow
+     if (g_nsdiscr .eq. 0) then
+       ucons(1,:,imax+1) = ucons(1,:,imax)
+     else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax)
+     else if (g_nsdiscr .eq. 12) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
+     end if
+     u_conv = ucons(1,g_mmi%imome,imax+1)/sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1))
+     do imat = 1,nummat
+        ucons(1,g_mmi%iemin+imat-1,imax+1) = ucons(1,imat,imax+1) * &
+          eos3_rhoe(g_gam(imat), g_pc(imat), pr_fs, &
+          ucons(1,g_mmi%irmin+imat-1,imax+1)/ucons(1,imat,imax+1), u_conv)
+     end do !imat
+
   else
      write(*,*) "BC-type not set for flag ", g_rbflag
 
