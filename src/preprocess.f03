@@ -1088,6 +1088,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   call weak_recons_primitives(ucons, uprim, ndof_el)
   call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
+  call weak_recons_initconsr(ucons, uprim, ndof_el)
 
   call gnuplot_flow_mm6eq(ucons, uprim, matint_el, 0)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, 0)
@@ -1347,21 +1348,21 @@ associate (nummat=>g_mmi%nummat)
      trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
-     write(24,'(E16.6)',advance='no') xp
+     write(24,'(E18.8)',advance='no') xp
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uconsi(imat)
+        write(24,'(E18.8)',advance='no') uconsi(imat)
      end do !imat
-     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
+     write(24,'(4E18.8)',advance='no') rhomix*rho_nd, &
                                        uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
+        write(24,'(E18.8)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
+        write(24,'(E18.8)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix*p_nd/rho_nd, &
+     write(24,'(3E18.8)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &
                           trcell
 
@@ -1403,21 +1404,21 @@ associate (nummat=>g_mmi%nummat)
      trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
-     write(24,'(E16.6)',advance='no') xp
+     write(24,'(E18.8)',advance='no') xp
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uconsi(imat)
+        write(24,'(E18.8)',advance='no') uconsi(imat)
      end do !imat
-     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
+     write(24,'(4E18.8)',advance='no') rhomix*rho_nd, &
                                        uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
+        write(24,'(E18.8)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') tmat(imat)*t_nd
+        write(24,'(E18.8)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix*p_nd/rho_nd, &
+     write(24,'(3E18.8)') emix*p_nd/rho_nd, &
                           temix*p_nd/rho_nd, &
                           trcell
 

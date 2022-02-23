@@ -78,12 +78,14 @@ end if
 !----- 1: p_k, u
 !----- 2: p_k, u, \rho u = \sum(\alpha_k \rho_k) * u
 !----- 3: p_k, u, \alpha_k \rho_k e, \alpha \rho u^2
-g_pvarreco = 2
+!----- 4: p_k, u, \rho u = \sum(\alpha_k \rho_k) * u, and
+!         \alpha Q = \alpha * Q, Q = \rho E, \rho.
+g_pvarreco = 0
 
 !----- Check for incompatible combinations for reco/lim
 if (g_pureco == 0) then
-  if (g_pvarreco == 2 .or. g_pvarreco == 3) then
-    write(*,*) "Redundant reconst/limiting required for g_pvarreco = 2, 3."
+  if (g_pvarreco >= 2) then
+    write(*,*) "Redundant reconst/limiting required for g_pvarreco >= 2."
     stop
   end if
 end if

@@ -329,6 +329,13 @@ associate (nummat=>g_mmi%nummat)
             upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1) - &
               upg(rho_idx(nummat,imat))
 
+          else if (g_pvarreco == 4) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+            upg(rho_idx(nummat, imat)) = ug(g_mmi%irmin+imat-1)/ug(imat)
+            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1)/ug(imat)
+
           end if
 
         end do !imat
@@ -366,6 +373,134 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine weak_recons_primitives
+
+!-------------------------------------------------------------------------------
+!----- Reconstructing initial unknowns from primitive vars for consistency:
+!-------------------------------------------------------------------------------
+
+subroutine weak_recons_initconsr(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+real*8, intent(in) :: uprim(g_tdof,g_nprim,0:imax+1)
+
+integer :: ig, ie, ieqn, imat, ngauss
+
+real*8  :: dxi, xci, xg, wi, &
+           carea(3), weight(3), &
+           b2, b3, rhs(g_gdof,g_neqns), lhs(g_gdof)
+
+real*8  :: upg(g_nprim), ug(g_neqns), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  if (g_pureco == 1 .and. g_pvarreco /= 3) then
+
+    ngauss = get_numqpoints(g_nsdiscr)
+    call rutope(1, ngauss, carea, weight)
+
+    do ie = 0,imax+1
+
+      dxi = coord(ie+1)-coord(ie)
+      xci = 0.5*(coord(ie+1)+coord(ie))
+
+      ! get lhs
+      lhs(1) = dxi
+      if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
+      !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+
+      ! quadrature
+      rhs = 0.0
+      do ig = 1,ngauss
+        xg = carea(ig) * 0.5*dxi + xci
+        wi = 0.5 * weight(ig)
+        b2 = p1basis(xg, xci, dxi)
+        !b3 = p2basis(xg, xci, dxi)
+
+        !--- dgp0 or rdgp0p1
+        if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp1 or rdgp1p2
+        elseif ((g_nsdiscr .ge. 11)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie) + b2*uprim(2,ieqn,ie)
+          end do !ieqn
+
+        !!--- rdgp1p2
+        !elseif (g_nsdiscr .eq. 12) then
+        !  do ieqn = 1,g_neqns
+        !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+        !      + b3*ucons(3,ieqn,ie)
+        !  end do !ieqn
+
+        end if
+
+        ! modified var at quadrature point
+        ug(g_mmi%imome) = sum(ug(g_mmi%irmin:g_mmi%irmax))*upg(vel_idx(nummat,0))
+        do imat = 1,nummat
+          if (g_pvarreco == 0) then
+            ug(g_mmi%iemin+imat-1) = ug(imat) * &
+              eos3_rhoe(g_gam(imat), g_pc(imat), upg(apr_idx(nummat,imat))/ug(imat), &
+              ug(g_mmi%irmin+imat-1)/ug(imat), upg(vel_idx(nummat,0)))
+          else
+            ug(g_mmi%iemin+imat-1) = ug(imat) * &
+              eos3_rhoe(g_gam(imat), g_pc(imat), upg(apr_idx(nummat,imat)), &
+              ug(g_mmi%irmin+imat-1)/ug(imat), upg(vel_idx(nummat,0)))
+          end if
+        end do !imat
+
+        ! get rhs
+        do ieqn = 1,g_neqns
+          rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*ug(ieqn)
+          if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*ug(ieqn)*b2
+          !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*ug(ieqn)*b3
+        end do !ieqn
+
+      end do !ig
+
+      ! get modified high-order dofs
+      if (g_nsdiscr .gt. 1) ucons(2,g_mmi%imome,ie) = rhs(2,g_mmi%imome)/lhs(2)
+      !if (g_nsdiscr .gt. 11) ucons(3,g_mmi%imome,ie) = rhs(3,g_mmi%imome)/lhs(3)
+      do imat = 1,nummat
+        if (g_nsdiscr .gt. 1) ucons(2,g_mmi%iemin+imat-1,ie) = rhs(2,g_mmi%iemin+imat-1)/lhs(2)
+        !if (g_nsdiscr .gt. 11) ucons(3,g_mmi%iemin+imat-1,ie) = rhs(3,g_mmi%iemin+imat-1)/lhs(3)
+      end do !imat
+
+    end do !ie
+
+    !--- rdofs for boundary cells to zero
+    if (g_nsdiscr .eq. 1) then
+      ucons(2,g_mmi%imome,0) = 0.0
+      ucons(2,g_mmi%imome,imax+1) = 0.0
+      do imat = 1,nummat
+        ucons(2,g_mmi%iemin+imat-1,0) = 0.0
+        ucons(2,g_mmi%iemin+imat-1,imax+1) = 0.0
+      end do !imat
+
+    else if (g_nsdiscr .eq. 12) then
+      ucons(3,g_mmi%imome,0) = 0.0
+      ucons(3,g_mmi%imome,imax+1) = 0.0
+      do imat = 1,nummat
+        ucons(3,g_mmi%iemin+imat-1,0) = 0.0
+        ucons(3,g_mmi%iemin+imat-1,imax+1) = 0.0
+      end do !imat
+
+    end if
+
+  end if
+
+end associate
+
+end subroutine weak_recons_initconsr
 
 !-------------------------------------------------------------------------------
 !----- P0 limiting:
@@ -767,7 +902,7 @@ associate (nummat=>g_mmi%nummat)
     end if
 
     ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
+    theta(1:nummat) = minval(theta(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
@@ -2174,6 +2309,14 @@ associate (nummat=>g_mmi%nummat)
         pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
         uho(g_mmi%iemin+imat-1) = pho(rhote_idx(nummat,imat)) + pho(rho_idx(nummat,imat))
       end do !imat
+
+    else if (g_pvarreco == 4) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+        uho(g_mmi%irmin+imat-1) = uho(imat)*pho(rho_idx(nummat,imat))
+        uho(g_mmi%iemin+imat-1) = uho(imat)*pho(rhote_idx(nummat,imat))
+      end do !imat
+      uho(g_mmi%imome) = sum(uho(g_mmi%irmin:g_mmi%irmax))*pho(vel_idx(nummat,0))
 
     end if
 

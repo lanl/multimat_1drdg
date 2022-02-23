@@ -84,6 +84,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         call weak_recons_primitives(ucons, uprim, ndof_el)
         call ignore_tinyphase_mm6eq(ucons, uprim)
         call reconst_mm6eq(ucons, uprim, ndof_el)
+        call weak_recons_initconsr(ucons, uprim, ndof_el)
 
      end do !istage
      !---------------------------------------------------------
