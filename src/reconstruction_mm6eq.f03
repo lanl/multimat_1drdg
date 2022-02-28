@@ -117,6 +117,35 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 end subroutine reconstruction_p1p2
 
 !-------------------------------------------------------------------------------
+!----- P2 reconstruction (only limiting):
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction_p2(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+
+integer :: ie
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  !--- if interface reconstruction is active, check if any cells are FV2
+  if (g_intreco > 0) then
+    ! central difference reconstruction (least-squares for uniform meshes)
+    ! for FV2 cells
+    do ie = 1,imax
+      if (ndof_el(1,ie) == 1) then
+        ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+        if (g_pureco == 1) &
+          uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+      end if
+    end do !ie
+  end if
+
+  !--- limit third-order solution
+  call limiting_p2(ucons, uprim)
+
+end subroutine reconstruction_p2
+
+!-------------------------------------------------------------------------------
 !----- high-order reconstruction given the basis functions at required point
 !-------------------------------------------------------------------------------
 
@@ -143,8 +172,8 @@ integer :: ieqn
       uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn)
     end do !ieqn
 
-  !--- rdgp1p2
-  elseif (g_nsdiscr .eq. 12) then
+  !--- rdgp1p2 or dgp2
+  elseif ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
     do ieqn = 1,neq
       uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn) &
         + basis(3)*udof(3,ieqn)
@@ -246,7 +275,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 integer :: ig, ie, ieqn, imat, ngauss
 
 real*8  :: dxi, xci, xg, wi, &
-           carea(3), weight(3), &
+           carea(5), weight(5), &
            b2, b3, rhs(g_gdof,g_nprim), lhs(g_gdof)
 
 real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
@@ -267,7 +296,7 @@ associate (nummat=>g_mmi%nummat)
       ! get lhs
       lhs(1) = dxi
       if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
-      !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+      if (g_nsdiscr .gt. 12) lhs(3) = lhs(1)/45.0
 
       ! quadrature
       rhs = 0.0
@@ -275,7 +304,7 @@ associate (nummat=>g_mmi%nummat)
         xg = carea(ig) * 0.5*dxi + xci
         wi = 0.5 * weight(ig)
         b2 = p1basis(xg, xci, dxi)
-        !b3 = p2basis(xg, xci, dxi)
+        b3 = p2basis(xg, xci, dxi)
 
         !--- dgp0 or rdgp0p1
         if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
@@ -284,17 +313,17 @@ associate (nummat=>g_mmi%nummat)
           end do !ieqn
 
         !--- dgp1 or rdgp1p2
-        elseif ((g_nsdiscr .ge. 11)) then
+        elseif ((g_nsdiscr.eq.11) .or. (g_nsdiscr.eq.12)) then
           do ieqn = 1,g_neqns
             ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
           end do !ieqn
 
-        !!--- rdgp1p2
-        !elseif (g_nsdiscr .eq. 12) then
-        !  do ieqn = 1,g_neqns
-        !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
-        !      + b3*ucons(3,ieqn,ie)
-        !  end do !ieqn
+        !--- dgp2
+        elseif (g_nsdiscr.eq.22) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+              + b3*ucons(3,ieqn,ie)
+          end do !ieqn
 
         end if
 
@@ -344,7 +373,7 @@ associate (nummat=>g_mmi%nummat)
         do ieqn = 1,g_nprim
           rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
           if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
-          !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
+          if (g_nsdiscr .gt. 12) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
         end do !ieqn
 
       end do !ig
@@ -353,7 +382,7 @@ associate (nummat=>g_mmi%nummat)
       do ieqn = 1,g_nprim
         uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
         if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
-        !if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
+        if (g_nsdiscr .gt. 12) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
       end do !ieqn
 
     end do !ie
@@ -386,7 +415,7 @@ real*8, intent(in) :: uprim(g_tdof,g_nprim,0:imax+1)
 integer :: ig, ie, ieqn, imat, ngauss
 
 real*8  :: dxi, xci, xg, wi, &
-           carea(3), weight(3), &
+           carea(5), weight(5), &
            b2, b3, rhs(g_gdof,g_neqns), lhs(g_gdof)
 
 real*8  :: upg(g_nprim), ug(g_neqns), &
@@ -407,7 +436,7 @@ associate (nummat=>g_mmi%nummat)
       ! get lhs
       lhs(1) = dxi
       if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
-      !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+      if (g_nsdiscr .gt. 12) lhs(3) = lhs(1)/45.0
 
       ! quadrature
       rhs = 0.0
@@ -415,7 +444,7 @@ associate (nummat=>g_mmi%nummat)
         xg = carea(ig) * 0.5*dxi + xci
         wi = 0.5 * weight(ig)
         b2 = p1basis(xg, xci, dxi)
-        !b3 = p2basis(xg, xci, dxi)
+        b3 = p2basis(xg, xci, dxi)
 
         !--- dgp0 or rdgp0p1
         if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
@@ -427,7 +456,7 @@ associate (nummat=>g_mmi%nummat)
           end do !ieqn
 
         !--- dgp1 or rdgp1p2
-        elseif ((g_nsdiscr .ge. 11)) then
+        elseif ((g_nsdiscr.eq.11) .or. (g_nsdiscr.eq.12)) then
           do ieqn = 1,g_neqns
             ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
           end do !ieqn
@@ -435,12 +464,16 @@ associate (nummat=>g_mmi%nummat)
             upg(ieqn) = uprim(1,ieqn,ie) + b2*uprim(2,ieqn,ie)
           end do !ieqn
 
-        !!--- rdgp1p2
-        !elseif (g_nsdiscr .eq. 12) then
-        !  do ieqn = 1,g_neqns
-        !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
-        !      + b3*ucons(3,ieqn,ie)
-        !  end do !ieqn
+        !--- dgp2
+        elseif (g_nsdiscr.eq.22) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+              + b3*ucons(3,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie) + b2*uprim(2,ieqn,ie) &
+              + b3*uprim(3,ieqn,ie)
+          end do !ieqn
 
         end if
 
@@ -462,17 +495,17 @@ associate (nummat=>g_mmi%nummat)
         do ieqn = 1,g_neqns
           rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*ug(ieqn)
           if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*ug(ieqn)*b2
-          !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*ug(ieqn)*b3
+          if (g_nsdiscr .gt. 12) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*ug(ieqn)*b3
         end do !ieqn
 
       end do !ig
 
       ! get modified high-order dofs
       if (g_nsdiscr .gt. 1) ucons(2,g_mmi%imome,ie) = rhs(2,g_mmi%imome)/lhs(2)
-      !if (g_nsdiscr .gt. 11) ucons(3,g_mmi%imome,ie) = rhs(3,g_mmi%imome)/lhs(3)
+      if (g_nsdiscr .gt. 12) ucons(3,g_mmi%imome,ie) = rhs(3,g_mmi%imome)/lhs(3)
       do imat = 1,nummat
         if (g_nsdiscr .gt. 1) ucons(2,g_mmi%iemin+imat-1,ie) = rhs(2,g_mmi%iemin+imat-1)/lhs(2)
-        !if (g_nsdiscr .gt. 11) ucons(3,g_mmi%iemin+imat-1,ie) = rhs(3,g_mmi%iemin+imat-1)/lhs(3)
+        if (g_nsdiscr .gt. 12) ucons(3,g_mmi%iemin+imat-1,ie) = rhs(3,g_mmi%iemin+imat-1)/lhs(3)
       end do !imat
 
     end do !ie

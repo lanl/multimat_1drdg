@@ -59,6 +59,8 @@ else if (g_nsdiscr .eq. 11) then
   write(*,*) "   DG(P1)"
 else if (g_nsdiscr .eq. 12) then
   write(*,*) "   rDG(P1P2)"
+else if (g_nsdiscr .eq. 22) then
+  write(*,*) "   DG(P2)"
 end if
 
 if (i_system > -1) then
@@ -1135,6 +1137,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
       do ieqn = 1,g_neqns
         rhs(1,ieqn) = rhs(1,ieqn) + wi * s(ieqn)
         rhs(2,ieqn) = rhs(2,ieqn) + wi * s(ieqn) * carea(ig)
+        if (g_nsdiscr == 22) rhs(3,ieqn) = rhs(3,ieqn) + wi * s(ieqn) * &
+          p2basis(x, xc, vol)
       end do !ieqn
 
     end do !ig
@@ -1142,6 +1146,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
       ucons(1,ieqn,ie) = rhs(1,ieqn) / vol
       ucons(2,ieqn,ie) = rhs(2,ieqn) / (vol/3.0)
+      if (g_nsdiscr == 22) ucons(3,ieqn,ie) = rhs(3,ieqn) / (vol/45.0)
     end do !ieqn
 
   end do !ie

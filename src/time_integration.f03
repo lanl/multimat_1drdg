@@ -65,6 +65,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         mm(1) = coord(ielem+1)-coord(ielem)
         if (g_nsdiscr .gt. 0) mm(2) = mm(1) / 3.0
+        if (g_nsdiscr .gt. 12) mm(3) = mm(1) / 45.0
 
         do ieqn = 1,g_neqns
         do idof = 1,ndof_el(1,ielem) !g_gdof

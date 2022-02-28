@@ -152,6 +152,8 @@ associate (nummat=>g_mmi%nummat)
       rhsel(1,ieqn,iel) = rhsel(1,ieqn,iel) - intflux(ieqn)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,iel) >= 2)) &
         rhsel(2,ieqn,iel) = rhsel(2,ieqn,iel) - intflux(ieqn)
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,iel) >= 3)) &
+        rhsel(3,ieqn,iel) = rhsel(3,ieqn,iel) - 1.0/3.0*intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -166,6 +168,8 @@ associate (nummat=>g_mmi%nummat)
       rhsel(1,ieqn,ier) = rhsel(1,ieqn,ier) + intflux(ieqn)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ier) >= 2)) &
         rhsel(2,ieqn,ier) = rhsel(2,ieqn,ier) - intflux(ieqn)
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ier) >= 3)) &
+        rhsel(3,ieqn,ier) = rhsel(3,ieqn,ier) + 1.0/3.0*intflux(ieqn)
     end do !ieqn
 
     do imat = 1,nummat
@@ -194,11 +198,11 @@ subroutine volumeint_dg(ucons, uprim, ndof_el, rgrad, vriem, rhsel)
 
 integer :: ig, ie, ieqn, ngauss, imat
 
-real*8  :: dx2, b3, p, hmat, viriem, &
+real*8  :: dx2, db3dx, p, hmat, viriem, &
            xg, xc, dx, basis(g_tdof), &
            u(g_neqns), pp(g_nprim), &
            rhob, y(g_mmi%nummat), dapdx, &
-           carea(2), weight(2), &
+           carea(5), weight(5), &
            cflux(g_neqns), &
            nflux(g_gdof,g_neqns), &
            rhsel(g_gdof,g_neqns,imax)
@@ -226,6 +230,7 @@ associate (nummat=>g_mmi%nummat)
     xg = carea(ig) * 0.5*dx + xc
     call get_basisfns(xg, xc, dx, basis)
     call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, u, pp, dx, xc)
+    if (g_nsdiscr .ge. 22) db3dx = (xg-xc)/((dx/2.0)*(dx/2.0))
 
     !if (dabs(sum(u(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14) then
     !  print*, "voluint-e: ", ie, sum(u(g_mmi%iemin:g_mmi%iemax))
@@ -254,6 +259,7 @@ associate (nummat=>g_mmi%nummat)
     cflux(g_mmi%imome) = pp(vel_idx(nummat, 0)) * u(g_mmi%imome) + p
     nflux(1,g_mmi%imome) = 0.0
     if (g_nsdiscr .ge. 11) nflux(2,g_mmi%imome) = 0.0
+    if (g_nsdiscr .ge. 22) nflux(3,g_mmi%imome) = 0.0
     do imat = 1,nummat
       hmat = u(g_mmi%iemin+imat-1) + pp(apr_idx(nummat, imat))
       ! other conservative fluxes
@@ -271,11 +277,18 @@ associate (nummat=>g_mmi%nummat)
         nflux(2,g_mmi%irmin+imat-1) = 0.0
         nflux(2,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * carea(ig)
       end if
+      if (g_nsdiscr .ge. 22) then
+        nflux(3,imat) = nflux(1,imat) * basis(3) + u(imat) * viriem * db3dx*dx
+        nflux(3,g_mmi%irmin+imat-1) = 0.0
+        nflux(3,g_mmi%iemin+imat-1) = nflux(1,g_mmi%iemin+imat-1) * basis(3)
+      end if
     end do !imat
 
     do ieqn = 1,g_neqns
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
         rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + dx2 * cflux(ieqn)
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ie) >= 3)) &
+        rhsel(3,ieqn,ie) = rhsel(3,ieqn,ie) + db3dx*0.5*weight(ig)*dx * cflux(ieqn)
     end do !ieqn
 
     !do ieqn = 1,g_neqns
@@ -286,6 +299,8 @@ associate (nummat=>g_mmi%nummat)
       rhsel(1,ieqn,ie) = rhsel(1,ieqn,ie) + 0.5 * dx2 * nflux(1,ieqn)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) &
         rhsel(2,ieqn,ie) = rhsel(2,ieqn,ie) + 0.5 * dx2 * nflux(2,ieqn)
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ie) >= 3)) &
+        rhsel(3,ieqn,ie) = rhsel(3,ieqn,ie) + 0.5 * dx2 * nflux(3,ieqn)
     end do !ieqn
 
   end do !ig
@@ -757,8 +772,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,0) = ucons(1,:,1)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1)
-     else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
+     else if ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
+       ucons(1,:,0) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
      end if
 
   else if (g_lbflag .eq. 1) then
@@ -791,8 +806,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,0) = ucons(1,:,imax)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax)
-     else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
+     else if ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
+       ucons(1,:,0) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
      end if
 
   else
@@ -823,8 +838,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = ucons(1,:,imax)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax)
-     else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
+     else if ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
      end if
 
   else if (g_rbflag .eq. 1) then
@@ -857,8 +872,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = ucons(1,:,1)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1)
-     else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) !+ ucons(3,:,1)/3.0
+     else if ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
+       ucons(1,:,imax+1) = ucons(1,:,1) - ucons(2,:,1) + ucons(3,:,1)/3.0
      end if
 
   else if (g_rbflag .eq. 4) then
@@ -867,8 +882,8 @@ associate (nummat=>g_mmi%nummat)
        ucons(1,:,imax+1) = ucons(1,:,imax)
      else if ((g_nsdiscr .eq. 1) .or. (g_nsdiscr .eq. 11)) then
        ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax)
-     else if (g_nsdiscr .eq. 12) then
-       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) !+ ucons(3,:,imax)/3.0
+     else if ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
+       ucons(1,:,imax+1) = ucons(1,:,imax) + ucons(2,:,imax) + ucons(3,:,imax)/3.0
      end if
      u_conv = ucons(1,g_mmi%imome,imax+1)/sum(ucons(1,g_mmi%irmin:g_mmi%irmax,imax+1))
      do imat = 1,nummat
@@ -908,7 +923,7 @@ integer :: ig, ie, ieqn, ngauss, imat
 real*8  :: dx, dx2, b3, p_star, rel_time, rhorat, s_lim, &
            xc, xg, basis(g_tdof), &
            rho, p, aimat, nume, deno, &
-           carea(2), weight(2)
+           carea(5), weight(5)
 real*8  :: u(g_neqns), pp(g_nprim), rhsel(g_gdof,g_neqns,imax)
 
 real*8, dimension(g_mmi%nummat) :: rhom, pm, km, s_alp, s_max
@@ -973,6 +988,10 @@ associate (nummat=>g_mmi%nummat)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
         rhsel(2,imat,ie) = rhsel(2,imat,ie) + dx2 * carea(ig) * s_alp(imat)
         rhsel(2,g_mmi%iemin+imat-1,ie) = rhsel(2,g_mmi%iemin+imat-1,ie) - dx2 * carea(ig) * p*s_alp(imat)
+      end if
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ie) >= 3)) then
+        rhsel(3,imat,ie) = rhsel(3,imat,ie) + dx2 * basis(3) * s_alp(imat)
+        rhsel(3,g_mmi%iemin+imat-1,ie) = rhsel(3,g_mmi%iemin+imat-1,ie) - dx2 * basis(3) * p*s_alp(imat)
       end if
     end do !imat
 
@@ -1166,7 +1185,7 @@ integer, intent(in) :: ndof_el(2,0:imax+1)
 
 integer :: ig, ie, ngauss, i
 real*8  :: dx, dx2, xc, xg, &
-           carea(2), weight(2)
+           carea(5), weight(5)
 real*8  :: u(g_neqns), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
 
 associate (nummat=>g_mmi%nummat)
@@ -1202,6 +1221,9 @@ associate (nummat=>g_mmi%nummat)
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
         rhsel(2,i,ie) = rhsel(2,i,ie) + dx2 * carea(ig) * src(i)
       end if
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ie) >= 3)) then
+        rhsel(3,i,ie) = rhsel(3,i,ie) + dx2 * p2basis(xg, xc, dx) * src(i)
+      end if
     end do !i
 
   end do !ig
@@ -1221,7 +1243,7 @@ integer, intent(in) :: ndof_el(2,0:imax+1)
 
 integer :: ig, ie, ngauss, i
 real*8  :: dx, dx2, xc, xg, &
-           carea(2), weight(2)
+           carea(5), weight(5)
 real*8  :: t, c_1, c_2, c_3, k, beta, rho0, e0, e_10, h, d_a
 real*8  :: u(g_neqns), rhsel(g_gdof,g_neqns,imax), src(g_neqns)
 
@@ -1271,6 +1293,9 @@ associate (nummat=>g_mmi%nummat)
 
       if ((g_nsdiscr .ge. 11) .and. (ndof_el(1,ie) >= 2)) then
         rhsel(2,i,ie) = rhsel(2,i,ie) + dx2 * carea(ig) * src(i)
+      end if
+      if ((g_nsdiscr .ge. 22) .and. (ndof_el(1,ie) >= 3)) then
+        rhsel(3,i,ie) = rhsel(3,i,ie) + dx2 * p2basis(xg, xc, dx) * src(i)
       end if
     end do !i
 
@@ -1570,7 +1595,7 @@ integer :: ndof_el(2,0:imax+1), matint(g_mmi%nummat), ie, new_ndof_el
 
 real*8 :: ucons(g_tdof,g_neqns,0:imax+1)
 
-  ! only applicable to DG(P1)/rDG(P1P2)
+  ! only applicable to DG(P1)/rDG(P1P2)/DG(P2)
   if (g_nsdiscr > 1) then
 
     do ie = 0, imax+1
@@ -1585,12 +1610,12 @@ real*8 :: ucons(g_tdof,g_neqns,0:imax+1)
       ! if cell is refined from FV2 to DGP1 initialize the high-order DOFs
       if (new_ndof_el > ndof_el(1,ie)) then
         ndof_el(2,ie) = 1
-        ucons(2,:,ie) = 0.0
+        ucons(2:,:,ie) = 0.0
       else if (new_ndof_el == ndof_el(1,ie)) then
         ndof_el(2,ie) = 0
       else if (new_ndof_el < ndof_el(1,ie)) then
         ndof_el(2,ie) = -1
-        !ucons(2,:,ie) = 0.0
+        !ucons(2:,:,ie) = 0.0
       end if
 
       ndof_el(1,ie) = new_ndof_el

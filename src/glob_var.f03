@@ -88,7 +88,7 @@ real*8, intent(out) :: basis(g_tdof)
   !--- rdgp0p1 or dgp1
   if (g_nsdiscr .gt. 0) basis(2) = p1basis(x, xc, dx)
 
-  !--- rdgp1p2
+  !--- rdgp1p2 or dgp2
   if (g_nsdiscr .gt. 11) basis(3) = p2basis(x, xc, dx)
 
 end subroutine get_basisfns
@@ -127,6 +127,10 @@ integer, intent(in) :: ndiscr
   !--- dgp1 or rdgp1p2
   else if ((ndiscr == 11) .or. (ndiscr == 12)) then
     get_numqpoints = 2
+
+  !--- dgp2
+  else if (ndiscr == 22) then
+    get_numqpoints = 3
 
   end if
 

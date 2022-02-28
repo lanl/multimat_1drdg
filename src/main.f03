@@ -1,6 +1,5 @@
 !!---------------------------------------------------------------------------------------
-!!----- Non-equilibrium velocity Isothermal Multiphase and
-!!----- non-equilibrium pressure multi-material flow code
+!!----- Non-equilibrium pressure multi-material flow code
 !!----- by
 !!----- Aditya K Pandare
 !!
@@ -24,7 +23,6 @@ real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end, linfty
 
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
-procedure(limiting_p1), pointer :: tvdlimiting_mm6eq => NULL()
 
 !----- Read control file:
 call read_cntl()
@@ -62,6 +60,9 @@ else if (g_nsdiscr .eq. 11) then
 else if (g_nsdiscr .eq. 12) then
    g_tdof = 3
    g_gdof = 2
+else if (g_nsdiscr .eq. 22) then
+   g_tdof = 3
+   g_gdof = 3
 else
    write(*,*) "Error: Incorrect discretization scheme selected:", g_nsdiscr
 end if
@@ -151,16 +152,14 @@ else if (i_system .eq. 1) then
 
   case(0)
     reconst_mm6eq => reconstruction_p0
-    tvdlimiting_mm6eq => limiting_p0
   case(1)
     reconst_mm6eq => reconstruction_p0p1
-    tvdlimiting_mm6eq => limiting_p1
   case(11)
     reconst_mm6eq => reconstruction_p1
-    tvdlimiting_mm6eq => limiting_p1
   case(12)
     reconst_mm6eq => reconstruction_p1p2
-    tvdlimiting_mm6eq => limiting_p2
+  case(22)
+    reconst_mm6eq => reconstruction_p2
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
                g_nsdiscr
