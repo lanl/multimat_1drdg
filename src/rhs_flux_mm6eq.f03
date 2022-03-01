@@ -96,16 +96,20 @@ associate (nummat=>g_mmi%nummat)
   !--- left element
   xc = 0.5*(coord(iel+1)+coord(iel))
   dx = coord(iel+1)-coord(iel)
-  call get_basisfns(coord(ifc), xc, dx, basis)
+  call get_basisfns(xc, xc, dx, basis)
   call linc_reconstruction(ucons(:,:,iel), uprim(:,:,iel), basis, ul, pp_l, dx, xc)
   call get_multimatsoundspeed(ul, pp_l, ac_l)
+  call get_basisfns(coord(ifc), xc, dx, basis)
+  call linc_reconstruction(ucons(:,:,iel), uprim(:,:,iel), basis, ul, pp_l, dx, xc)
 
   !--- right element
   xc = 0.5*(coord(ier+1)+coord(ier))
   dx = coord(ier+1)-coord(ier)
-  call get_basisfns(coord(ifc), xc, dx, basis)
+  call get_basisfns(xc, xc, dx, basis)
   call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
   call get_multimatsoundspeed(ur, pp_r, ac_r)
+  call get_basisfns(coord(ifc), xc, dx, basis)
+  call linc_reconstruction(ucons(:,:,ier), uprim(:,:,ier), basis, ur, pp_r, dx, xc)
 
   !if (dabs(sum(ul(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14 .or. &
   !  dabs(sum(ur(g_mmi%iemin:g_mmi%iemax))-3.0000000000705) > 1e-14) then

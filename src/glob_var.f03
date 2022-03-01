@@ -130,7 +130,7 @@ integer, intent(in) :: ndiscr
 
   !--- dgp2
   else if (ndiscr == 22) then
-    get_numqpoints = 3
+    get_numqpoints = 5
 
   end if
 

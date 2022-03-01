@@ -1533,7 +1533,7 @@ associate (nummat=>g_mmi%nummat)
     end if
 
     ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
+    theta1(1:nummat) = minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
