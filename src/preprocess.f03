@@ -1514,24 +1514,29 @@ end subroutine gnuplot_diagnostics_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine errorcalc_p1(ucons, t, err_log, linfty)
+subroutine errorcalc_p1(ucons, uprim, t, err_log, linfty)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                      uprim(g_tdof,g_nprim,0:imax+1), t
 
-integer :: ig, ie, ieqn, imat, ngauss
+integer :: ig, ie, ieqn, k, ngauss
 logical :: file_exists
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
            u(g_neqns), &
+           pr(2), &
            carea(3), weight(3), &
            s(g_neqns), &
            err, linfty, err_log(2,g_neqns), &
-           errrho, errte
+           errrho, errte, errp_log(2)
+
+associate (nummat=>g_mmi%nummat)
 
   call rutope(1, ngauss, carea, weight)
 
   err_log = 0.0
+  errp_log = 0.0
   linfty = 0.d0
 
   if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. -3) .or. &
@@ -1552,12 +1557,53 @@ real*8  :: dx, xg, wi, xc, b3i, &
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3i*ucons(3,ieqn,ie)
         end do !ieqn
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie) &
+            + carea(ig) * uprim(2,apr_idx(nummat,k),ie) &
+            + b3i*uprim(3,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie) &
+          + carea(ig) * uprim(2,vel_idx(nummat,0),ie) &
+          + b3i*uprim(3,vel_idx(nummat,0),ie)
+
       else if (g_nsdiscr .ge. 1) then
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie) &
+            + carea(ig) * uprim(2,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie) &
+          + carea(ig) * uprim(2,vel_idx(nummat,0),ie)
+
       else
         u(:) = ucons(1,:,ie)
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie)
+
+      end if
+
+      if (g_pureco == 0) then
+        pr(2) = u(g_mmi%imome)/sum(u(g_mmi%irmin:g_mmi%irmax))
+        do k = 1,nummat
+          pr(1) = pr(1) + eos3_alphapr(g_gam(k), g_pc(k), u(k), &
+            u(g_mmi%irmin+k-1), u(g_mmi%iemin+k-1), pr(2))
+        end do !k
       end if
 
       if (i_system .eq. 1) then
@@ -1575,6 +1621,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
         err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
         err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
       end do !ieqn
+      errp_log(1) = errp_log(1) + wi*(pr(1)-1.0/p_nd)*(pr(1)-1.0/p_nd)
+      errp_log(2) = errp_log(2) + wi*(pr(2)-1.0/a_nd)*(pr(2)-1.0/a_nd)
 
       linfty = max(linfty, dabs(u(1) - s(1)))
 
@@ -1587,6 +1635,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
       err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
       err_log(2,ieqn) = dlog10(err_log(2,ieqn))
     end do !ieqn
+    errp_log(:) = dsqrt(errp_log(:))
+    errp_log(:) = dlog10(errp_log(:))
 
     !--- write errors to file
     inquire(file='logl1errors.dat', exist=file_exists)
@@ -1617,6 +1667,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
     do ieqn = 1,g_neqns
       write(42,'(F16.6)',advance='no') err_log(2,ieqn)
     end do !ieqn
+    write(42,'(2F16.6)',advance='no') errp_log(1), errp_log(2)
     close(42)
 
     inquire(file='absl1errors.dat', exist=file_exists)
@@ -1647,6 +1698,7 @@ real*8  :: dx, xg, wi, xc, b3i, &
     do ieqn = 1,g_neqns
       write(44,'(E16.6)',advance='no') 10.0**err_log(2,ieqn)
     end do !ieqn
+    write(44,'(2E16.6)',advance='no') 10.0**errp_log(1), 10.0**errp_log(2)
     close(44)
 
   else
@@ -1654,6 +1706,8 @@ real*8  :: dx, xg, wi, xc, b3i, &
     write(*,*) "  WARNING: Error computation not configured for iprob = ", iprob
 
   end if
+
+  end associate
 
 end subroutine errorcalc_p1
 

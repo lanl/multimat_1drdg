@@ -129,7 +129,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   call gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, g_time)
 
   !----- compute L2-error-norm
-  call errorcalc_p1(ucons, g_time*a_nd, err_log, linfty)
+  call errorcalc_p1(ucons, uprim, g_time*a_nd, err_log, linfty)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"

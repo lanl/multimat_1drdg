@@ -141,7 +141,7 @@ if (i_system .eq. -1) then
   call init_soln_kex(ucons, ndof_el)
   dt = dt_u
   call reconst_mm6eq(ucons, uprim, ndof_el)
-  call errorcalc_p1(ucons, 0.0, err_log, linfty)
+  call errorcalc_p1(ucons, uprim, 0.0, err_log, linfty)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "      cubic: log(||e||): ", err_log(2), 10.0**err_log(2)
   write(*,*) "   gaussian: log(||e||): ", err_log(3), 10.0**err_log(3)
