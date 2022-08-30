@@ -1621,8 +1621,8 @@ associate (nummat=>g_mmi%nummat)
         err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
         err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
       end do !ieqn
-      errp_log(1) = errp_log(1) + wi*(pr(1)-1.0/p_nd)*(pr(1)-1.0/p_nd)
-      errp_log(2) = errp_log(2) + wi*(pr(2)-1.0/a_nd)*(pr(2)-1.0/a_nd)
+      errp_log(1) = errp_log(1) + wi*(pr(1)-pr_fs)*(pr(1)-pr_fs)
+      errp_log(2) = errp_log(2) + wi*(pr(2)-u_fs)*(pr(2)-u_fs)
 
       linfty = max(linfty, dabs(u(1) - s(1)))
 
