@@ -158,7 +158,7 @@ real*8  :: uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta)
+    call vertexbased_fn(g_neqns, uneigh, theta, g_limcell(1,ie))
 
     !--- 3b. Obtain limiter functions for equation system in single-material cell
 
@@ -228,7 +228,7 @@ real*8  :: dx2, uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
 
-    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta2)
+    call vertexbased_fn(g_neqns, uneigh, theta2, g_limcell(1,ie))
 
     ! ii. P1 derivative limiting
 
@@ -236,7 +236,7 @@ real*8  :: dx2, uneigh(2,g_neqns,-1:1), ucons(g_tdof,g_neqns,0:imax+1), &
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, 2.0, 1.0, uneigh, theta1)
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
 
     !--- 2. Obtain limiter functions for equation system in single-material cell
 
