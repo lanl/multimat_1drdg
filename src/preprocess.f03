@@ -63,6 +63,8 @@ else if (g_nsdiscr .eq. 11) then
   write(*,*) "   DG(P1)"
 else if (g_nsdiscr .eq. 12) then
   write(*,*) "   rDG(P1P2)"
+else if (g_nsdiscr .eq. 22) then
+  write(*,*) "   DG(P2)"
 end if
 
 if (i_system > -1) then
@@ -91,6 +93,14 @@ if (i_system > -1) then
   end if
 
   write(*,*) " "
+  write(*,*) " 'Redundant' reconst/limiting for a*p, u: "
+  if (g_pureco .eq. 1) then
+    write(*,*) "   ON"
+  else
+    write(*,*) "   OFF"
+  end if
+
+  write(*,*) " "
   write(*,*) " Limiter: "
   if (g_nlim .eq. 0) then
     write(*,*) "   None."
@@ -109,7 +119,7 @@ if (i_system > -1) then
   else if (g_nlim .eq. 7) then
     write(*,*) "   LINC+Vertex-based+WENO."
   else if (g_nlim .eq. 8) then
-    write(*,*) "   Superbee."
+    write(*,*) "   Vertex-based+Positivity."
   else
     write(*,*) "Invalid limiter."
     stop
@@ -128,6 +138,13 @@ end subroutine screen_output
 subroutine read_cntl()
 
 integer :: imat
+logical :: file_exists
+
+        inquire(file='setflow.cntl', exist=file_exists)
+        if (.not.file_exists) then
+          write(*,*) "Error: Input file 'setflow.cntl' does not exist"
+          stop
+        end if
 
         open(12, file = 'setflow.cntl')
 
@@ -155,7 +172,8 @@ integer :: imat
         read(12,*) u_fs
         read(12,*) pr_fs
         read(12,*) ! blank line
-        read(12,*) g_nsdiscr, g_nlim, g_nmatint
+        read(12,*) g_nsdiscr
+        read(12,*) g_nlim, g_nmatint, g_pureco
         read(12,*) dt_u
         read(12,*) ntstep
         read(12,*) ! blank line
@@ -179,6 +197,9 @@ real*8  :: ldomn, dx
         if ((iprob==8) .and. (i_system==1)) then
           ldomn = 10.0
           coord(1) = -5.0
+        else if ((iprob==9) .and. (i_system==1)) then
+          ldomn = 9.0
+          coord(1) = 0.0
         else
           ldomn = 1.0
           coord(1)  = 0.d0
@@ -349,7 +370,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      alpha_fs(1) = g_alphamin
      alpha_fs(2) = 1.0-alpha_fs(1)
-     t_fs = 300.0
+     t_fs = 0.003484320557
      rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
      rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
 
@@ -364,6 +385,127 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
          xf = 0.5*(coord(ielem) + coord(ielem+1))
 
          s = gaussian(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
+  !--- MMS 1: advection of equilibrium interface
+  !----------
+  else if (iprob .eq. -2) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 2) then
+       write(*,*) " Error: 'tanh manufactured problem' not configured for &
+         more than two materials"
+       stop
+     end if
+
+     ! Quantities below calculated based on following:
+     ! rhoe_1=1/rho_1, rhoe_2=1/rho_2, gam_1=gam_2, rho_1=rho_2=rho_01+k1*x
+     ! rho_01=5
+     u_fs = 1.0
+     pr_fs = 0.4
+     t_fs = 1.0/(5.0*g_cp(1)/g_gam(1))
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     call nondimen_mm6eq()
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = mms_tanh(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
+  !--- MMS 2: two-material nonlinear energy growth
+  !----------
+  else if (iprob .eq. -3) then
+
+     g_alphamin = 1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 2) then
+       write(*,*) " Error: 'nleg manufactured problem' not configured for &
+         more than two materials"
+       stop
+     end if
+
+     ! Quantities below calculated based on following:
+     ! \rho_10 = \rho_20 = 30.0
+     ! e_20 = 5.0
+     ! c_1 = 0.5
+     ! c_2 = 1.0
+     ! c_3 = -1.0
+     ! beta = 1.0
+     ! k = 0.8
+     u_fs = 1.0
+     pr_fs = 1.0
+     t_fs = 1.0
+     rhomat_fs = 1.0
+     call nondimen_mm6eq()
+
+     pr_fs = eos3_pr(g_gam(1), g_pc(1), 30.0, 150.0, 0.0)
+     t_fs = eos3_t(g_gam(1), g_cp(1), g_pc(1), 30.0, 150.0, 0.0)
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = mms_nleg(xf,0.0)
+         ucons(1,:,ielem) = s(:)
+       end do !ielem
+       if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
+
+     end if
+
+  !--- Density-Gaussian and volfrac-tanh
+  !----------
+  else if (iprob .eq. -4) then
+
+     g_alphamin = 1.d-10
+
+     alpha_fs(1) = g_alphamin
+     alpha_fs(2) = 1.0-alpha_fs(1)
+     t_fs = 0.03484320557
+     rhomat_fs(1) = eos3_density(g_gam(1), g_cp(1), g_pc(1), pr_fs, t_fs)
+     rhomat_fs(2) = eos3_density(g_gam(2), g_cp(2), g_pc(2), pr_fs, t_fs)
+
+     call nondimen_mm6eq()
+
+     if (g_nsdiscr .ge. 11) then
+       call weakinit_p1(ucons)
+       if (g_nsdiscr .eq. 12) ucons(3,:,:) = 0.0
+
+     else
+       do ielem = 1,imax
+         xf = 0.5*(coord(ielem) + coord(ielem+1))
+
+         s = gaussiantanh(xf,0.0)
          ucons(1,:,ielem) = s(:)
        end do !ielem
        if (g_nsdiscr .eq. 1) ucons(2,:,:) = 0.0
@@ -916,6 +1058,66 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end if
 
+  !--- LeBlanc shocktube
+  !----------
+  else if (iprob .eq. 9) then
+
+     g_alphamin = 0.0 !1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 1) then
+       write(*,*) " Error: LeBlanc shocktube not configured for &
+         more than one material"
+       stop
+     end if
+     u_fs = 0.0
+     pr_fs = eos3_pr(g_gam(1), g_pc(1), 1.0, 0.1, 0.0)
+     t_fs = eos3_t(g_gam(1), g_cp(1), g_pc(1), 1.0, 0.1, 0.0)
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = 0.0
+     ! right state (need to non-dimensionalize)
+     p1r = eos3_pr(g_gam(1), g_pc(1), 0.001/rho_nd, 1.0d-10/(rho_nd*p_nd), 0.0)
+     t1r = eos3_t(g_gam(1), g_cp(1), g_pc(1), 0.001/rho_nd, &
+       1.0d-10/(rho_nd*p_nd), 0.0)
+     ur  = 0.0
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 3.0) then
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+        else
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * u_fs
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+        end if
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
@@ -932,6 +1134,7 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
   call weak_recons_primitives(ucons, uprim, ndof_el)
   call ignore_tinyphase_mm6eq(ucons, uprim)
   call reconst_mm6eq(ucons, uprim)
+  call weak_recons_initconsr(ucons, uprim, ndof_el)
 
   call gnuplot_flow_mm6eq(ucons, uprim, matint_el, 0)
   call gnuplot_flow_p1_mm6eq(ucons, uprim, matint_el, 0)
@@ -1138,9 +1341,9 @@ end subroutine init_soln_soldyn
 subroutine weakinit_p1(ucons)
 
 integer :: ig, ie, ieqn, ngauss
-data       ngauss/3/
+data       ngauss/5/
 
-real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(3), weight(3)
+real*8  :: wi, vol, xc, x, s(g_neqns), rhs(g_tdof,g_neqns), carea(5), weight(5)
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
 
   call rutope(1, ngauss, carea, weight)
@@ -1158,6 +1361,12 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
       x = carea(ig) * 0.5 * vol + xc
       if (iprob == -1) then
         s = gaussian(x,0.0)
+      else if (iprob == -2) then
+        s = mms_tanh(x,0.0)
+      else if (iprob == -3) then
+        s = mms_nleg(x,0.0)
+      else if (iprob == -4) then
+        s = gaussiantanh(x,0.0)
       else if (iprob == 8) then
         s = shockentropywave(x, 0.0)
       end if
@@ -1165,6 +1374,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
       do ieqn = 1,g_neqns
         rhs(1,ieqn) = rhs(1,ieqn) + wi * s(ieqn)
         rhs(2,ieqn) = rhs(2,ieqn) + wi * s(ieqn) * carea(ig)
+        if (g_nsdiscr == 22) rhs(3,ieqn) = rhs(3,ieqn) + wi * s(ieqn) * &
+          p2basis(x, xc, vol)
       end do !ieqn
 
     end do !ig
@@ -1172,6 +1383,7 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1)
     do ieqn = 1,g_neqns
       ucons(1,ieqn,ie) = rhs(1,ieqn) / vol
       ucons(2,ieqn,ie) = rhs(2,ieqn) / (vol/3.0)
+      if (g_nsdiscr == 22) ucons(3,ieqn,ie) = rhs(3,ieqn) / (vol/45.0)
     end do !ieqn
 
   end do !ie
@@ -1201,8 +1413,8 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
                        uprim(g_tdof,g_nprim,0:imax+1)
 
 integer :: ielem, imat
-real*8  :: xcc, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns)
+real*8  :: dx, xcc, pmix, tmix, rhomix, emix, temix, trcell
+real*8  :: uconsi(g_neqns), uprimi(g_nprim), basis(g_tdof), tmat(g_mmi%nummat)
 
 character(len=100) :: filename2,filename3
 
@@ -1227,17 +1439,20 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
      write(23,'(A8)',advance='no') "tmat, "
   end do !imat
-  write(23,'(2A8)') "e_m, ", &
-                    "int_cell"
+  write(23,'(5A15)') "e_m, ", &
+                     "te_m," , &
+                     "limcons_cell, ", &
+                     "limprim_cell, ", &
+                     "int_cell"
 
   do ielem = 1,imax
 
-     uconsi = ucons(1,:,ielem)
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprim(1,apr_idx(nummat, 1):apr_idx(nummat, nummat),ielem)
-     uprimi(g_mmi%imome) = uprim(1,vel_idx(nummat, 0),ielem)
-
-     xcc = 0.5d0 * (coord(ielem) + coord(ielem+1))
+     ! cell geometry
+     dx = coord(ielem+1) - coord(ielem)
+     xcc = coord(ielem) + 0.5 * dx
+     call get_basisfns(xcc, xcc, dx, basis)
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xcc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1246,36 +1461,39 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
      temix = temix/rhomix
 
-     trcell = dble(matint_el(ielem))
-
      !--- write material and bulk data to gnuplot file
      write(23,'(E16.6)',advance='no') xcc
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(imat)
+        write(23,'(E16.6)',advance='no') uconsi(imat)
      end do !imat
      write(23,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(23,'(E16.6)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
-        write(23,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(23,'(E16.6)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(23,'(3E16.6)') emix, &
-                          temix, &
-                          trcell
+     write(23,'(5E16.6)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
+                          g_limcell(1,ielem), &
+                          g_limcell(2,ielem), &
+                          dble(matint_el(ielem))
 
   end do !ielem
 
@@ -1295,7 +1513,7 @@ real*8,  intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
 
 integer :: ielem, imat
 real*8  :: dx, xc, xp, pmix, tmix, rhomix, emix, temix, trcell
-real*8  :: uconsi(g_neqns), uprimi(g_neqns), uprimp(g_nprim), basis(g_tdof)
+real*8  :: uconsi(g_neqns), uprimi(g_nprim), basis(g_tdof), tmat(g_mmi%nummat)
 
 character(len=100) :: filename2,filename3
 
@@ -1305,9 +1523,9 @@ associate (nummat=>g_mmi%nummat)
   filename3 = trim(adjustl(filename2)) // '.dgtwofluid.'//'dat'
   open(24,file=trim(adjustl(filename3)),status='unknown')
 
-  !write(filename2,'(1I50)')itstep
-  !filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
-  !open(25,file=trim(adjustl(filename3)),status='unknown')
+  write(filename2,'(1I50)')itstep
+  filename3 = trim(adjustl(filename2)) // '.conserved.'//'dat'
+  open(25,file=trim(adjustl(filename3)),status='unknown')
 
   !--- write material and bulk meta-data to gnuplot file
   write(24,'(A8)',advance='no') "# xcc, "
@@ -1324,17 +1542,18 @@ associate (nummat=>g_mmi%nummat)
   do imat = 1,nummat
      write(24,'(A8)',advance='no') "tmat, "
   end do !imat
-  write(24,'(2A8)') "e_m, ", &
+  write(24,'(3A8)') "e_m, ", &
+                    "te_m, ", &
                     "int_cell"
 
-  !write(25,'(8A8)') "# xcc,", &   !1
-  !                  "arho1,", &   !2
-  !                  "arho2," , &  !3
-  !                  "rhou,", &    !4
-  !                  "arhoE1,", &  !5
-  !                  "arhoE2,", &  !6
-  !                  "arhoe1,", &  !7
-  !                  "arhoe2"      !8
+  write(25,'(A8)',advance='no') "# xcc, "
+  do imat = 1,nummat
+     write(25,'(A12)',advance='no') "rhomat, "
+  end do !imat
+  do imat = 1,nummat
+     write(25,'(A12)',advance='no') "temat, "
+  end do !imat
+  write(25,*) " "
 
   do ielem = 1,imax
 
@@ -1345,11 +1564,8 @@ associate (nummat=>g_mmi%nummat)
      ! left face
      xp = coord(ielem)
      call get_basisfns(xp, xc, dx, basis)
-     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
-     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1358,11 +1574,14 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
@@ -1371,41 +1590,38 @@ associate (nummat=>g_mmi%nummat)
      trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
-     write(24,'(E16.6)',advance='no') xp
+     write(24,'(E18.8)',advance='no') xp
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uconsi(imat)
+        write(24,'(E18.8)',advance='no') uconsi(imat)
      end do !imat
-     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+     write(24,'(4E18.8)',advance='no') rhomix*rho_nd, &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(24,'(E18.8)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(24,'(E18.8)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix, &
-                          temix, &
+     write(24,'(3E18.8)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
                           trcell
 
-     !write(25,'(8E16.6)') xp, &                                                               !1
-     !                     uconsi(g_mmi%irmin), &                                              !2
-     !                     uconsi(g_mmi%irmin+1), &                                            !3
-     !                     uconsi(g_mmi%imome), &                                              !4
-     !                     uconsi(g_mmi%iemin), &                                              !5
-     !                     uconsi(g_mmi%iemin+1), &                                            !6
-     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     write(25,'(E24.14)',advance='no') xp
+     do imat = 1,nummat
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+     end do !imat
+     do imat = 1,nummat
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+     end do !imat
+     write(25,*) " "
 
      ! right face
      xp = coord(ielem+1)
      call get_basisfns(xp, xc, dx, basis)
-     call ho_reconstruction(g_neqns, ucons(:,:,ielem), basis, uconsi(:))
-     call ho_reconstruction(g_nprim, uprim(:,:,ielem), basis, uprimp(:))
-     call get_uprim_mm6eq(uconsi, uprimi)
-     uprimi(g_mmi%irmin:g_mmi%irmax) = uprimp(apr_idx(nummat,1):apr_idx(nummat,nummat))
-     uprimi(g_mmi%imome) = uprimp(vel_idx(nummat, 0))
+     call linc_reconstruction(ucons(:,:,ielem), uprim(:,:,ielem), basis, &
+       uconsi, uprimi, dx, xc)
 
      rhomix = 0.0
      pmix = 0.0
@@ -1414,11 +1630,14 @@ associate (nummat=>g_mmi%nummat)
      temix = 0.0
      do imat = 1,nummat
         rhomix = rhomix + uconsi(g_mmi%irmin+imat-1)
-        pmix = pmix + uprimi(g_mmi%irmin+imat-1)
-        tmix = tmix + uprimi(imat)*uprimi(g_mmi%iemin+imat-1)
+        pmix = pmix + uprimi(apr_idx(nummat,imat))
+        tmat(imat) = eos3_t(g_gam(imat), g_cp(imat), g_pc(imat), &
+          uconsi(g_mmi%irmin+imat-1)/uconsi(imat), &
+          uconsi(g_mmi%iemin+imat-1)/uconsi(imat), uprimi(vel_idx(nummat,0)))
+        tmix = tmix + uconsi(imat)*tmat(imat)
         emix = emix + (uconsi(g_mmi%iemin+imat-1) &
                        - 0.5*uconsi(g_mmi%irmin+imat-1) &
-                         *uprimi(g_mmi%imome)*uprimi(g_mmi%imome))
+                         *uprimi(vel_idx(nummat,0))*uprimi(vel_idx(nummat,0)))
         temix = temix + uconsi(g_mmi%iemin+imat-1)
      end do !imat
      emix = emix/rhomix
@@ -1427,41 +1646,41 @@ associate (nummat=>g_mmi%nummat)
      trcell = dble(matint_el(ielem))
 
      !--- write material and bulk data to gnuplot file
-     write(24,'(E16.6)',advance='no') xp
+     write(24,'(E18.8)',advance='no') xp
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uconsi(imat)
+        write(24,'(E18.8)',advance='no') uconsi(imat)
      end do !imat
-     write(24,'(4E16.6)',advance='no') rhomix*rho_nd, &
-                                       uprimi(g_mmi%imome)*a_nd , &
+     write(24,'(4E18.8)',advance='no') rhomix*rho_nd, &
+                                       uprimi(vel_idx(nummat,0))*a_nd , &
                                        pmix*p_nd, &
                                        tmix*t_nd
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%irmin+imat-1)*p_nd
+        write(24,'(E18.8)',advance='no') uprimi(apr_idx(nummat,imat))*p_nd/uconsi(imat)
      end do !imat
      do imat = 1,nummat
-        write(24,'(E16.6)',advance='no') uprimi(g_mmi%iemin+imat-1)*t_nd
+        write(24,'(E18.8)',advance='no') tmat(imat)*t_nd
      end do !imat
-     write(24,'(3E16.6)') emix, &
-                          temix, &
+     write(24,'(3E18.8)') emix*p_nd/rho_nd, &
+                          temix*p_nd/rho_nd, &
                           trcell
 
-     !write(25,'(8E16.6)') xp, &                                                               !1
-     !                     uconsi(g_mmi%irmin), &                                              !2
-     !                     uconsi(g_mmi%irmin+1), &                                            !3
-     !                     uconsi(g_mmi%imome), &                                              !4
-     !                     uconsi(g_mmi%iemin), &                                              !5
-     !                     uconsi(g_mmi%iemin+1), &                                            !6
-     !                     uconsi(g_mmi%iemin)-0.5*uconsi(g_mmi%irmin)*uprimi(g_mmi%imome), &  !7
-     !                     uconsi(g_mmi%iemin+1)-0.5*uconsi(g_mmi%irmin+1)*uprimi(g_mmi%imome) !8
+     write(25,'(E24.14)',advance='no') xp
+     do imat = 1,nummat
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%irmin+imat-1)*rho_nd
+     end do !imat
+     do imat = 1,nummat
+        write(25,'(E24.14)',advance='no') uconsi(g_mmi%iemin+imat-1)*p_nd
+     end do !imat
+     write(25,*) " "
 
      write(24,*) " "
 
-     !write(25,*) " "
+     write(25,*) " "
 
   end do !ielem
 
   close(24)
-  !close(25)
+  close(25)
 
 end associate
 
@@ -1529,7 +1748,9 @@ real*8,  intent(in) :: time, ucons(g_tdof,g_neqns,0:imax+1), &
 
 logical :: mixed_cell
 integer :: ie, k
-real*8 :: alk, apk, pb, denob, pavg(g_mmi%nummat), deno(g_mmi%nummat)
+real*8 :: dx, xc
+real*8 :: basis(g_tdof), alk, uci(g_neqns), pri(g_nprim), pb, denob, &
+  pavg(g_mmi%nummat), deno(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
@@ -1539,17 +1760,27 @@ associate (nummat=>g_mmi%nummat)
   denob = 0.0
   do ie=1,imax
     mixed_cell = .false.
+
+    ! cell geometry
+    dx = coord(ie+1) - coord(ie)
+    xc = coord(ie) + 0.5 * dx
+    call get_basisfns(xc, xc, dx, basis)
+    call linc_reconstruction(ucons(:,:,ie), uprim(:,:,ie), basis, &
+      uci, pri, dx, xc)
+
+    ! average pressures of majority materials for all mixed cells
     do k = 1,nummat
       alk = ucons(1,g_mmi%iamin+k-1,ie)
-      apk = uprim(1,apr_idx(nummat, k),ie)
       if ((alk > 1d-2) .and. (alk < 1.0-1d-2)) then
         mixed_cell = .true.
-        pavg(k) = pavg(k) + apk
+        pavg(k) = pavg(k) + pri(apr_idx(nummat,k))
         deno(k) = deno(k) + alk
       end if
     end do !k
+
+    ! average bulk pressure for all mixed cells
     if (mixed_cell) then
-      pb = pb + sum(uprim(1,apr_idx(nummat,1):apr_idx(nummat,nummat),ie))
+      pb = pb + sum(pri(apr_idx(nummat,1):apr_idx(nummat,nummat)))
       denob = denob + 1.0
     end if
   end do !ie
@@ -1573,27 +1804,33 @@ end subroutine gnuplot_diagnostics_mm6eq
 
 !----------------------------------------------------------------------------------------------
 
-subroutine errorcalc_p1(ucons, t, err_log, linfty)
+subroutine errorcalc_p1(ucons, uprim, t, err_log, linfty)
 
-real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), t
+real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1), &
+                      uprim(g_tdof,g_nprim,0:imax+1), t
 
-integer :: ig, ie, ieqn, ngauss
+integer :: ig, ie, ieqn, k, ngauss
+logical :: file_exists
 data       ngauss/3/
 
 real*8  :: dx, xg, wi, xc, b3i, &
-           u(g_neqns), ulow(g_neqns), &
+           u(g_neqns), &
+           pr(2), &
            carea(3), weight(3), &
            s(g_neqns), &
            err, linfty, err_log(2,g_neqns), &
-           errlow_log(g_neqns)
+           errrho, errte, errp_log(2)
+
+associate (nummat=>g_mmi%nummat)
 
   call rutope(1, ngauss, carea, weight)
 
   err_log = 0.0
-  errlow_log = 0.0
+  errp_log = 0.0
   linfty = 0.d0
 
-  if ( (iprob .eq. -1) .or. (iprob .eq. 0) ) then
+  if ( (iprob .eq. -1) .or. (iprob .eq. -2) .or. (iprob .eq. -3) .or. &
+    (iprob .eq. -4) .or. (iprob .eq. 0) ) then
 
     do ie = 1,imax
     do ig = 1,ngauss
@@ -1609,18 +1846,61 @@ real*8  :: dx, xg, wi, xc, b3i, &
         b3i = p2basis(xg,xc,dx)
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie) + b3i*ucons(3,ieqn,ie)
-          ulow(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie) &
+            + carea(ig) * uprim(2,apr_idx(nummat,k),ie) &
+            + b3i*uprim(3,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie) &
+          + carea(ig) * uprim(2,vel_idx(nummat,0),ie) &
+          + b3i*uprim(3,vel_idx(nummat,0),ie)
+
       else if (g_nsdiscr .ge. 1) then
         do ieqn = 1,g_neqns
           u(ieqn) = ucons(1,ieqn,ie) + carea(ig) * ucons(2,ieqn,ie)
         end do !ieqn
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie) &
+            + carea(ig) * uprim(2,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie) &
+          + carea(ig) * uprim(2,vel_idx(nummat,0),ie)
+
       else
         u(:) = ucons(1,:,ie)
+
+        ! bulk pressure
+        pr = 0.d0
+        do k = 1,nummat
+          pr(1) = pr(1) + uprim(1,apr_idx(nummat,k),ie)
+        end do !k
+        ! velocity
+        pr(2) = uprim(1,vel_idx(nummat,0),ie)
+
+      end if
+
+      if (g_pureco == 0) then
+        pr(2) = u(g_mmi%imome)/sum(u(g_mmi%irmin:g_mmi%irmax))
+        do k = 1,nummat
+          pr(1) = pr(1) + eos3_alphapr(g_gam(k), g_pc(k), u(k), &
+            u(g_mmi%irmin+k-1), u(g_mmi%iemin+k-1), pr(2))
+        end do !k
       end if
 
       if (i_system .eq. 1) then
         if (iprob.eq.-1) s = gaussian(xg,t)
+        if (iprob.eq.-2) s = mms_tanh(xg,t)
+        if (iprob.eq.-3) s = mms_nleg(xg,t)
+        if (iprob.eq.-4) s = gaussiantanh(xg,t)
         if (iprob.eq.0) s = contact(xg,t)
       else if (i_system .eq. -1) then
         s = quadraticfn(xg,t)
@@ -1630,27 +1910,94 @@ real*8  :: dx, xg, wi, xc, b3i, &
         err = u(ieqn) - s(ieqn)
         err_log(1,ieqn) = err_log(1,ieqn) + wi*dabs(err)
         err_log(2,ieqn) = err_log(2,ieqn) + wi*err*err
-        err = ulow(ieqn) - s(ieqn)
-        errlow_log(ieqn) = errlow_log(ieqn) + wi*err*err
       end do !ieqn
+      errp_log(1) = errp_log(1) + wi*(pr(1)-pr_fs)*(pr(1)-pr_fs)
+      errp_log(2) = errp_log(2) + wi*(pr(2)-u_fs)*(pr(2)-u_fs)
+
       linfty = max(linfty, dabs(u(1) - s(1)))
 
     end do !ig
     end do !ie
 
+    !--- final error computation
     do ieqn = 1,g_neqns
       err_log(1,ieqn) = dlog10(err_log(1,ieqn))
       err_log(2,ieqn) = dsqrt(err_log(2,ieqn))
       err_log(2,ieqn) = dlog10(err_log(2,ieqn))
-      errlow_log(ieqn) = dsqrt(errlow_log(ieqn))
-      errlow_log(ieqn) = dlog10(errlow_log(ieqn))
     end do !ieqn
+    errp_log(:) = dsqrt(errp_log(:))
+    errp_log(:) = dlog10(errp_log(:))
+
+    !--- write errors to file
+    inquire(file='logl1errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(41,file='logl1errors.dat',status='old', position='append')
+    else
+      open(41,file='logl1errors.dat',status='new')
+      write(41,'(A13)') "#  l1-errors: "
+      write(41,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(41,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
+      dlog10(dble(imax*g_gdof))
+    do ieqn = 1,g_neqns
+      write(41,'(F16.6)',advance='no') err_log(1,ieqn)
+    end do !ieqn
+    close(41)
+
+    inquire(file='logl2errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(42,file='logl2errors.dat',status='old', position='append')
+    else
+      open(42,file='logl2errors.dat',status='new')
+      write(42,'(A13)') "#  l2-errors: "
+      write(42,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(42,'(2F16.6)',advance='no') dlog10(coord(2)-coord(1)), &
+      dlog10(dble(imax*g_gdof))
+    do ieqn = 1,g_neqns
+      write(42,'(F16.6)',advance='no') err_log(2,ieqn)
+    end do !ieqn
+    write(42,'(2F16.6)',advance='no') errp_log(1), errp_log(2)
+    close(42)
+
+    inquire(file='absl1errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(43,file='absl1errors.dat',status='old', position='append')
+    else
+      open(43,file='absl1errors.dat',status='new')
+      write(43,'(A13)') "#  l1-errors: "
+      write(43,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(43,'(E16.6)',advance='no') coord(2)-coord(1)
+    write(43,'(I16)',advance='no') imax*g_gdof
+    do ieqn = 1,g_neqns
+      write(43,'(E16.6)',advance='no') 10.0**err_log(1,ieqn)
+    end do !ieqn
+    close(43)
+
+    inquire(file='absl2errors.dat', exist=file_exists)
+    if (file_exists) then
+      open(44,file='absl2errors.dat',status='old', position='append')
+    else
+      open(44,file='absl2errors.dat',status='new')
+      write(44,'(A13)') "#  l2-errors: "
+      write(44,'(A31)') "#  dx,  ndof,  errors(nunk), ..."
+    end if
+    write(44,'(E16.6)',advance='no') coord(2)-coord(1)
+    write(44,'(I16)',advance='no') imax*g_gdof
+    do ieqn = 1,g_neqns
+      write(44,'(E16.6)',advance='no') 10.0**err_log(2,ieqn)
+    end do !ieqn
+    write(44,'(2E16.6)',advance='no') 10.0**errp_log(1), 10.0**errp_log(2)
+    close(44)
 
   else
 
     write(*,*) "  WARNING: Error computation not configured for iprob = ", iprob
 
   end if
+
+  end associate
 
 end subroutine errorcalc_p1
 

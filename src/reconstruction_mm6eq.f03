@@ -42,9 +42,11 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   end do !ie
 
   !--- central difference reconstruction for primitive quantities
-  do ie = 1,imax
-    uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
-  end do !ie
+  if (g_pureco == 1) then
+    do ie = 1,imax
+      uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+    end do !ie
+  end if
 
   !--- limit second-order solution
   call limiting_p1(ucons, uprim)
@@ -69,7 +71,8 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
     do ie = 1,imax
       if (ndof_el(1,ie) == 1) then
         ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
-        uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+        if (g_pureco == 1) &
+          uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
       end if
     end do !ie
   end if
@@ -106,12 +109,41 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   call leastsquares_p1p2(g_neqns, ucons)
 
   !--- reconstruct third-order primitive quantities
-  call leastsquares_p1p2(g_nprim, uprim)
+  if (g_pureco == 1) call leastsquares_p1p2(g_nprim, uprim)
 
   !--- limit third-order solution
   call limiting_p2(ucons, uprim)
 
 end subroutine reconstruction_p1p2
+
+!-------------------------------------------------------------------------------
+!----- P2 reconstruction (only limiting):
+!-------------------------------------------------------------------------------
+
+subroutine reconstruction_p2(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+
+integer :: ie
+real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  !--- if interface reconstruction is active, check if any cells are FV2
+  if (g_intreco > 0) then
+    ! central difference reconstruction (least-squares for uniform meshes)
+    ! for FV2 cells
+    do ie = 1,imax
+      if (ndof_el(1,ie) == 1) then
+        ucons(2,:,ie) = 0.25 * (ucons(1,:,ie+1) - ucons(1,:,ie-1))
+        if (g_pureco == 1) &
+          uprim(2,:,ie) = 0.25 * (uprim(1,:,ie+1) - uprim(1,:,ie-1))
+      end if
+    end do !ie
+  end if
+
+  !--- limit third-order solution
+  call limiting_p2(ucons, uprim)
+
+end subroutine reconstruction_p2
 
 !-------------------------------------------------------------------------------
 !----- high-order reconstruction given the basis functions at required point
@@ -140,8 +172,8 @@ integer :: ieqn
       uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn)
     end do !ieqn
 
-  !--- rdgp1p2
-  elseif (g_nsdiscr .eq. 12) then
+  !--- rdgp1p2 or dgp2
+  elseif ((g_nsdiscr .eq. 12) .or. (g_nsdiscr .eq. 22)) then
     do ieqn = 1,neq
       uho(ieqn) = udof(1,ieqn) + basis(2)*udof(2,ieqn) &
         + basis(3)*udof(3,ieqn)
@@ -243,7 +275,7 @@ real*8, intent(in) :: ucons(g_tdof,g_neqns,0:imax+1)
 integer :: ig, ie, ieqn, imat, ngauss
 
 real*8  :: dxi, xci, xg, wi, &
-           carea(3), weight(3), &
+           carea(5), weight(5), &
            b2, b3, rhs(g_gdof,g_nprim), lhs(g_gdof)
 
 real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
@@ -251,84 +283,119 @@ real*8  :: rhomat, rhoemat, upg(g_nprim), ug(g_neqns), &
 
 associate (nummat=>g_mmi%nummat)
 
-  ngauss = get_numqpoints(g_nsdiscr)
-  call rutope(1, ngauss, carea, weight)
+  if (g_pureco == 1) then
 
-  do ie = 0,imax+1
+    ngauss = get_numqpoints(g_nsdiscr)
+    call rutope(1, ngauss, carea, weight)
 
-    dxi = coord(ie+1)-coord(ie)
-    xci = 0.5*(coord(ie+1)+coord(ie))
+    do ie = 0,imax+1
 
-    ! get lhs
-    lhs(1) = dxi
-    if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
-    !if (g_nsdiscr .gt. 11) lhs(3) = lhs(1)/45.0
+      dxi = coord(ie+1)-coord(ie)
+      xci = 0.5*(coord(ie+1)+coord(ie))
 
-    ! quadrature
-    rhs = 0.0
-    do ig = 1,ngauss
-      xg = carea(ig) * 0.5*dxi + xci
-      wi = 0.5 * weight(ig)
-      b2 = p1basis(xg, xci, dxi)
-      !b3 = p2basis(xg, xci, dxi)
+      ! get lhs
+      lhs(1) = dxi
+      if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
+      if (g_nsdiscr .gt. 12) lhs(3) = lhs(1)/45.0
 
-      !--- dgp0 or rdgp0p1
-      if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
-        do ieqn = 1,g_neqns
-          ug(ieqn) = ucons(1,ieqn,ie)
+      ! quadrature
+      rhs = 0.0
+      do ig = 1,ngauss
+        xg = carea(ig) * 0.5*dxi + xci
+        wi = 0.5 * weight(ig)
+        b2 = p1basis(xg, xci, dxi)
+        b3 = p2basis(xg, xci, dxi)
+
+        !--- dgp0 or rdgp0p1
+        if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp1 or rdgp1p2
+        elseif ((g_nsdiscr.eq.11) .or. (g_nsdiscr.eq.12)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp2
+        elseif (g_nsdiscr.eq.22) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+              + b3*ucons(3,ieqn,ie)
+          end do !ieqn
+
+        end if
+
+        ! primitives at quadrature point
+        upg = 0.0
+        upg(vel_idx(nummat, 0)) = ug(g_mmi%imome)/sum(ug(g_mmi%irmin:g_mmi%irmax))
+        do imat = 1,nummat
+          rhomat = ug(g_mmi%irmin+imat-1)
+          rhoemat = ug(g_mmi%iemin+imat-1)
+
+          if (g_pvarreco == 0) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0)))
+
+          else if (g_pvarreco == 1) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+
+          else if (g_pvarreco == 2) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+
+          else if (g_pvarreco == 3) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+            upg(rho_idx(nummat, imat)) = 0.5 * ug(g_mmi%irmin+imat-1) * &
+              upg(vel_idx(nummat,0)) * upg(vel_idx(nummat,0))
+            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1) - &
+              upg(rho_idx(nummat,imat))
+
+          else if (g_pvarreco == 4) then
+            upg(apr_idx(nummat, imat)) = &
+              eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
+                upg(vel_idx(nummat, 0))) / ug(imat)
+            upg(rho_idx(nummat, imat)) = ug(g_mmi%irmin+imat-1)/ug(imat)
+            upg(rhote_idx(nummat, imat)) = ug(g_mmi%iemin+imat-1)/ug(imat)
+
+          end if
+
+        end do !imat
+
+        ! get rhs
+        do ieqn = 1,g_nprim
+          rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
+          if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
+          if (g_nsdiscr .gt. 12) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
         end do !ieqn
 
-      !--- dgp1 or rdgp1p2
-      elseif ((g_nsdiscr .ge. 11)) then
-        do ieqn = 1,g_neqns
-          ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
-        end do !ieqn
+      end do !ig
 
-      !!--- rdgp1p2
-      !elseif (g_nsdiscr .eq. 12) then
-      !  do ieqn = 1,g_neqns
-      !    ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
-      !      + b3*ucons(3,ieqn,ie)
-      !  end do !ieqn
-
-      end if
-
-      ! primitives at quadrature point
-      upg = 0.0
-      upg(vel_idx(nummat, 0)) = ug(g_mmi%imome)/sum(ug(g_mmi%irmin:g_mmi%irmax))
-      do imat = 1,nummat
-        rhomat = ug(g_mmi%irmin+imat-1)
-        rhoemat = ug(g_mmi%iemin+imat-1)
-        upg(apr_idx(nummat, imat)) = &
-          eos3_alphapr(g_gam(imat), g_pc(imat), ug(imat), rhomat, rhoemat, &
-            upg(vel_idx(nummat, 0)))
-      end do !imat
-
-      ! get rhs
+      ! get primitive variable dofs
       do ieqn = 1,g_nprim
-        rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*upg(ieqn)
-        if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*upg(ieqn)*b2
-        !if (g_nsdiscr .gt. 11) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*upg(ieqn)*b3
+        uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
+        if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
+        if (g_nsdiscr .gt. 12) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
       end do !ieqn
 
-    end do !ig
+    end do !ie
 
-    ! get primitive variable dofs
-    do ieqn = 1,g_nprim
-      uprim(1,ieqn,ie) = rhs(1,ieqn)/lhs(1)
-      if (g_nsdiscr .gt. 1) uprim(2,ieqn,ie) = rhs(2,ieqn)/lhs(2)
-      !if (g_nsdiscr .gt. 11) uprim(3,ieqn,ie) = rhs(3,ieqn)/lhs(3)
-    end do !ieqn
+    if (g_nsdiscr .eq. 1) then
+      uprim(2,:,0) = 0.0
+      uprim(2,:,imax+1) = 0.0
 
-  end do !ie
+    else if (g_nsdiscr .eq. 12) then
+      uprim(3,:,0) = 0.0
+      uprim(3,:,imax+1) = 0.0
 
-  if (g_nsdiscr .eq. 1) then
-    uprim(2,:,0) = 0.0
-    uprim(2,:,imax+1) = 0.0
-
-  else if (g_nsdiscr .eq. 12) then
-    uprim(3,:,0) = 0.0
-    uprim(3,:,imax+1) = 0.0
+    end if
 
   end if
 
@@ -337,12 +404,146 @@ end associate
 end subroutine weak_recons_primitives
 
 !-------------------------------------------------------------------------------
+!----- Reconstructing initial unknowns from primitive vars for consistency:
+!-------------------------------------------------------------------------------
+
+subroutine weak_recons_initconsr(ucons, uprim, ndof_el)
+
+integer, intent(in) :: ndof_el(2,0:imax+1)
+real*8, intent(in) :: uprim(g_tdof,g_nprim,0:imax+1)
+
+integer :: ig, ie, ieqn, imat, ngauss
+
+real*8  :: dxi, xci, xg, wi, &
+           carea(5), weight(5), &
+           b2, b3, rhs(g_gdof,g_neqns), lhs(g_gdof)
+
+real*8  :: upg(g_nprim), ug(g_neqns), &
+           ucons(g_tdof,g_neqns,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  if (g_pureco == 1 .and. g_pvarreco /= 3) then
+
+    ngauss = get_numqpoints(g_nsdiscr)
+    call rutope(1, ngauss, carea, weight)
+
+    do ie = 0,imax+1
+
+      dxi = coord(ie+1)-coord(ie)
+      xci = 0.5*(coord(ie+1)+coord(ie))
+
+      ! get lhs
+      lhs(1) = dxi
+      if (g_nsdiscr .gt. 1) lhs(2) = lhs(1)/3.0
+      if (g_nsdiscr .gt. 12) lhs(3) = lhs(1)/45.0
+
+      ! quadrature
+      rhs = 0.0
+      do ig = 1,ngauss
+        xg = carea(ig) * 0.5*dxi + xci
+        wi = 0.5 * weight(ig)
+        b2 = p1basis(xg, xci, dxi)
+        b3 = p2basis(xg, xci, dxi)
+
+        !--- dgp0 or rdgp0p1
+        if ((g_nsdiscr.eq.0) .or. (g_nsdiscr.eq.1)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp1 or rdgp1p2
+        elseif ((g_nsdiscr.eq.11) .or. (g_nsdiscr.eq.12)) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie) + b2*uprim(2,ieqn,ie)
+          end do !ieqn
+
+        !--- dgp2
+        elseif (g_nsdiscr.eq.22) then
+          do ieqn = 1,g_neqns
+            ug(ieqn) = ucons(1,ieqn,ie) + b2*ucons(2,ieqn,ie) &
+              + b3*ucons(3,ieqn,ie)
+          end do !ieqn
+          do ieqn = 1,g_nprim
+            upg(ieqn) = uprim(1,ieqn,ie) + b2*uprim(2,ieqn,ie) &
+              + b3*uprim(3,ieqn,ie)
+          end do !ieqn
+
+        end if
+
+        ! modified var at quadrature point
+        ug(g_mmi%imome) = sum(ug(g_mmi%irmin:g_mmi%irmax))*upg(vel_idx(nummat,0))
+        do imat = 1,nummat
+          if (g_pvarreco == 0) then
+            ug(g_mmi%iemin+imat-1) = ug(imat) * &
+              eos3_rhoe(g_gam(imat), g_pc(imat), upg(apr_idx(nummat,imat))/ug(imat), &
+              ug(g_mmi%irmin+imat-1)/ug(imat), upg(vel_idx(nummat,0)))
+          else
+            ug(g_mmi%iemin+imat-1) = ug(imat) * &
+              eos3_rhoe(g_gam(imat), g_pc(imat), upg(apr_idx(nummat,imat)), &
+              ug(g_mmi%irmin+imat-1)/ug(imat), upg(vel_idx(nummat,0)))
+          end if
+        end do !imat
+
+        ! get rhs
+        do ieqn = 1,g_neqns
+          rhs(1,ieqn) = rhs(1,ieqn) + wi*dxi*ug(ieqn)
+          if (g_nsdiscr .gt. 1) rhs(2,ieqn) = rhs(2,ieqn) + wi*dxi*ug(ieqn)*b2
+          if (g_nsdiscr .gt. 12) rhs(3,ieqn) = rhs(3,ieqn) + wi*dxi*ug(ieqn)*b3
+        end do !ieqn
+
+      end do !ig
+
+      ! get modified high-order dofs
+      if (g_nsdiscr .gt. 1) ucons(2,g_mmi%imome,ie) = rhs(2,g_mmi%imome)/lhs(2)
+      if (g_nsdiscr .gt. 12) ucons(3,g_mmi%imome,ie) = rhs(3,g_mmi%imome)/lhs(3)
+      do imat = 1,nummat
+        if (g_nsdiscr .gt. 1) ucons(2,g_mmi%iemin+imat-1,ie) = rhs(2,g_mmi%iemin+imat-1)/lhs(2)
+        if (g_nsdiscr .gt. 12) ucons(3,g_mmi%iemin+imat-1,ie) = rhs(3,g_mmi%iemin+imat-1)/lhs(3)
+      end do !imat
+
+    end do !ie
+
+    !--- rdofs for boundary cells to zero
+    if (g_nsdiscr .eq. 1) then
+      ucons(2,g_mmi%imome,0) = 0.0
+      ucons(2,g_mmi%imome,imax+1) = 0.0
+      do imat = 1,nummat
+        ucons(2,g_mmi%iemin+imat-1,0) = 0.0
+        ucons(2,g_mmi%iemin+imat-1,imax+1) = 0.0
+      end do !imat
+
+    else if (g_nsdiscr .eq. 12) then
+      ucons(3,g_mmi%imome,0) = 0.0
+      ucons(3,g_mmi%imome,imax+1) = 0.0
+      do imat = 1,nummat
+        ucons(3,g_mmi%iemin+imat-1,0) = 0.0
+        ucons(3,g_mmi%iemin+imat-1,imax+1) = 0.0
+      end do !imat
+
+    end if
+
+  end if
+
+end associate
+
+end subroutine weak_recons_initconsr
+
+!-------------------------------------------------------------------------------
 !----- P0 limiting:
 !-------------------------------------------------------------------------------
 
 subroutine limiting_p0(ucons, uprim)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  g_limcell(:,:) = 1.0
 
 end subroutine limiting_p0
 
@@ -353,6 +554,8 @@ end subroutine limiting_p0
 subroutine limiting_p1(ucons, uprim)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+  g_limcell(:,:) = 1.0
 
   select case (g_nlim)
 
@@ -373,6 +576,10 @@ real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
   case(6)
     call thincvertexbased_p1(ucons, uprim)
 
+  case(8)
+    call vertexbased_p1(ucons, uprim)
+    call positivitypres_p1(ucons, uprim)
+
   case default
     write(*,*) "Error: incorrect p1-limiter index in control file: ", g_nlim
     call exit
@@ -391,9 +598,14 @@ subroutine limiting_p2(ucons, uprim)
 
 real*8  :: ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
 
+  g_limcell(:,:) = 1.0
+
   select case (g_nlim)
 
   case(0)
+
+  case(1)
+    call min_vertexbased_p2(ucons, uprim)
 
   case(2)
     call vertexbased_p2(ucons, uprim)
@@ -651,7 +863,7 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta)
+    call vertexbased_fn(g_neqns, uneigh, theta, g_limcell(1,ie))
 
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
     theta(1:nummat) = theta(mmax)
@@ -660,23 +872,24 @@ associate (nummat=>g_mmi%nummat)
     theta = minval(theta)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap, g_limcell(2,ie))
+    end if
 
     ! 2. limit 2nd dofs
     ucons(2,:,ie) = theta(:) * ucons(2,:,ie)
 
+    if (g_pureco == 1) then
     uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
     uprim(2,vel_idx(nummat, 0),ie) = thetap(vel_idx(nummat, 0)) &
       * uprim(2,vel_idx(nummat, 0),ie)
-    uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))) &
-      * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
+    end if
 
   end do !ie
 
@@ -710,17 +923,19 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta)
+    call vertexbased_fn(g_neqns, uneigh, theta, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap, g_limcell(2,ie))
+    end if
 
     ! use common limiter function for all volume-fractions
-    theta(1:nummat) = theta(mmax) !minval(theta(1:nummat))
+    theta(1:nummat) = minval(theta(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
          interface_cell(almax, dalmax) ) then
@@ -731,20 +946,16 @@ associate (nummat=>g_mmi%nummat)
 
       !! consistent limiting of primitives
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = 0.0
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = &
-      !  ucons(1,g_mmi%irmin:g_mmi%irmax,ie)*uprim(1,vel_idx(nummat, 0),ie) &
-      !  * ucons(2,1:nummat,ie) /ucons(1,1:nummat,ie)
       !uprim(2,vel_idx(nummat, 0),ie) = 0.0
 
       ! monotonicity of primitives
+      if (g_pureco == 1) then
       uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+      end if
 
       !--- common for all equations
-      !thetac = min(minval(theta), &
-      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !thetac = minval(theta)
       !ucons(2,:,ie) = thetac * ucons(2,:,ie)
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
-      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,1:nummat,ie) = minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
       !  * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
@@ -760,11 +971,8 @@ associate (nummat=>g_mmi%nummat)
       !thetac = minval(theta(g_mmi%iemin:g_mmi%iemax))
       !ucons(2,g_mmi%iemin:g_mmi%iemax,ie) = thetac &
       !  * ucons(2,g_mmi%iemin:g_mmi%iemax,ie)
-      !thetac = min(theta(g_mmi%imome), &
-      !  minval(thetap(mmom_idx(nummat,1):mmom_idx(nummat,nummat))))
+      !thetac = theta(g_mmi%imome)
       !ucons(2,g_mmi%imome,ie) = thetac * ucons(2,g_mmi%imome,ie)
-      !uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie) = thetac &
-      !  * uprim(2,mmom_idx(nummat,1):mmom_idx(nummat,nummat),ie)
 
       !uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
       !  minval(thetap(apr_idx(nummat,1):apr_idx(nummat,nummat))) &
@@ -803,7 +1011,9 @@ associate (nummat=>g_mmi%nummat)
         ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
       end do !ieqn
 
+      if (g_pureco == 1) then
       uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+      end if
 
     end if
 
@@ -835,14 +1045,16 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta)
+    call vertexbased_fn(g_neqns, uneigh, theta, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap, g_limcell(2,ie))
+    end if
 
     !--- 2. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -870,7 +1082,9 @@ associate (nummat=>g_mmi%nummat)
       ucons(2,ieqn,ie) = theta(ieqn) * ucons(2,ieqn,ie)
     end do !ieqn
 
+    if (g_pureco == 1) then
     uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    end if
 
   end do !ie
 
@@ -1003,6 +1217,246 @@ end associate
 
 end subroutine weno_p1
 
+!------------------------------------------------------------------------------
+!----- Robust Positivity-preserving limiter (Wang, Zhang and Shu JCP 2012):
+!------------------------------------------------------------------------------
+
+subroutine positivitypres_p1(ucons, uprim)
+
+integer :: ie, imat, ifc, ne
+real*8  :: dx, xc, rho_min, p_min, eps, eps_pos, ui_min, ui, uf(1), pf(1), &
+  pressure, u2i_min, theta_1, theta_2, theta_3, theta_m
+real*8  :: basis(g_tdof), ufull(g_neqns), pfull(g_nprim), &
+  ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  !--- set up a small number
+  rho_min = 999.9d9
+  p_min = 999.9d9
+
+  eps = 1.0d-13
+
+  do ie = 1,imax
+
+    do imat = 1,nummat
+      rho_min = min(rho_min, ucons(1,g_mmi%irmin+imat-1,ie))
+      p_min = min(p_min, uprim(1,apr_idx(nummat,imat),ie)/ucons(1,imat,ie))
+    end do !imat
+
+  end do !ie
+
+  eps_pos = max(1d-16, min(eps, rho_min, p_min))
+
+  do ie = 1,imax
+
+    xc = 0.5*(coord(ie+1)+coord(ie))
+    dx = coord(ie+1)-coord(ie)
+
+    !--- modify density for each material
+
+    ui_min = 999.d9
+
+    do imat = 1,nummat
+
+      do ifc = 1,2
+
+        if (ifc == 1) then
+          ne = 0
+        else if (ifc == 2) then
+          ne = 1
+        end if
+
+        ! unlimited 2nd order density
+        call get_basisfns(coord(ie+ne), xc, dx, basis)
+        call ho_reconstruction(1, ucons(:,g_mmi%irmin+imat-1,ie), basis, &
+          uf)
+
+        ! minimum in this cell
+        ui_min = min(ui_min, uf(1))
+
+      end do !ifc
+
+      ui = ucons(1,g_mmi%irmin+imat-1,ie)
+      if (dabs(ui-ui_min) <= eps) then
+        theta_1 = 1.d0
+      else
+        theta_1 = min(1.0, dabs((ui - eps_pos) / (ui - ui_min)))
+      end if
+
+      ! limit the slope of the density
+      ucons(2,g_mmi%irmin+imat-1,ie) = theta_1 * ucons(2,g_mmi%irmin+imat-1,ie)
+
+    end do !imat
+
+    !--- modify the pressure and energy for each material
+
+    ui_min = 999.d9
+    u2i_min = 999.d9
+    theta_m = 1.0
+
+    do imat = 1,nummat
+
+      do ifc = 1,2
+
+        if (ifc == 1) then
+          ne = 0
+        else if (ifc == 2) then
+          ne = 1
+        end if
+
+        ! unlimited 2nd order pressure
+        call get_basisfns(coord(ie+ne), xc, dx, basis)
+        call ho_reconstruction(g_neqns, ucons(:,:,ie), basis, ufull)
+        call ho_reconstruction(g_nprim, uprim(:,:,ie), basis, pfull)
+
+        !pressure = eos3_alphapr(g_gam(imat), g_pc(imat), ufull(imat), &
+        !  ufull(g_mmi%irmin+imat-1), ufull(g_mmi%iemin+imat-1), &
+        !  ufull(g_mmi%imome)/sum(ufull(g_mmi%irmin:g_mmi%irmax))) &
+        !  / ufull(imat)
+
+        !! minimum in this cell
+        !ui_min = min(ui_min, pressure)
+
+        ! minimum in this cell
+        ui_min = min(ui_min, pfull(apr_idx(nummat,imat))/ufull(imat))
+
+        ! unlimited 2nd order energy
+        u2i_min = min(u2i_min, intenergy(ufull(g_mmi%iemin+imat-1), &
+          ufull(g_mmi%irmin+imat-1), &
+          ufull(g_mmi%irmin+imat-1)*pfull(vel_idx(nummat,0))))
+
+      end do !ifc
+
+      ui = uprim(1,apr_idx(nummat,imat),ie)/ucons(1,imat,ie)
+      if (ui_min < eps_pos) then
+        theta_2 = min(1.0, dabs((ui - eps_pos) / (ui - ui_min)))
+      else
+        theta_2 = 1.d0
+      end if
+
+      ui = intenergy(ucons(1,g_mmi%iemin+imat-1,ie), &
+        ucons(1,g_mmi%irmin+imat-1,ie), &
+        ucons(1,g_mmi%irmin+imat-1,ie)*uprim(1,vel_idx(nummat,0),ie))
+      if (u2i_min < eps_pos) then
+        theta_3 = min(1.0, dabs((ui - eps_pos) / (ui - u2i_min)))
+      else
+        theta_3 = 1.d0
+      end if
+
+      !if (theta_1 < 1.0 .or. theta_2 < 1.0 .or. theta_3 < 1.0) &
+      !print*, ie, theta_1, theta_2, theta_3
+
+      theta_3 = min(theta_3, theta_2)
+      theta_m = min(theta_m, theta_2, theta_3)
+
+      ! limit slopes of other vars
+      uprim(2,apr_idx(nummat,imat),ie) = theta_3 &
+        * uprim(2,apr_idx(nummat,imat),ie)
+      ucons(2,g_mmi%irmin+imat-1,ie) = theta_3 * ucons(2,g_mmi%irmin+imat-1,ie)
+      ucons(2,g_mmi%iemin+imat-1,ie) = theta_3 * ucons(2,g_mmi%iemin+imat-1,ie)
+
+    end do !imat
+
+    ! limit momentum
+    ucons(2,g_mmi%imome,ie) = theta_m * ucons(2,g_mmi%imome,ie)
+    uprim(2,vel_idx(nummat,0),ie) = theta_m * uprim(2,vel_idx(nummat,0),ie)
+
+  end do !ie
+
+end associate
+
+end subroutine positivitypres_p1
+
+!-------------------------------------------------------------------------------
+!----- min vertexbased limiter for P2 dofs:
+!-------------------------------------------------------------------------------
+
+subroutine min_vertexbased_p2(ucons, uprim)
+
+integer :: ie, ieqn, imat
+real*8  :: dx2, theta2(g_neqns), theta1(g_neqns), &
+           theta1m, theta2m, &
+           thetap2(g_nprim), thetap1(g_nprim)
+real*8  :: uneigh(2,g_neqns,-1:1), alneigh(2,1,-1:1), &
+           ucons(g_tdof,g_neqns,0:imax+1), uprim(g_tdof,g_nprim,0:imax+1)
+
+associate (nummat=>g_mmi%nummat)
+
+  do ie = 1,imax
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+
+    !--- 1. obtain limiter function for individual unknowns
+    ! i. P2 derivative limiting
+
+    ! conserved quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,:,-1) = ucons(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,:,0)  = ucons(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_neqns, uneigh, theta2, g_limcell(1,ie))
+
+    ! primitive quantities
+    dx2 = 0.5 * (coord(ie)-coord(ie-1))
+    uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
+
+    dx2 = 0.5 * (coord(ie+1)-coord(ie))
+    uneigh(1:2,1:g_nprim,0)  = uprim(2:3,:,ie) / dx2
+
+    dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
+    uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
+
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2, g_limcell(2,ie))
+
+    ! ii. P1 derivative limiting
+
+    ! conserved quantities
+    uneigh(1:2,:,-1) = ucons(1:2,:,ie-1)
+    uneigh(1:2,:,0)  = ucons(1:2,:,ie)
+    uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
+
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
+
+    ! primitive quantities
+    uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
+    uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
+    uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
+
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1, g_limcell(2,ie))
+
+    ! use min limiter function for all conserved vars
+    theta1m = minval(theta1)
+    theta2m = minval(theta2)
+
+    !--- 2. Limit unknowns
+    ucons(2,:,ie) = max(theta1m,theta2m) * ucons(2,:,ie)
+    ucons(3,:,ie) = theta2m * ucons(3,:,ie)
+
+    uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      max(minval(thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat))), &
+      minval(thetap1(apr_idx(nummat,1):apr_idx(nummat,nummat)))) &
+      * uprim(2,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    uprim(2,vel_idx(nummat, 0),ie) = max(thetap2(vel_idx(nummat, 0)), &
+      thetap1(vel_idx(nummat, 0))) * uprim(2,vel_idx(nummat, 0),ie)
+
+    uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie) = &
+      thetap2(apr_idx(nummat,1):apr_idx(nummat,nummat)) &
+      * uprim(3,apr_idx(nummat,1):apr_idx(nummat,nummat),ie)
+    uprim(3,vel_idx(nummat, 0),ie) = thetap2(vel_idx(nummat, 0)) &
+      * uprim(3,vel_idx(nummat, 0),ie)
+
+  end do !ie
+
+end associate
+
+end subroutine min_vertexbased_p2
+
 !-------------------------------------------------------------------------------
 !----- system-consistent vertexbased limiter for P2 dofs:
 !-------------------------------------------------------------------------------
@@ -1044,9 +1498,10 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
 
-    call vertexbased_fn(g_neqns, uneigh, theta2)
+    call vertexbased_fn(g_neqns, uneigh, theta2, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
 
@@ -1056,7 +1511,8 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2, g_limcell(2,ie))
+    end if
 
     ! ii. P1 derivative limiting
 
@@ -1065,17 +1521,19 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta1)
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1, g_limcell(2,ie))
+    end if
 
     ! use common limiter function for all volume-fractions
-    theta1(1:nummat) = theta1(mmax) !minval(theta1(1:nummat))
+    theta1(1:nummat) = minval(theta1(1:nummat))
     theta2(1:nummat) = minval(theta2(1:nummat))
 
     if ( (g_nmatint .eq. 1) .and. &
@@ -1115,10 +1573,12 @@ associate (nummat=>g_mmi%nummat)
       !uprim(2:3,vel_idx(nummat, 0),ie) = 0.0
 
       ! monotonicity of primitives
+      if (g_pureco == 1) then
       do ieqn = 1,g_nprim
         uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
         uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
       end do !ieqn
+      end if
 
     else
     !--- 3b. Obtain limiter functions for equation system in single-material cell
@@ -1128,10 +1588,12 @@ associate (nummat=>g_mmi%nummat)
         ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
       end do !ieqn
 
+      if (g_pureco == 1) then
       do ieqn = 1,g_nprim
         uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
         uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
       end do !ieqn
+      end if
 
     end if
 
@@ -1173,9 +1635,10 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,:,1)  = ucons(2:3,:,ie+1) / dx2
 
-    call vertexbased_fn(g_neqns, uneigh, theta2)
+    call vertexbased_fn(g_neqns, uneigh, theta2, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     dx2 = 0.5 * (coord(ie)-coord(ie-1))
     uneigh(1:2,1:g_nprim,-1) = uprim(2:3,:,ie-1) / dx2
 
@@ -1185,7 +1648,8 @@ associate (nummat=>g_mmi%nummat)
     dx2 = 0.5 * (coord(ie+2)-coord(ie+1))
     uneigh(1:2,1:g_nprim,1)  = uprim(2:3,:,ie+1) / dx2
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap2, g_limcell(2,ie))
+    end if
 
     ! 2. P1 derivative limiting
     ! conserved quantities
@@ -1193,14 +1657,16 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta1)
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap1, g_limcell(2,ie))
+    end if
 
     !--- ii. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -1232,10 +1698,12 @@ associate (nummat=>g_mmi%nummat)
       ucons(2,ieqn,ie) = max(theta1(ieqn), theta2(ieqn)) * ucons(2,ieqn,ie)
     end do !ieqn
 
+    if (g_pureco == 1) then
     do ieqn = 1,g_nprim
       uprim(3,ieqn,ie) = thetap2(ieqn) * uprim(3,ieqn,ie)
       uprim(2,ieqn,ie) = max(thetap1(ieqn), thetap2(ieqn)) * uprim(2,ieqn,ie)
     end do !ieqn
+    end if
 
   end do !ie
 
@@ -1416,14 +1884,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta1)
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
 
     ! primitive quantities
     upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
     upneigh(1:2,:,0)  = uprim(1:2,:,ie)
     upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, upneigh, thetap1)
+    call vertexbased_fn(g_nprim, upneigh, thetap1, g_limcell(2,ie))
 
     do ieqn = 1,g_nprim
       uprim(2,ieqn,ie) = thetap1(ieqn) * uprim(2,ieqn,ie)
@@ -1550,14 +2018,14 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta1)
+    call vertexbased_fn(g_neqns, uneigh, theta1, g_limcell(1,ie))
 
     ! primitive quantities
     upneigh(1:2,:,-1) = uprim(1:2,:,ie-1)
     upneigh(1:2,:,0)  = uprim(1:2,:,ie)
     upneigh(1:2,:,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, upneigh, thetap1)
+    call vertexbased_fn(g_nprim, upneigh, thetap1, g_limcell(2,ie))
 
     !--- ii. detect interface/single-material cell
     mmax = maxloc(ucons(1,1:nummat,ie), 1)
@@ -1623,17 +2091,19 @@ associate (nummat=>g_mmi%nummat)
     uneigh(1:2,:,0)  = ucons(1:2,:,ie)
     uneigh(1:2,:,1)  = ucons(1:2,:,ie+1)
 
-    call vertexbased_fn(g_neqns, uneigh, theta)
+    call vertexbased_fn(g_neqns, uneigh, theta, g_limcell(1,ie))
 
     ! compressive limiting for volume fraction
     call overbee_fn(uneigh(:,mmax,:), theta_al)
 
     ! primitive quantities
+    if (g_pureco == 1) then
     uneigh(1:2,1:g_nprim,-1) = uprim(1:2,:,ie-1)
     uneigh(1:2,1:g_nprim,0)  = uprim(1:2,:,ie)
     uneigh(1:2,1:g_nprim,1)  = uprim(1:2,:,ie+1)
 
-    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap)
+    call vertexbased_fn(g_nprim, uneigh(:,1:g_nprim,:), thetap, g_limcell(2,ie))
+    end if
 
     ! use common limiter function for all volume-fractions
     theta(1:nummat) = theta_al !theta(mmax)
@@ -1653,7 +2123,9 @@ associate (nummat=>g_mmi%nummat)
 
     end if
 
+    if (g_pureco == 1) then
     uprim(2,:,ie) = thetap(:) * uprim(2,:,ie)
+    end if
 
   end do !ie
 
@@ -1668,13 +2140,13 @@ end subroutine oververtexbased
 !----- to vertexbased_p1 and vertexbased_p2 respectively
 !-------------------------------------------------------------------------------
 
-subroutine vertexbased_fn(neq, ucons, theta)
+subroutine vertexbased_fn(neq, ucons, theta, limcell)
 
 integer, intent(in) :: neq
 real*8,  intent(in) :: ucons(2,neq,-1:1)
 
 integer :: ieqn, ifc, ne
-real*8  :: ui, ug, umin, umax, diff, phi, theta(neq)
+real*8  :: ui, ug, umin, umax, uref, diff, phi, theta(neq), limcell
 
   theta(:) = 1.0
 
@@ -1697,11 +2169,12 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq)
       ug = ucons(1,ieqn,0) + ((-1.0)**ifc) * ucons(2,ieqn,0)
 
       ! bounds
+      uref = max(dabs(ui), 1e-06)
       diff = ug-ui
-      if (diff > 1.0d-16) then
+      if (diff > 1.0d-6*uref) then
         phi = min(1.0, (umax-ui)/diff)
 
-      else if (diff < -1.0d-16) then
+      else if (diff < -1.0d-6*uref) then
         phi = min(1.0, (umin-ui)/diff)
 
       else
@@ -1709,6 +2182,7 @@ real*8  :: ui, ug, umin, umax, diff, phi, theta(neq)
 
       end if
 
+      limcell = min(limcell, phi)
       theta(ieqn) = min(phi, theta(ieqn))
 
     end do !ifc
@@ -1843,13 +2317,45 @@ real*8, intent(out) :: uho(g_neqns), pho(g_nprim)
 
 integer :: imat, mmax, matint(g_mmi%nummat)
 real*8 :: beta_linc, lolim, hilim, almax, alm, al_reco, xt, nx, x, sig, vel, &
-  alsum, almat(g_mmi%nummat)
+  alsum, velavg, almat(g_mmi%nummat)
 
 associate (nummat=>g_mmi%nummat)
 
   !--- TVD reconstruction
   call ho_reconstruction(g_neqns, udof, basis, uho)
-  call ho_reconstruction(g_nprim, pdof, basis, pho)
+  if (g_pureco == 1) then
+    call ho_reconstruction(g_nprim, pdof, basis, pho)
+
+    if (g_pvarreco == 1) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+      end do !imat
+
+    else if (g_pvarreco == 2) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+      end do !imat
+      uho(g_mmi%imome) = sum(uho(g_mmi%irmin:g_mmi%irmax))*pho(vel_idx(nummat,0))
+
+    else if (g_pvarreco == 3) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+        uho(g_mmi%iemin+imat-1) = pho(rhote_idx(nummat,imat)) + pho(rho_idx(nummat,imat))
+      end do !imat
+
+    else if (g_pvarreco == 4) then
+      do imat = 1,nummat
+        pho(apr_idx(nummat,imat)) = uho(imat)*pho(apr_idx(nummat,imat))
+        uho(g_mmi%irmin+imat-1) = uho(imat)*pho(rho_idx(nummat,imat))
+        uho(g_mmi%iemin+imat-1) = uho(imat)*pho(rhote_idx(nummat,imat))
+      end do !imat
+      uho(g_mmi%imome) = sum(uho(g_mmi%irmin:g_mmi%irmax))*pho(vel_idx(nummat,0))
+
+    end if
+
+  else
+    call get_uprim_mm6eq(uho, pho)
+  end if
 
   beta_linc = 2.5
 
@@ -1907,6 +2413,8 @@ associate (nummat=>g_mmi%nummat)
     uho(mmax) = uho(mmax) + (1.0 - alsum)
     alsum = 1.0
 
+    velavg = udof(1,g_mmi%imome)/sum(udof(1,g_mmi%irmin:g_mmi%irmax))
+
     ! consistent reconstruction
     do imat = 1, nummat
       if (matint(imat) == 1) then
@@ -1916,7 +2424,20 @@ associate (nummat=>g_mmi%nummat)
         ! energy
         uho(g_mmi%iemin+imat-1) = udof(1,g_mmi%iemin+imat-1)/alm * uho(imat)
         ! pressure
-        pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm * uho(imat)
+        if (g_pureco == 1) then
+          if (g_pvarreco == 0) then
+            pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat))/alm &
+              * uho(imat)
+          else
+            pho(apr_idx(nummat, imat)) = pdof(1,apr_idx(nummat, imat)) &
+              * uho(imat)
+          end if
+        else
+          pho(apr_idx(nummat, imat)) = eos3_alphapr(g_gam(imat), g_pc(imat), &
+            alm, udof(1,g_mmi%irmin+imat-1), udof(1,g_mmi%iemin+imat-1), &
+            velavg)/alm &
+            * uho(imat)
+        end if
       end if
     end do !imat
 
@@ -1924,7 +2445,11 @@ associate (nummat=>g_mmi%nummat)
     ! bulk-momentum
     uho(g_mmi%imome) = vel * sum( uho(g_mmi%irmin:g_mmi%irmax) )
     ! velocity
-    pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
+    if (g_pureco == 1) then
+      pho(vel_idx(nummat, 0)) = pdof(1,vel_idx(nummat, 0))
+    else
+      pho(vel_idx(nummat, 0)) = velavg
+    end if
 
   end if
 

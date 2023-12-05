@@ -1,6 +1,5 @@
 !!---------------------------------------------------------------------------------------
-!!----- Non-equilibrium velocity Isothermal Multiphase and
-!!----- non-equilibrium pressure multi-material flow code
+!!----- Non-equilibrium pressure multi-material flow code
 !!----- by
 !!----- Aditya K Pandare
 !!
@@ -24,7 +23,6 @@ real*8, allocatable :: ucons(:,:,:), uprim(:,:,:), err_log(:)
 real*8 :: t_start, t_end, linfty
 
 procedure(reconstruction_p0p1), pointer :: reconst_mm6eq => NULL()
-procedure(limiting_p1), pointer :: tvdlimiting_mm6eq => NULL()
 
 !----- Read control file:
 call read_cntl()
@@ -47,7 +45,7 @@ else if (i_system .eq. 1) then
 
    g_neqns = g_mmi%iemax
    ! primitive variable vector. See glob_var.f03 for indexing
-   g_nprim = 2*g_mmi%nummat+1
+   g_nprim = 3*g_mmi%nummat+1
 else if (i_system .eq. 2) then
    ! hyperelastic solid dynamics
    g_neqns = 8
@@ -66,6 +64,9 @@ else if (g_nsdiscr .eq. 11) then
 else if (g_nsdiscr .eq. 12) then
    g_tdof = 3
    g_gdof = 2
+else if (g_nsdiscr .eq. 22) then
+   g_tdof = 3
+   g_gdof = 3
 else
    write(*,*) "Error: Incorrect discretization scheme selected:", g_nsdiscr
 end if
@@ -77,6 +78,23 @@ else
   g_intreco = 0
 end if
 
+!----- Variables to reconstruct are controlled by values of pvarreco
+!----- 0: \alpha_k p_k, u
+!----- 1: p_k, u
+!----- 2: p_k, u, \rho u = \sum(\alpha_k \rho_k) * u
+!----- 3: p_k, u, \alpha_k \rho_k e, \alpha \rho u^2
+!----- 4: p_k, u, \rho u = \sum(\alpha_k \rho_k) * u, and
+!         \alpha Q = \alpha * Q, Q = \rho E, \rho.
+g_pvarreco = 0
+
+!----- Check for incompatible combinations for reco/lim
+if (g_pureco == 0) then
+  if (g_pvarreco >= 2) then
+    write(*,*) "Redundant reconst/limiting required for g_pvarreco >= 2."
+    stop
+  end if
+end if
+
 !----- Allocation:
 allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          uprim(g_tdof,g_nprim,0:imax+1), &
@@ -84,7 +102,9 @@ allocate(ucons(g_tdof,g_neqns,0:imax+1), &
          ndof_el(2,0:imax+1), &
          err_log(g_neqns))
 
-allocate(coord(0:imax+2))
+allocate(coord(0:imax+2), g_limcell(2,imax))
+
+!allocate(g_fluxch(g_gdof,g_neqns,0:imax+1))
 
 !----- Mesh generation:
 call gen_mesh()
@@ -125,7 +145,7 @@ if (i_system .eq. -1) then
   call init_soln_kex(ucons, ndof_el)
   dt = dt_u
   call reconst_mm6eq(ucons, uprim, ndof_el)
-  call errorcalc_p1(ucons, 0.0, err_log, linfty)
+  call errorcalc_p1(ucons, uprim, 0.0, err_log, linfty)
   write(*,*) "  quadratic: log(||e||): ", err_log(1), 10.0**err_log(1)
   write(*,*) "      cubic: log(||e||): ", err_log(2), 10.0**err_log(2)
   write(*,*) "   gaussian: log(||e||): ", err_log(3), 10.0**err_log(3)
@@ -136,16 +156,14 @@ else if (i_system .eq. 1) then
 
   case(0)
     reconst_mm6eq => reconstruction_p0
-    tvdlimiting_mm6eq => limiting_p0
   case(1)
     reconst_mm6eq => reconstruction_p0p1
-    tvdlimiting_mm6eq => limiting_p1
   case(11)
     reconst_mm6eq => reconstruction_p1
-    tvdlimiting_mm6eq => limiting_p1
   case(12)
     reconst_mm6eq => reconstruction_p1p2
-    tvdlimiting_mm6eq => limiting_p2
+  case(22)
+    reconst_mm6eq => reconstruction_p2
   case default
     write(*,*) "FATAL ERROR: Main3d: Incorrect spatial discretization:", &
                g_nsdiscr
@@ -156,6 +174,9 @@ else if (i_system .eq. 1) then
   ! Initialization
   call init_soln_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
   dt = dt_u
+  write(*,*) "Initialization complete. Starting time stepping..."
+  write(*,*) " "
+
   call ExplicitRK3_mm6eq(reconst_mm6eq, ucons, uprim, matint_el, ndof_el)
 
 else if (i_system .eq. 2) then

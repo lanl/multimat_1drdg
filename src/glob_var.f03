@@ -5,10 +5,12 @@ implicit none
 integer :: i_system, &
            imax, g_neqns, g_nprim, ntstep, &
            g_nsdiscr, g_gdof, g_tdof, g_nlim, g_nmatint, &
+           g_pureco, g_pvarreco, &
            g_nprelx, g_intreco, &
            g_lbflag, g_rbflag, &
            iprob, i_restart, i_flux, n_opfile, n_screen
-real*8  :: dt_u, dt, dt_s, g_time
+real*8  :: dt_u, dt, dt_s, g_time, alpha_dt
+!real*8, allocatable :: g_fluxch(:,:,:)
 
 !--- indexing into the multimaterial system
 type mmindex
@@ -46,7 +48,7 @@ real*8  :: g_prelct
 real*8  :: g_mass0_m, g_tenergy0_m
 
 !--- geometry
-real*8,  allocatable :: coord(:)
+real*8,  allocatable :: coord(:), g_limcell(:,:)
 
 real*8,  parameter :: Pi = 4.d0*datan(1.d0)
 
@@ -85,7 +87,7 @@ real*8, intent(out) :: basis(g_tdof)
   !--- rdgp0p1 or dgp1
   if (g_nsdiscr .gt. 0) basis(2) = p1basis(x, xc, dx)
 
-  !--- rdgp1p2
+  !--- rdgp1p2 or dgp2
   if (g_nsdiscr .gt. 11) basis(3) = p2basis(x, xc, dx)
 
 end subroutine get_basisfns
@@ -125,6 +127,10 @@ integer, intent(in) :: ndiscr
   else if ((ndiscr == 11) .or. (ndiscr == 12)) then
     get_numqpoints = 2
 
+  !--- dgp2
+  else if (ndiscr == 22) then
+    get_numqpoints = 5
+
   end if
 
 end function get_numqpoints
@@ -142,19 +148,28 @@ end function apr_idx
 
 !-----------------------------------------------------------------------
 
-pure integer function mmom_idx(nummat, k)
+pure integer function rho_idx(nummat, k)
 integer, intent(in) :: nummat, k
 
-  mmom_idx = nummat + k
+  rho_idx = nummat + k
 
-end function mmom_idx
+end function rho_idx
+
+!-----------------------------------------------------------------------
+
+pure integer function rhote_idx(nummat, k)
+integer, intent(in) :: nummat, k
+
+  rhote_idx = 2*nummat + k
+
+end function rhote_idx
 
 !-----------------------------------------------------------------------
 
 pure integer function vel_idx(nummat, idir)
 integer, intent(in) :: nummat, idir
 
-  vel_idx = 2*nummat + 1
+  vel_idx = 3*nummat + 1
 
 end function vel_idx
 

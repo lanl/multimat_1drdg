@@ -48,7 +48,16 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
      !--- RK stages
      do istage = 1,3 !2
 
+        if (istage == 1) then
+          alpha_dt = 0.0
+        else if (istage == 2) then
+          alpha_dt = 1.0
+        else
+          alpha_dt = 0.5
+        end if
+
         rhsel(:,:,:) = 0.d0
+        !g_fluxch(:,:,:) = 0.d0
 
         call rhs_rdg_mm6eq(ucons, uprim, rhsel, matint_el, ndof_el)
 
@@ -56,6 +65,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
         mm(1) = coord(ielem+1)-coord(ielem)
         if (g_nsdiscr .gt. 0) mm(2) = mm(1) / 3.0
+        if (g_nsdiscr .gt. 12) mm(3) = mm(1) / 45.0
 
         do ieqn = 1,g_neqns
         do idof = 1,ndof_el(1,ielem) !g_gdof
@@ -75,6 +85,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
         call weak_recons_primitives(ucons, uprim, ndof_el)
         call ignore_tinyphase_mm6eq(ucons, uprim)
         call reconst_mm6eq(ucons, uprim, ndof_el)
+        call weak_recons_initconsr(ucons, uprim, ndof_el)
 
      end do !istage
      !---------------------------------------------------------
@@ -118,7 +129,7 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   call gnuplot_diagnostics_mm6eq(ucons, uprim, cons_err, g_time)
 
   !----- compute L2-error-norm
-  call errorcalc_p1(ucons, g_time*a_nd, err_log, linfty)
+  call errorcalc_p1(ucons, uprim, g_time*a_nd, err_log, linfty)
 
   !----- Screen-output:
   write(*,*) "-----------------------------------------------"
