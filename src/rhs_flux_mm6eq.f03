@@ -673,21 +673,21 @@ associate (nummat=>g_mmi%nummat)
     flux = ffunc_l
     lambda_plus = u_l
     lambda_minu = 0.0
-    pplus = u_l
+    pplus = 1.0
     pminu = 0.0
   else if (sr <= 0.0) then
     flux = ffunc_r
     lambda_plus = 0.0
     lambda_minu = u_r
     pplus = 0.0
-    pminu = u_r
+    pminu = 1.0
   else
     flux = ( sr*ffunc_l - sl*ffunc_r + sl*sr*(ur-ul) )&
       / (sr-sl)
     lambda_plus = (sr*u_l - sr*sl) / (sr-sl)
     lambda_minu = (sr*sl - sl*u_r) / (sr-sl)
-    pplus = sr*u_l / (sr-sl)
-    pminu = - sl*u_r / (sr-sl)
+    pplus = sr / (sr-sl)
+    pminu = - sl / (sr-sl)
   end if
 
   lambda = lambda_plus + lambda_minu
@@ -696,9 +696,6 @@ associate (nummat=>g_mmi%nummat)
 
   lambda_plus = lambda_plus/(lambda_mag)
   lambda_minu = lambda_minu/(lambda_mag)
-
-  pplus = pplus/lambda_mag
-  pminu = pminu/lambda_mag
 
 end associate
 
