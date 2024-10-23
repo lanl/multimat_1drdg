@@ -1074,6 +1074,63 @@ real*8  :: s(g_neqns), xf, p1l, p1r, t1l, t1r, &
 
      end do !ielem
 
+  !--- Heavy fluid impact
+  !----------
+  else if (iprob .eq. 10) then
+
+     g_alphamin = 0.0 !1.d-12
+
+     alpha_fs(:) = g_alphamin
+     alpha_fs(1) = 1.0 - dble(g_mmi%nummat-1)*g_alphamin
+     if (g_mmi%nummat > 1) then
+       write(*,*) " Error: Impact not configured for &
+         more than one material"
+       stop
+     end if
+     t_fs = 300.0
+     do imat = 1, g_mmi%nummat
+       rhomat_fs(imat) = eos3_density(g_gam(imat), g_cp(imat), g_pc(imat), &
+         pr_fs, t_fs)
+     end do !imat
+
+     call nondimen_mm6eq()
+
+     ! left state
+     p1l = pr_fs
+     t1l = t_fs
+     ul  = u_fs
+     ! right state (need to non-dimensionalize)
+     p1r = pr_fs
+     t1r = t_fs
+     ur  = -u_fs
+
+     do ielem = 0,imax+1
+
+        xf = coord(ielem)
+
+        if (xf .le. 0.5) then
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1l, t1l)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * ul
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1l, rho1, ul)
+        else
+           rho1 = eos3_density(g_gam(1), g_cp(1), g_pc(1), p1r, t1r)
+           ucons(1,1,ielem) = alpha_fs(1)
+           ucons(1,2,ielem) = alpha_fs(1) * rho1
+           ucons(1,3,ielem) = ucons(1,2,ielem) * ur
+           ucons(1,4,ielem) = alpha_fs(1) * eos3_rhoe(g_gam(1), g_pc(1), p1r, rho1, ur)
+        end if
+
+        if (g_nsdiscr .ge. 1) then
+          ucons(2,:,ielem) = 0.0
+            if (g_nsdiscr .ge. 12) then
+              ucons(3,:,ielem) = 0.0
+            end if
+        end if
+
+     end do !ielem
+
   else
      write(*,*) "Incorrect problem setup code!"
 
