@@ -708,7 +708,7 @@ subroutine splitmach_as(fa, mach, msplus, msminu, psplus, psminu)
 
 real*8, intent(in) :: fa, mach
 
-real*8             :: alph_fa, msplus(3), msminu(3), psplus, psminu
+real*8             :: alph_fa, beta, msplus(3), msminu(3), psplus, psminu
 
     msplus(1) = 0.5d0*(mach + dabs(mach))
     msminu(1) = 0.5d0*(mach - dabs(mach))
@@ -717,6 +717,7 @@ real*8             :: alph_fa, msplus(3), msminu(3), psplus, psminu
     msminu(2) = -0.25d0*(mach - 1.0d0)*(mach - 1.0d0)
 
     alph_fa = (3.d0/16.d0) * (-4.d0 + 5.d0*fa*fa)
+    beta = 1.d0/8.d0
 
     if (dabs(mach) .ge. 1.d0) then
     
@@ -727,8 +728,8 @@ real*8             :: alph_fa, msplus(3), msminu(3), psplus, psminu
    
     else
     
-        msplus(3) = msplus(2)* (1.d0 - 2.d0*msminu(2))
-        msminu(3) = msminu(2)* (1.d0 + 2.d0*msplus(2))
+        msplus(3) = msplus(2)* (1.d0 - 16.d0*beta*msminu(2))
+        msminu(3) = msminu(2)* (1.d0 + 16.d0*beta*msplus(2))
         psplus    = msplus(2)* &
                     ((+2.d0 - mach) - (16.d0 * alph_fa)*mach*msminu(2))
         psminu    = msminu(2)* &
