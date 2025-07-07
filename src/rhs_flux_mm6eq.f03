@@ -73,7 +73,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
            xc, dx, basis(g_tdof), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           ac_l, ac_r, lplus, lminu, lmda, pplus, pminu, pstar
+           ac_l, ac_r, lmda, pplus, pminu, pstar
 
 real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
@@ -129,15 +129,13 @@ associate (nummat=>g_mmi%nummat)
 
   if (i_flux .eq. 1) then
      call llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                    intflux, lplus, lminu, lmda, pplus, pminu)
+                    intflux, lmda, pplus, pminu)
   else if (i_flux .eq. 2) then
      call ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                         intflux, lplus, lminu, lmda, pplus, pminu, iel, ier)
-     pplus = lplus
-     pminu = lminu
+                         intflux, lmda, pplus, pminu, iel, ier)
   else if (i_flux .eq. 3) then
      call hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, intflux, &
-                    lplus, lminu, lmda, pplus, pminu)
+                    lmda, pplus, pminu)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -370,7 +368,7 @@ end subroutine get_multimatsoundspeed
 !-------------------------------------------------------------------------------
 
 subroutine llf_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-                     flux, lplus, lminu, lambda, pplus, pminu)
+                     flux, lambda, pplus, pminu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
@@ -465,7 +463,7 @@ end subroutine llf_mm6eq
 !-------------------------------------------------------------------------------
 
 subroutine ausmplus_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-  flux, lambda_plus, lambda_minu, lambda, psplus_l, psminu_r, iel, ier)
+  flux, lambda, pplus, pminu, iel, ier)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
@@ -482,7 +480,7 @@ real*8 :: rhou_l, em_l, u_l, m_l, rho_l, pi_l, p_l, &
 real*8 :: rho_12, ac_12, &
           f_a, m_12, p_12, m_p, p_u(g_mmi%nummat)
 real*8 :: msplus_l(3),msplus_r(3),msminu_l(3),msminu_r(3)
-real*8 :: psplus_l,psplus_r,psminu_l,psminu_r!,pplus,pminu
+real*8 :: psplus_l,psplus_r,psminu_l,psminu_r,pplus,pminu
 real*8 :: temp
 
 real*8 :: lambda,lambda_plus, lambda_minu, lambda_mag
@@ -585,8 +583,8 @@ associate (nummat=>g_mmi%nummat)
 
   lambda_mag = dabs(lambda) + 1.d-16
 
-  lambda_plus = lambda_plus/(lambda_mag)
-  lambda_minu = dabs(lambda_minu/(lambda_mag))
+  pplus = lambda_plus/(lambda_mag)
+  pminu = dabs(lambda_minu/(lambda_mag))
 
 end associate
 
@@ -597,7 +595,7 @@ end subroutine ausmplus_mm6eq
 !------------------------------------------------------------------------------
 
 subroutine hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
-  flux, lambda_plus, lambda_minu, lambda, pplus, pminu)
+  flux, lambda, pplus, pminu)
 
 real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
                       pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
@@ -691,11 +689,6 @@ associate (nummat=>g_mmi%nummat)
   end if
 
   lambda = lambda_plus + lambda_minu
-
-  lambda_mag = (lambda_plus+lambda_minu) + 1.d-16
-
-  lambda_plus = lambda_plus/(lambda_mag)
-  lambda_minu = lambda_minu/(lambda_mag)
 
 end associate
 
