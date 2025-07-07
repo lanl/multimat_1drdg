@@ -73,7 +73,7 @@ real*8  :: ul(g_neqns), ur(g_neqns), &
            pp_l(g_nprim), pp_r(g_nprim), &
            xc, dx, basis(g_tdof), &
            intflux(g_neqns), rhsel(g_gdof,g_neqns,imax), &
-           ac_l, ac_r, lmda, pplus, pminu, pstar
+           ac_l, ac_r, lmda, pplus, pminu, ap_flux(g_mmi%nummat)
 
 real*8  :: rgrad(g_mmi%nummat+1,imax), vriem(g_mmi%nummat+1,imax+1)
 
@@ -136,6 +136,9 @@ associate (nummat=>g_mmi%nummat)
   else if (i_flux .eq. 3) then
      call hll_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, intflux, &
                     lmda, pplus, pminu)
+  else if (i_flux .eq. 4) then
+     call hllc_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, intflux, &
+                     lmda, ap_flux)
   else
      write(*,*) "Invalid flux scheme."
      stop
@@ -143,10 +146,16 @@ associate (nummat=>g_mmi%nummat)
 
   !--- compute gradients of volume fractions and velocity for the
   !--- non-conservative terms from Riemann reconstructed values
-  do imat = 1,nummat
-    vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
-      + pminu*pp_r(apr_idx(nummat, imat))
-  end do !imat
+  if (i_flux .eq. 4) then
+    do imat = 1,nummat
+      vriem(imat,ifc) = ap_flux(imat)
+    end do !imat
+  else
+    do imat = 1,nummat
+      vriem(imat,ifc) = pplus*pp_l(apr_idx(nummat, imat)) &
+        + pminu*pp_r(apr_idx(nummat, imat))
+    end do !imat
+  end if
   vriem(nummat+1,ifc) = lmda
 
   if (iel .gt. 0) then
@@ -693,6 +702,151 @@ associate (nummat=>g_mmi%nummat)
 end associate
 
 end subroutine hll_mm6eq
+
+!------------------------------------------------------------------------------
+!----- Numerical flux by HLLC:
+!------------------------------------------------------------------------------
+
+subroutine hllc_mm6eq(ul, ur, pp_l, pp_r, ac_l, ac_r, &
+  flux, lambda, ap_flux)
+
+real*8, intent(in) :: ul(g_neqns), ur(g_neqns), &
+                      pp_l(g_nprim), pp_r(g_nprim), ac_l, ac_r
+
+integer :: imat
+real*8 :: flux(g_neqns), &
+          ustar_l(g_neqns), ustar_r(g_neqns), ap_star(g_mmi%nummat)
+real*8, dimension(g_mmi%nummat) :: al_l, al_r, &
+                                   arhom_l, &
+                                   arhom_r, ap_flux
+
+real*8 :: rhou_l, u_l, rho_l, p_l, &
+          rhou_r, u_r, rho_r, p_r, p_star
+
+real*8 :: sl, sr, sm
+
+real*8 :: lambda
+
+associate (nummat=>g_mmi%nummat)
+
+  flux(:) = 0.0
+
+  ! material states and bulk pressure
+  p_l = 0.0
+  p_r = 0.0
+  do imat = 1,nummat
+  ! ul
+    al_l(imat)    = ul(imat)
+    arhom_l(imat) = ul(g_mmi%irmin+imat-1)
+    p_l = p_l + pp_l(apr_idx(nummat, imat))
+
+  ! ur
+    al_r(imat)    = ur(imat)
+    arhom_r(imat) = ur(g_mmi%irmin+imat-1)
+    p_r = p_r + pp_r(apr_idx(nummat, imat))
+  end do !imat
+
+  ! bulk state
+  rhou_l  = ul(g_mmi%imome)
+  rhou_r  = ur(g_mmi%imome)
+
+  rho_l = sum(arhom_l)
+  rho_r = sum(arhom_r)
+  u_l = pp_l(vel_idx(nummat, 0))
+  u_r = pp_r(vel_idx(nummat, 0))
+
+  ! signal velocities
+  sl = min((u_l-ac_l), (u_r-ac_r))
+  sr = max((u_l+ac_l), (u_r+ac_r))
+  sm = ( rho_r*u_r*(sr-u_r) - rho_l*u_l*(sl-u_l) + p_l-p_r )&
+    /( rho_r*(sr-u_r) - rho_l*(sl-u_l) )
+
+  ! middle-zone (star) variables
+  do imat=1,nummat
+    ap_star(imat) = pp_l(apr_idx(nummat, imat)) &
+      + ul(g_mmi%irmin+imat-1)*(u_l-sl)*(u_l-sm)
+    p_star = p_star + ap_star(imat)
+  end do !imat
+
+  ustar_l(g_mmi%imome) = ((sl-u_l)*rhou_l + (p_star-p_l))/(sl-sm)
+  ustar_r(g_mmi%imome) = ((sr-u_r)*rhou_r + (p_star-p_r))/(sr-sm)
+
+  do imat=1,nummat
+    ! Left
+    ustar_l(imat) = al_l(imat)
+    ustar_l(g_mmi%irmin+imat-1) = (sl-u_l) * arhom_l(imat) / (sl-sm);
+    ustar_l(g_mmi%iemin+imat-1) = ((sl-u_l) * ul(g_mmi%iemin+imat-1) &
+      - pp_l(apr_idx(nummat, imat))*u_l + ap_star(imat)*sm) / (sl-sm);
+
+    ! Right
+    ustar_r(imat) = al_r(imat)
+    ustar_r(g_mmi%irmin+imat-1) = (sr-u_r) * arhom_r(imat) / (sr-sm);
+    ustar_r(g_mmi%iemin+imat-1) = ((sr-u_r) * ur(g_mmi%iemin+imat-1) &
+      - pp_r(apr_idx(nummat, imat))*u_r + ap_star(imat)*sm) / (sr-sm);
+  end do !imat
+
+  ! Numerical flux
+  if (sl >= 0.0) then
+    do imat = 1,nummat
+      flux(imat) = u_l * al_l(imat)
+      flux(g_mmi%irmin+imat-1) = u_l * arhom_l(imat)
+      flux(g_mmi%iemin+imat-1) = &
+        u_l * (ul(g_mmi%iemin+imat-1) + pp_l(apr_idx(nummat, imat)))
+    end do !imat
+    flux(g_mmi%imome) = u_l * rhou_l + p_l
+
+    lambda = u_l
+    do imat = 1,nummat
+      ap_flux(imat) = pp_l(apr_idx(nummat, imat))
+    end do !imat
+
+  else if (sl <= 0.0 .and. sm > 0.0) then
+    do imat = 1,nummat
+      flux(imat) = sm * ustar_l(imat)
+      flux(g_mmi%irmin+imat-1) = sm * ustar_l(g_mmi%irmin+imat-1)
+      flux(g_mmi%iemin+imat-1) = &
+        sm * (ustar_l(g_mmi%iemin+imat-1) + ap_star(imat))
+    end do !imat
+    flux(g_mmi%imome) = sm * ustar_l(g_mmi%imome) + p_star
+
+    lambda = sm
+    do imat = 1,nummat
+      ap_flux(imat) = ap_star(imat)
+    end do !imat
+
+  else if (sm <= 0.0 .and. sr >= 0.0) then
+    do imat = 1,nummat
+      flux(imat) = sm * ustar_r(imat)
+      flux(g_mmi%irmin+imat-1) = sm * ustar_r(g_mmi%irmin+imat-1)
+      flux(g_mmi%iemin+imat-1) = &
+        sm * (ustar_r(g_mmi%iemin+imat-1) + ap_star(imat))
+    end do !imat
+    flux(g_mmi%imome) = sm * ustar_r(g_mmi%imome) + p_star
+
+    lambda = sm
+    do imat = 1,nummat
+      ap_flux(imat) = ap_star(imat)
+    end do !imat
+
+  else !if (sr <= 0.0) then
+    do imat = 1,nummat
+      flux(imat) = u_r * al_r(imat)
+      flux(g_mmi%irmin+imat-1) = u_r * arhom_r(imat)
+      flux(g_mmi%iemin+imat-1) = &
+        u_r * (ur(g_mmi%iemin+imat-1) + pp_r(apr_idx(nummat, imat)))
+    end do !imat
+    flux(g_mmi%imome) = u_r * rhou_r + p_r
+
+    lambda = u_r
+    do imat = 1,nummat
+      ap_flux(imat) = pp_r(apr_idx(nummat, imat))
+    end do !imat
+
+  end if
+
+end associate
+
+end subroutine hllc_mm6eq
 
 !-------------------------------------------------------------------------------
 !----- Split Mach polynomials for AUSM+UP:
