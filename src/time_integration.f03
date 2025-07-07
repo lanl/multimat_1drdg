@@ -24,7 +24,7 @@ integer  :: matint_el(0:imax+1), ndof_el(2,0:imax+1)
 real*8   :: mm(g_tdof), err_log(2,g_neqns), linfty
 real*8   :: ucons(g_tdof,g_neqns,0:imax+1),uconsn(g_tdof,g_neqns,0:imax+1), &
             uprim(g_tdof,g_nprim,0:imax+1), &
-            k1(3),k2(3)
+            k1(3),k2(3),dt_cfl
 real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
   g_time = 0.d0
@@ -43,6 +43,11 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
 
      !--- solution update
      uconsn(:,:,:) = ucons(:,:,:)
+
+     if (cfl_u > 0) then
+       call dtcfl_mm6eq(ucons, uprim, dt_cfl)
+       dt = dt_cfl
+     end if
 
      !---------------------------------------------------------
      !--- RK stages
@@ -147,6 +152,46 @@ real*8   :: rhsel(g_gdof,g_neqns,imax), cons_err(2)
   write(*,*) " "
 
 end subroutine ExplicitRK3_mm6eq
+
+!----------------------------------------------------------------------------------------------
+!----- Determine time step size based on CFL
+!----------------------------------------------------------------------------------------------
+
+subroutine dtcfl_mm6eq(ucons, uprim, dt_cfl)
+
+real*8, intent(in)  :: ucons(g_tdof,g_neqns,0:imax+1), &
+                       uprim(g_tdof,g_nprim,0:imax+1)
+real*8, intent(out) :: dt_cfl
+
+integer :: ie, imat
+real*8  :: dx, am, al, rhom, apr
+
+associate (nummat=>g_mmi%nummat)
+
+  dt_cfl = 1e10
+  do ie = 1,imax
+
+    dx = coord(ie+1)-coord(ie)
+
+    am = 0.0
+    do imat = 1,nummat
+      al = ucons(1,imat,ie)
+      if (al > 1e-4) then
+        rhom = ucons(1,g_mmi%irmin+imat-1,ie)
+        apr = uprim(1,apr_idx(nummat,imat),ie)
+        am = max(am, eos3_ss(g_gam(imat), g_pc(imat), rhom, al, apr))
+      end if
+    end do !imat
+
+    am = am + uprim(1,vel_idx(nummat, 0),ie)
+
+    dt_cfl = min(dt_cfl, cfl_u*dx/am);
+
+  end do !ie
+
+end associate
+
+end subroutine dtcfl_mm6eq
 
 !----------------------------------------------------------------------------------------------
 !----- Determine what materials are present in cell

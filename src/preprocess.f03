@@ -48,7 +48,15 @@ end if
 
 write(*,*) " "
 write(*,*) " nelem = ", imax
-write(*,*) " dt =    ", dt_u
+
+if (cfl_u > 0) then
+  write(*,*) " Using CFL since positive value specified."
+  write(*,*) " cfl =    ", cfl_u
+else
+  write(*,*) " Using dt since negative CFL value specified."
+  write(*,*) " dt =    ", dt_u
+end if
+
 write(*,*) " "
 write(*,*) " Spatial discretization: "
 if (g_nsdiscr .eq. 0) then
@@ -168,7 +176,7 @@ logical :: file_exists
         read(12,*) ! blank line
         read(12,*) g_nsdiscr
         read(12,*) g_nlim, g_nmatint, g_pureco
-        read(12,*) dt_u
+        read(12,*) dt_u, cfl_u
         read(12,*) ntstep
         read(12,*) ! blank line
         read(12,*) n_opfile
